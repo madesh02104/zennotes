@@ -1,0 +1,117 @@
+import type { SVGProps } from 'react'
+
+type IconProps = SVGProps<SVGSVGElement>
+
+function I(props: IconProps & { children: React.ReactNode }): JSX.Element {
+  const { children, ...rest } = props
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      {...rest}
+    >
+      {children}
+    </svg>
+  )
+}
+
+export const SearchIcon = (p: IconProps): JSX.Element => (
+  <I {...p}>
+    <circle cx="11" cy="11" r="7" />
+    <path d="m20 20-3.5-3.5" />
+  </I>
+)
+
+export const InboxIcon = (p: IconProps): JSX.Element => (
+  <I {...p}>
+    <path d="M4 13v5a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5" />
+    <path d="M4 13 6.6 5.5A2 2 0 0 1 8.5 4h7a2 2 0 0 1 1.9 1.5L20 13" />
+    <path d="M4 13h4l1.5 2.5h5L16 13h4" />
+  </I>
+)
+
+export const ArchiveIcon = (p: IconProps): JSX.Element => (
+  <I {...p}>
+    <rect x="3" y="4" width="18" height="4" rx="1" />
+    <path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8" />
+    <path d="M10 12h4" />
+  </I>
+)
+
+export const ChatIcon = (p: IconProps): JSX.Element => (
+  <I {...p}>
+    <path d="M21 12a8 8 0 0 1-11.3 7.3L4 21l1.7-5.7A8 8 0 1 1 21 12Z" />
+  </I>
+)
+
+export const TagIcon = (p: IconProps): JSX.Element => (
+  <I {...p}>
+    <path d="M20.6 12.6 12.7 20.5a1.8 1.8 0 0 1-2.5 0L3 13.4V4h9.4l8.2 8.2a1.8 1.8 0 0 1 0 2.4Z" />
+    <circle cx="7.5" cy="8.5" r="1.2" />
+  </I>
+)
+
+export const SettingsIcon = (p: IconProps): JSX.Element => (
+  <I {...p}>
+    <circle cx="12" cy="12" r="3" />
+    <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z" />
+  </I>
+)
+
+export const FeedbackIcon = (p: IconProps): JSX.Element => (
+  <I {...p}>
+    <path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z" />
+  </I>
+)
+
+export const TrashIcon = (p: IconProps): JSX.Element => (
+  <I {...p}>
+    <path d="M3 6h18" />
+    <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+    <path d="m19 6-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+    <path d="M10 11v6" />
+    <path d="M14 11v6" />
+  </I>
+)
+
+export const PlusIcon = (p: IconProps): JSX.Element => (
+  <I {...p}>
+    <path d="M12 5v14" />
+    <path d="M5 12h14" />
+  </I>
+)
+
+export const PanelLeftIcon = (p: IconProps): JSX.Element => (
+  <I {...p}>
+    <rect x="3" y="4" width="18" height="16" rx="2" />
+    <path d="M9 4v16" />
+  </I>
+)
+
+export const ChevronRightIcon = (p: IconProps): JSX.Element => (
+  <I {...p}>
+    <path d="m9 6 6 6-6 6" />
+  </I>
+)
+
+export const MoreIcon = (p: IconProps): JSX.Element => (
+  <I {...p}>
+    <circle cx="5" cy="12" r="1" />
+    <circle cx="12" cy="12" r="1" />
+    <circle cx="19" cy="12" r="1" />
+  </I>
+)
+
+export const ArrowUpRightIcon = (p: IconProps): JSX.Element => (
+  <I {...p}>
+    <path d="M7 17 17 7" />
+    <path d="M8 7h9v9" />
+  </I>
+)

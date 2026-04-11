@@ -1,0 +1,393 @@
+/* KaTeX + highlight.js are pulled in by the markdown pipeline. */
+@import 'katex/dist/katex.min.css';
+@import 'highlight.js/styles/atom-one-light.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  --scrollbar: rgba(42, 38, 32, 0.18);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  font-family: theme('fontFamily.sans');
+  background: theme('colors.paper.100');
+  color: theme('colors.ink.900');
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  user-select: none;
+  overflow: hidden;
+}
+
+input,
+textarea,
+[contenteditable='true'],
+.cm-editor,
+.prose-zen {
+  user-select: text;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(42, 38, 32, 0.32);
+  background-clip: padding-box;
+  border: 2px solid transparent;
+}
+
+.drag-region {
+  -webkit-app-region: drag;
+}
+.no-drag,
+button,
+a,
+input,
+textarea,
+[role='button'] {
+  -webkit-app-region: no-drag;
+}
+
+/* --- CodeMirror paper theme --------------------------------------------- */
+
+.cm-editor {
+  background: transparent !important;
+  font-family: theme('fontFamily.sans');
+  font-size: 16px;
+  line-height: 1.7;
+  color: theme('colors.ink.900');
+  height: 100%;
+}
+.cm-editor.cm-focused {
+  outline: none !important;
+}
+.cm-editor .cm-scroller {
+  font-family: inherit;
+  padding: 8px 0 40vh 0;
+  overflow: auto;
+}
+.cm-editor .cm-content {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 0 8px;
+  caret-color: theme('colors.accent.DEFAULT');
+}
+.cm-editor .cm-line {
+  padding: 0;
+}
+.cm-editor .cm-cursor,
+.cm-editor .cm-dropCursor {
+  border-left-color: theme('colors.accent.DEFAULT');
+}
+.cm-editor .cm-selectionBackground,
+.cm-editor ::selection {
+  background: rgba(233, 123, 60, 0.18) !important;
+}
+.cm-editor .cm-activeLine {
+  background: transparent;
+}
+.cm-editor .cm-gutters {
+  display: none;
+}
+
+/* Markdown syntax highlight inside CodeMirror */
+.cm-editor .tok-heading,
+.cm-editor .tok-heading1,
+.cm-editor .tok-heading2,
+.cm-editor .tok-heading3,
+.cm-editor .tok-heading4,
+.cm-editor .tok-heading5,
+.cm-editor .tok-heading6 {
+  color: theme('colors.ink.900');
+  font-weight: 600;
+  font-family: theme('fontFamily.serif');
+}
+.cm-editor .tok-heading1 {
+  font-size: 1.65em;
+}
+.cm-editor .tok-heading2 {
+  font-size: 1.35em;
+}
+.cm-editor .tok-heading3 {
+  font-size: 1.15em;
+}
+.cm-editor .tok-emphasis {
+  font-style: italic;
+  color: theme('colors.ink.800');
+}
+.cm-editor .tok-strong {
+  font-weight: 700;
+  color: theme('colors.ink.900');
+}
+.cm-editor .tok-link,
+.cm-editor .tok-url {
+  color: theme('colors.accent.DEFAULT');
+  text-decoration: none;
+}
+.cm-editor .tok-monospace {
+  font-family: theme('fontFamily.mono');
+  font-size: 0.92em;
+  background: theme('colors.paper.200');
+  padding: 1px 4px;
+  border-radius: 4px;
+  color: theme('colors.ink.800');
+}
+.cm-editor .tok-quote {
+  color: theme('colors.ink.600');
+  font-style: italic;
+}
+.cm-editor .tok-list {
+  color: theme('colors.ink.700');
+}
+.cm-editor .tok-meta {
+  color: theme('colors.ink.500');
+}
+
+/* --- Rendered markdown (preview) --------------------------------------- */
+
+.prose-zen {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 0 8px 40vh;
+  font-size: 16px;
+  line-height: 1.7;
+  color: theme('colors.ink.900');
+}
+.prose-zen h1,
+.prose-zen h2,
+.prose-zen h3,
+.prose-zen h4,
+.prose-zen h5,
+.prose-zen h6 {
+  font-family: theme('fontFamily.serif');
+  font-weight: 600;
+  color: theme('colors.ink.900');
+  margin-top: 1.6em;
+  margin-bottom: 0.6em;
+  letter-spacing: -0.01em;
+}
+.prose-zen h1 {
+  font-size: 2em;
+  margin-top: 0;
+}
+.prose-zen h2 {
+  font-size: 1.5em;
+  border-bottom: 1px solid theme('colors.paper.300');
+  padding-bottom: 0.2em;
+}
+.prose-zen h3 {
+  font-size: 1.2em;
+}
+.prose-zen p {
+  margin: 0.85em 0;
+}
+.prose-zen a {
+  color: theme('colors.accent.DEFAULT');
+  text-decoration: none;
+  border-bottom: 1px solid theme('colors.accent.muted');
+}
+.prose-zen a:hover {
+  border-bottom-color: theme('colors.accent.DEFAULT');
+}
+.prose-zen ul,
+.prose-zen ol {
+  padding-left: 1.4em;
+  margin: 0.75em 0;
+}
+.prose-zen li {
+  margin: 0.25em 0;
+}
+.prose-zen ul > li {
+  list-style: disc;
+}
+.prose-zen ol > li {
+  list-style: decimal;
+}
+.prose-zen li.task-list-item {
+  list-style: none;
+  margin-left: -1.4em;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5em;
+}
+.prose-zen li.task-list-item input[type='checkbox'] {
+  margin-top: 0.45em;
+  accent-color: theme('colors.accent.DEFAULT');
+}
+.prose-zen blockquote {
+  margin: 1em 0;
+  padding: 0.2em 1em;
+  border-left: 3px solid theme('colors.paper.400');
+  color: theme('colors.ink.600');
+  font-style: italic;
+  background: theme('colors.paper.50');
+  border-radius: 0 8px 8px 0;
+}
+.prose-zen code {
+  font-family: theme('fontFamily.mono');
+  font-size: 0.9em;
+  background: theme('colors.paper.200');
+  padding: 1px 6px;
+  border-radius: 4px;
+  color: theme('colors.ink.800');
+}
+.prose-zen pre {
+  background: theme('colors.paper.200');
+  border: 1px solid theme('colors.paper.300');
+  border-radius: 10px;
+  padding: 14px 16px;
+  overflow-x: auto;
+  margin: 1em 0;
+}
+.prose-zen pre code {
+  background: transparent;
+  padding: 0;
+  font-size: 0.88em;
+  color: theme('colors.ink.800');
+}
+.prose-zen table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1em 0;
+  font-size: 0.94em;
+}
+.prose-zen th,
+.prose-zen td {
+  border: 1px solid theme('colors.paper.300');
+  padding: 0.5em 0.75em;
+  text-align: left;
+}
+.prose-zen th {
+  background: theme('colors.paper.200');
+  font-weight: 600;
+}
+.prose-zen hr {
+  border: none;
+  border-top: 1px solid theme('colors.paper.300');
+  margin: 2em 0;
+}
+.prose-zen img {
+  max-width: 100%;
+  border-radius: 8px;
+}
+
+/* Wiki links */
+.prose-zen a.wikilink {
+  background: theme('colors.paper.200');
+  padding: 1px 6px;
+  border-radius: 4px;
+  border-bottom: none;
+  font-weight: 500;
+}
+.prose-zen a.wikilink.broken {
+  color: theme('colors.ink.500');
+  border: 1px dashed theme('colors.paper.400');
+}
+.prose-zen a.wikilink:hover {
+  background: theme('colors.paper.300');
+}
+
+/* Inline hashtags */
+.prose-zen .hashtag {
+  display: inline-block;
+  background: theme('colors.paper.200');
+  color: theme('colors.ink.700');
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 0.85em;
+  font-weight: 500;
+  text-decoration: none;
+  border-bottom: none !important;
+}
+
+/* Callouts (Obsidian style) */
+.prose-zen .callout {
+  margin: 1em 0;
+  padding: 0.8em 1em;
+  border-radius: 10px;
+  border: 1px solid theme('colors.paper.300');
+  background: theme('colors.paper.50');
+}
+.prose-zen .callout-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  font-weight: 600;
+  margin-bottom: 0.35em;
+}
+.prose-zen .callout[data-callout='note'] {
+  border-color: #c5dcf5;
+  background: #f3f8ff;
+}
+.prose-zen .callout[data-callout='note'] .callout-title {
+  color: #2563a5;
+}
+.prose-zen .callout[data-callout='tip'],
+.prose-zen .callout[data-callout='hint'] {
+  border-color: #c7e4cb;
+  background: #f3faf4;
+}
+.prose-zen .callout[data-callout='tip'] .callout-title,
+.prose-zen .callout[data-callout='hint'] .callout-title {
+  color: #2e7d3a;
+}
+.prose-zen .callout[data-callout='warning'],
+.prose-zen .callout[data-callout='warn'] {
+  border-color: #f2dcb4;
+  background: #fdf7ea;
+}
+.prose-zen .callout[data-callout='warning'] .callout-title,
+.prose-zen .callout[data-callout='warn'] .callout-title {
+  color: #a36800;
+}
+.prose-zen .callout[data-callout='danger'],
+.prose-zen .callout[data-callout='error'] {
+  border-color: #f2c6c0;
+  background: #fdf1ef;
+}
+.prose-zen .callout[data-callout='danger'] .callout-title,
+.prose-zen .callout[data-callout='error'] .callout-title {
+  color: #b4321f;
+}
+.prose-zen .callout[data-callout='info'] {
+  border-color: #cdd7e4;
+  background: #f5f7fa;
+}
+.prose-zen .callout[data-callout='info'] .callout-title {
+  color: #445873;
+}
+
+/* Mermaid diagram container */
+.prose-zen .mermaid {
+  background: theme('colors.paper.50');
+  border-radius: 10px;
+  padding: 10px;
+  margin: 1em 0;
+  text-align: center;
+}
+.prose-zen .mermaid svg {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Fade between list items + general transitions */
+.list-row {
+  transition: background-color 120ms ease, color 120ms ease;
+}
