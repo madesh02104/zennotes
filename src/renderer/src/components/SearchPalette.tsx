@@ -50,11 +50,11 @@ export function SearchPalette(): JSX.Element {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center bg-ink-900/20 pt-[15vh] backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-start justify-center bg-black/45 pt-[15vh] backdrop-blur-sm"
       onClick={() => setSearchOpen(false)}
     >
       <div
-        className="w-[min(560px,90vw)] overflow-hidden rounded-xl bg-paper-50 shadow-float ring-1 ring-paper-300/70"
+        className="w-[min(560px,90vw)] overflow-hidden rounded-xl bg-paper-100 shadow-float ring-1 ring-paper-300/70"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="border-b border-paper-300/70 px-4 py-3">

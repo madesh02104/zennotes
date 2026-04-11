@@ -45,12 +45,6 @@ export const ArchiveIcon = (p: IconProps): JSX.Element => (
   </I>
 )
 
-export const ChatIcon = (p: IconProps): JSX.Element => (
-  <I {...p}>
-    <path d="M21 12a8 8 0 0 1-11.3 7.3L4 21l1.7-5.7A8 8 0 1 1 21 12Z" />
-  </I>
-)
-
 export const TagIcon = (p: IconProps): JSX.Element => (
   <I {...p}>
     <path d="M20.6 12.6 12.7 20.5a1.8 1.8 0 0 1-2.5 0L3 13.4V4h9.4l8.2 8.2a1.8 1.8 0 0 1 0 2.4Z" />
@@ -92,6 +86,14 @@ export const PanelLeftIcon = (p: IconProps): JSX.Element => (
   <I {...p}>
     <rect x="3" y="4" width="18" height="16" rx="2" />
     <path d="M9 4v16" />
+  </I>
+)
+
+export const ColumnsIcon = (p: IconProps): JSX.Element => (
+  <I {...p}>
+    <rect x="3" y="4" width="18" height="16" rx="2" />
+    <path d="M9 4v16" />
+    <path d="M15 4v16" />
   </I>
 )
 

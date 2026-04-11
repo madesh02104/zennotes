@@ -6,9 +6,601 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ===========================================================================
+ * Gruvbox Material theme tokens
+ * --------------------------------------------------------------------------
+ * All theme-sensitive colors live here as CSS custom properties using
+ * space-separated RGB triplets. Tailwind references these via the
+ * `rgb(var(--z-*) / <alpha-value>)` pattern in tailwind.config.js, so
+ * every existing utility class automatically picks up the active theme.
+ *
+ * Variants follow sainnhe/gruvbox-material:
+ *   background:   hard | medium (default) | soft
+ *   mode:         light | dark
+ * The user's final theme is the product of those two, e.g. `dark-soft`.
+ * =======================================================================*/
+
 :root {
   color-scheme: light;
-  --scrollbar: rgba(42, 38, 32, 0.18);
+
+  /* ---- Light Medium (default) -------------------------------------- */
+  --z-bg: 251 241 199;         /* #fbf1c7 */
+  --z-bg-softer: 249 245 215;  /* #f9f5d7 */
+  --z-bg-1: 242 229 188;       /* #f2e5bc */
+  --z-bg-2: 229 213 173;       /* #e5d5ad */
+  --z-bg-3: 213 196 161;       /* #d5c4a1 */
+  --z-bg-4: 189 174 147;       /* #bdae93 */
+
+  --z-fg: 80 73 69;            /* #504945 (a touch lighter than pure fg) */
+  --z-fg-1: 60 56 54;          /* #3c3836 */
+  --z-fg-2: 101 71 53;         /* #654735 */
+  --z-grey-2: 90 82 76;        /* #5a524c */
+  --z-grey-1: 124 111 100;     /* #7c6f64 */
+  --z-grey-0: 146 131 116;     /* #928374 */
+  --z-grey-dim: 189 174 147;   /* #bdae93 */
+
+  --z-accent: 195 94 10;       /* #c35e0a — orange */
+  --z-accent-soft: 180 113 9;  /* #b47109 — yellow */
+  --z-accent-muted: 108 120 46;/* #6c782e — green */
+
+  --z-red: 193 74 74;          /* #c14a4a */
+  --z-green: 108 120 46;       /* #6c782e */
+  --z-yellow: 180 113 9;       /* #b47109 */
+  --z-blue: 69 112 122;        /* #45707a */
+  --z-purple: 148 94 128;      /* #945e80 */
+  --z-aqua: 76 122 93;         /* #4c7a5d */
+
+  --z-shadow: 42 38 32;
+
+  /* Glass layer alphas. These get retinted per mode below so dark
+     themes use cooler, more translucent glass. */
+  --z-glass-a1: 0.62;
+  --z-glass-a2: 0.50;
+  --z-glass-a3: 0.35;
+  --z-glass-a4: 0.25;
+  --z-glass-blur: 22px;
+  --z-glass-sat: 180%;
+
+  --scrollbar: rgb(var(--z-shadow) / 0.18);
+  --glass-stroke: rgb(var(--z-shadow) / 0.08);
+  --glass-shadow: 0 1px 0 rgba(255, 255, 255, 0.55) inset,
+    0 0 0 1px var(--glass-stroke),
+    0 16px 40px -18px rgb(var(--z-shadow) / 0.22);
+}
+
+/* ===========================================================================
+ * Apple — clean macOS-style system palette (default theme family)
+ * =======================================================================*/
+
+:root[data-theme='apple-light'] {
+  color-scheme: light;
+  --z-bg: 255 255 255;         /* content: pure white */
+  --z-bg-softer: 245 245 247;  /* sidebar aluminum */
+  --z-bg-1: 242 242 247;       /* systemGroupedBackground */
+  --z-bg-2: 229 229 234;       /* secondarySystemBackground */
+  --z-bg-3: 209 209 214;       /* separator */
+  --z-bg-4: 174 174 178;       /* tertiaryLabel */
+  --z-fg: 29 29 31;            /* primary label #1d1d1f */
+  --z-fg-1: 38 38 41;          /* slightly lighter, still dark body */
+  --z-fg-2: 60 60 63;           /* darkened from secondaryLabel so rows
+                                   read as body text, not muted captions */
+  --z-grey-2: 90 90 94;         /* was 110 — bumped darker for readability */
+  --z-grey-1: 128 128 133;      /* muted label */
+  --z-grey-0: 174 174 178;
+  --z-grey-dim: 209 209 214;
+  --z-accent: 0 122 255;       /* systemBlue */
+  --z-accent-soft: 255 149 0;  /* systemOrange */
+  --z-accent-muted: 52 199 89; /* systemGreen */
+  --z-red: 255 59 48;          /* systemRed */
+  --z-green: 52 199 89;
+  --z-yellow: 255 149 0;
+  --z-blue: 0 122 255;
+  --z-purple: 175 82 222;      /* systemPurple */
+  --z-aqua: 90 200 250;        /* systemTeal */
+  --z-shadow: 42 38 32;
+}
+
+:root[data-theme='apple-dark'] {
+  color-scheme: dark;
+  --z-bg: 28 28 30;            /* systemBackground dark */
+  --z-bg-softer: 22 22 24;     /* slightly darker for chrome */
+  --z-bg-1: 44 44 46;          /* secondarySystemBackground */
+  --z-bg-2: 58 58 60;          /* tertiarySystemBackground */
+  --z-bg-3: 72 72 74;          /* separator */
+  --z-bg-4: 99 99 102;
+  --z-fg: 255 255 255;
+  --z-fg-1: 235 235 245;
+  --z-fg-2: 152 152 157;       /* secondary label dark */
+  --z-grey-2: 142 142 147;
+  --z-grey-1: 124 124 128;
+  --z-grey-0: 99 99 102;
+  --z-grey-dim: 72 72 74;
+  --z-accent: 10 132 255;      /* systemBlue dark */
+  --z-accent-soft: 255 159 10; /* systemOrange dark */
+  --z-accent-muted: 48 209 88; /* systemGreen dark */
+  --z-red: 255 69 58;          /* systemRed dark */
+  --z-green: 48 209 88;
+  --z-yellow: 255 214 10;      /* systemYellow dark */
+  --z-blue: 10 132 255;
+  --z-purple: 191 90 242;      /* systemPurple dark */
+  --z-aqua: 100 210 255;       /* systemTeal dark */
+  --z-shadow: 0 0 0;
+}
+
+/* ---- Light Hard ---------------------------------------------------- */
+:root[data-theme='light-hard'] {
+  color-scheme: light;
+  --z-bg: 249 245 215;         /* #f9f5d7 */
+  --z-bg-softer: 251 241 199;
+  --z-bg-1: 242 229 188;
+  --z-bg-2: 229 213 173;
+}
+
+/* ---- Light Medium (explicit selector, same as :root defaults) ----- */
+:root[data-theme='light-medium'] {
+  color-scheme: light;
+  --z-bg: 251 241 199;
+  --z-bg-softer: 249 245 215;
+}
+
+/* ---- Light Soft ---------------------------------------------------- */
+:root[data-theme='light-soft'] {
+  color-scheme: light;
+  --z-bg: 242 229 188;         /* #f2e5bc */
+  --z-bg-softer: 251 241 199;
+  --z-bg-1: 237 222 184;
+  --z-bg-2: 229 213 173;
+}
+
+/* ---- Dark (shared) ------------------------------------------------- */
+:root[data-theme='dark-hard'],
+:root[data-theme='dark-medium'],
+:root[data-theme='dark-soft'] {
+  color-scheme: dark;
+
+  --z-bg-1: 50 48 47;          /* #32302f */
+  --z-bg-2: 60 56 54;           /* #3c3836 */
+  --z-bg-3: 69 64 61;           /* #45403d */
+  --z-bg-4: 80 73 69;           /* #504945 */
+
+  --z-fg: 212 190 152;         /* #d4be98 */
+  --z-fg-1: 221 199 161;       /* #ddc7a1 */
+  --z-fg-2: 221 199 161;
+  --z-grey-2: 168 153 132;     /* #a89984 */
+  --z-grey-1: 146 131 116;     /* #928374 */
+  --z-grey-0: 124 111 100;     /* #7c6f64 */
+  --z-grey-dim: 80 73 69;
+
+  --z-accent: 231 138 78;      /* #e78a4e — orange */
+  --z-accent-soft: 216 166 87; /* #d8a657 — yellow */
+  --z-accent-muted: 169 182 101; /* #a9b665 — green */
+
+  --z-red: 234 105 98;         /* #ea6962 */
+  --z-green: 169 182 101;
+  --z-yellow: 216 166 87;
+  --z-blue: 125 174 163;       /* #7daea3 */
+  --z-purple: 211 134 155;     /* #d3869b */
+  --z-aqua: 137 180 130;       /* #89b482 */
+
+  --z-shadow: 0 0 0;
+
+  --z-glass-a1: 0.58;
+  --z-glass-a2: 0.46;
+  --z-glass-a3: 0.32;
+  --z-glass-a4: 0.22;
+
+  --glass-stroke: rgb(255 255 255 / 0.06);
+  --glass-shadow: 0 1px 0 rgb(255 255 255 / 0.04) inset,
+    0 0 0 1px var(--glass-stroke),
+    0 16px 40px -18px rgb(0 0 0 / 0.55);
+}
+
+:root[data-theme='dark-hard'] {
+  --z-bg: 29 32 33;            /* #1d2021 */
+  --z-bg-softer: 40 40 40;
+}
+:root[data-theme='dark-medium'] {
+  --z-bg: 40 40 40;            /* #282828 */
+  --z-bg-softer: 50 48 47;
+}
+:root[data-theme='dark-soft'] {
+  --z-bg: 50 48 47;            /* #32302f */
+  --z-bg-softer: 60 56 54;
+}
+
+/* Shared dark-theme glass overrides so every dark variant picks up
+   darker panel backgrounds and a darker stroke. */
+:root[data-theme='apple-dark'],
+:root[data-theme='catppuccin-frappe'],
+:root[data-theme='catppuccin-macchiato'],
+:root[data-theme='catppuccin-mocha'],
+:root[data-theme='github-dark'],
+:root[data-theme='github-dark-dimmed'],
+:root[data-theme='github-dark-high-contrast'],
+:root[data-theme='github-dark-colorblind'],
+:root[data-theme='github-dark-tritanopia'] {
+  --z-glass-a1: 0.58;
+  --z-glass-a2: 0.46;
+  --z-glass-a3: 0.32;
+  --z-glass-a4: 0.22;
+  --glass-stroke: rgb(255 255 255 / 0.06);
+  --glass-shadow: 0 1px 0 rgb(255 255 255 / 0.04) inset,
+    0 0 0 1px var(--glass-stroke),
+    0 16px 40px -18px rgb(0 0 0 / 0.55);
+}
+
+/* ===========================================================================
+ * Catppuccin — https://github.com/catppuccin/nvim
+ * All four flavors, exact palette values.
+ * =======================================================================*/
+
+/* ---- Latte (light) ------------------------------------------------- */
+:root[data-theme='catppuccin-latte'] {
+  color-scheme: light;
+  --z-bg: 239 241 245;         /* base    #eff1f5 */
+  --z-bg-softer: 230 233 239;  /* mantle  #e6e9ef */
+  --z-bg-1: 220 224 232;       /* crust   #dce0e8 */
+  --z-bg-2: 204 208 218;       /* surface0 #ccd0da */
+  --z-bg-3: 188 192 204;       /* surface1 #bcc0cc */
+  --z-bg-4: 172 176 190;       /* surface2 #acb0be */
+  --z-fg: 76 79 105;           /* text    #4c4f69 */
+  --z-fg-1: 92 95 119;         /* subtext1 #5c5f77 */
+  --z-fg-2: 108 111 133;       /* subtext0 #6c6f85 */
+  --z-grey-2: 124 127 147;     /* overlay2 #7c7f93 */
+  --z-grey-1: 140 143 161;     /* overlay1 #8c8fa1 */
+  --z-grey-0: 156 160 176;     /* overlay0 #9ca0b0 */
+  --z-grey-dim: 188 192 204;
+  --z-accent: 254 100 11;      /* peach   #fe640b */
+  --z-accent-soft: 223 142 29; /* yellow  #df8e1d */
+  --z-accent-muted: 136 57 239;/* mauve   #8839ef */
+  --z-red: 210 15 57;          /* red     #d20f39 */
+  --z-green: 64 160 43;        /* green   #40a02b */
+  --z-yellow: 223 142 29;
+  --z-blue: 30 102 245;        /* blue    #1e66f5 */
+  --z-purple: 136 57 239;
+  --z-aqua: 23 146 153;        /* teal    #179299 */
+  --z-shadow: 42 38 32;
+}
+
+/* ---- Frappé (dark, warmest) ---------------------------------------- */
+:root[data-theme='catppuccin-frappe'] {
+  color-scheme: dark;
+  --z-bg: 48 52 70;            /* base    #303446 */
+  --z-bg-softer: 41 44 60;     /* mantle  #292c3c */
+  --z-bg-1: 35 38 52;          /* crust   #232634 */
+  --z-bg-2: 65 69 89;          /* surface0 #414559 */
+  --z-bg-3: 81 87 109;         /* surface1 #51576d */
+  --z-bg-4: 98 104 128;        /* surface2 #626880 */
+  --z-fg: 198 208 245;         /* text    #c6d0f5 */
+  --z-fg-1: 181 191 226;       /* subtext1 #b5bfe2 */
+  --z-fg-2: 165 173 206;       /* subtext0 #a5adce */
+  --z-grey-2: 148 156 187;     /* overlay2 #949cbb */
+  --z-grey-1: 131 139 167;     /* overlay1 #838ba7 */
+  --z-grey-0: 115 121 148;     /* overlay0 #737994 */
+  --z-grey-dim: 98 104 128;
+  --z-accent: 239 159 118;     /* peach   #ef9f76 */
+  --z-accent-soft: 229 200 144;/* yellow  #e5c890 */
+  --z-accent-muted: 166 209 137;/* green   #a6d189 */
+  --z-red: 231 130 132;        /* red     #e78284 */
+  --z-green: 166 209 137;
+  --z-yellow: 229 200 144;
+  --z-blue: 140 170 238;       /* blue    #8caaee */
+  --z-purple: 202 158 230;     /* mauve   #ca9ee6 */
+  --z-aqua: 129 200 190;       /* teal    #81c8be */
+  --z-shadow: 0 0 0;
+}
+
+/* ---- Macchiato (dark) ---------------------------------------------- */
+:root[data-theme='catppuccin-macchiato'] {
+  color-scheme: dark;
+  --z-bg: 36 39 58;            /* base    #24273a */
+  --z-bg-softer: 30 32 48;     /* mantle  #1e2030 */
+  --z-bg-1: 24 25 38;          /* crust   #181926 */
+  --z-bg-2: 54 58 79;          /* surface0 #363a4f */
+  --z-bg-3: 73 77 100;         /* surface1 #494d64 */
+  --z-bg-4: 91 96 120;         /* surface2 #5b6078 */
+  --z-fg: 202 211 245;         /* text    #cad3f5 */
+  --z-fg-1: 184 192 224;       /* subtext1 #b8c0e0 */
+  --z-fg-2: 165 173 203;       /* subtext0 #a5adcb */
+  --z-grey-2: 147 154 183;     /* overlay2 #939ab7 */
+  --z-grey-1: 128 135 162;     /* overlay1 #8087a2 */
+  --z-grey-0: 110 115 141;     /* overlay0 #6e738d */
+  --z-grey-dim: 91 96 120;
+  --z-accent: 245 169 127;     /* peach   #f5a97f */
+  --z-accent-soft: 238 212 159;/* yellow  #eed49f */
+  --z-accent-muted: 166 218 149;/* green   #a6da95 */
+  --z-red: 237 135 150;        /* red     #ed8796 */
+  --z-green: 166 218 149;
+  --z-yellow: 238 212 159;
+  --z-blue: 138 173 244;       /* blue    #8aadf4 */
+  --z-purple: 198 160 246;     /* mauve   #c6a0f6 */
+  --z-aqua: 139 213 202;       /* teal    #8bd5ca */
+  --z-shadow: 0 0 0;
+}
+
+/* ---- Mocha (dark, deepest) ---------------------------------------- */
+:root[data-theme='catppuccin-mocha'] {
+  color-scheme: dark;
+  --z-bg: 30 30 46;            /* base    #1e1e2e */
+  --z-bg-softer: 24 24 37;     /* mantle  #181825 */
+  --z-bg-1: 17 17 27;          /* crust   #11111b */
+  --z-bg-2: 49 50 68;          /* surface0 #313244 */
+  --z-bg-3: 69 71 90;          /* surface1 #45475a */
+  --z-bg-4: 88 91 112;         /* surface2 #585b70 */
+  --z-fg: 205 214 244;         /* text    #cdd6f4 */
+  --z-fg-1: 186 194 222;       /* subtext1 #bac2de */
+  --z-fg-2: 166 173 200;       /* subtext0 #a6adc8 */
+  --z-grey-2: 147 153 178;     /* overlay2 #9399b2 */
+  --z-grey-1: 127 132 156;     /* overlay1 #7f849c */
+  --z-grey-0: 108 112 134;     /* overlay0 #6c7086 */
+  --z-grey-dim: 88 91 112;
+  --z-accent: 250 179 135;     /* peach   #fab387 */
+  --z-accent-soft: 249 226 175;/* yellow  #f9e2af */
+  --z-accent-muted: 166 227 161;/* green   #a6e3a1 */
+  --z-red: 243 139 168;        /* red     #f38ba8 */
+  --z-green: 166 227 161;
+  --z-yellow: 249 226 175;
+  --z-blue: 137 180 250;       /* blue    #89b4fa */
+  --z-purple: 203 166 247;     /* mauve   #cba6f7 */
+  --z-aqua: 148 226 213;       /* teal    #94e2d5 */
+  --z-shadow: 0 0 0;
+}
+
+/* ===========================================================================
+ * GitHub — https://github.com/projekt0n/github-nvim-theme
+ * Light, Light High Contrast, Dark, Dark Dimmed, Dark High Contrast.
+ * =======================================================================*/
+
+/* ---- github-light (default) ---------------------------------------- */
+:root[data-theme='github-light'] {
+  color-scheme: light;
+  --z-bg: 255 255 255;         /* canvas.default  #ffffff */
+  --z-bg-softer: 246 248 250;  /* canvas.subtle   #f6f8fa */
+  --z-bg-1: 246 248 250;
+  --z-bg-2: 234 238 242;       /* neutral.muted   #eaeef2 */
+  --z-bg-3: 208 215 222;       /* border.default  #d0d7de */
+  --z-bg-4: 175 184 193;
+  --z-fg: 31 35 40;            /* fg.default      #1f2328 */
+  --z-fg-1: 31 35 40;
+  --z-fg-2: 60 67 76;           /* darkened from fg.muted #656d76 */
+  --z-grey-2: 80 87 96;         /* still readable body-level gray */
+  --z-grey-1: 101 109 118;      /* was fg.muted */
+  --z-grey-0: 141 149 158;
+  --z-grey-dim: 216 222 228;
+  --z-accent: 9 105 218;       /* accent.fg       #0969da */
+  --z-accent-soft: 191 75 0;   /* open.fg         #bf4b00 */
+  --z-accent-muted: 26 127 55; /* success.fg      #1a7f37 */
+  --z-red: 209 36 47;          /* danger.fg       #d1242f */
+  --z-green: 26 127 55;
+  --z-yellow: 154 103 0;       /* attention.fg    #9a6700 */
+  --z-blue: 9 105 218;
+  --z-purple: 130 80 223;      /* done.fg         #8250df */
+  --z-aqua: 27 124 131;
+  --z-shadow: 42 38 32;
+}
+
+/* ---- github-light-high-contrast ------------------------------------ */
+:root[data-theme='github-light-high-contrast'] {
+  color-scheme: light;
+  --z-bg: 255 255 255;         /* #ffffff */
+  --z-bg-softer: 220 222 228;  /* pushed darker for obvious contrast */
+  --z-bg-1: 220 222 228;
+  --z-bg-2: 190 196 210;       /* darker than default */
+  --z-bg-3: 88 96 110;         /* strong borders — the hallmark of HC */
+  --z-bg-4: 55 62 74;
+  --z-fg: 0 0 0;               /* absolute black */
+  --z-fg-1: 0 0 0;
+  --z-fg-2: 28 33 43;
+  --z-grey-2: 28 33 43;
+  --z-grey-1: 55 62 74;
+  --z-grey-0: 88 96 110;
+  --z-grey-dim: 155 163 178;
+  --z-accent: 3 73 180;        /* accent.fg       #0349b4 */
+  --z-accent-soft: 148 47 0;
+  --z-accent-muted: 5 80 38;
+  --z-red: 166 0 23;
+  --z-green: 5 80 38;
+  --z-yellow: 112 75 0;
+  --z-blue: 3 73 180;
+  --z-purple: 80 45 151;
+  --z-aqua: 20 98 104;
+  --z-shadow: 42 38 32;
+}
+
+/* ---- github-dark (default) ----------------------------------------- */
+:root[data-theme='github-dark'] {
+  color-scheme: dark;
+  --z-bg: 13 17 23;            /* canvas.default  #0d1117 */
+  --z-bg-softer: 1 4 9;        /* canvas.inset    #010409 */
+  --z-bg-1: 22 27 34;          /* canvas.subtle   #161b22 */
+  --z-bg-2: 33 38 45;          /* neutral.muted   #21262d */
+  --z-bg-3: 48 54 61;          /* border.default  #30363d */
+  --z-bg-4: 110 118 129;       /* border.muted    #6e7681 */
+  --z-fg: 230 237 243;         /* fg.default      #e6edf3 */
+  --z-fg-1: 230 237 243;
+  --z-fg-2: 125 133 144;       /* fg.muted        #7d8590 */
+  --z-grey-2: 125 133 144;
+  --z-grey-1: 110 118 129;     /* fg.subtle       #6e7681 */
+  --z-grey-0: 72 79 88;
+  --z-grey-dim: 48 54 61;
+  --z-accent: 47 129 247;      /* accent.fg       #2f81f7 */
+  --z-accent-soft: 219 109 40; /* open.fg         #db6d28 */
+  --z-accent-muted: 63 185 80; /* success.fg      #3fb950 */
+  --z-red: 248 81 73;          /* danger.fg       #f85149 */
+  --z-green: 63 185 80;
+  --z-yellow: 210 153 34;      /* attention.fg    #d29922 */
+  --z-blue: 47 129 247;
+  --z-purple: 163 113 247;     /* done.fg         #a371f7 */
+  --z-aqua: 86 196 180;
+  --z-shadow: 0 0 0;
+}
+
+/* ---- github-dark-dimmed -------------------------------------------- */
+:root[data-theme='github-dark-dimmed'] {
+  color-scheme: dark;
+  --z-bg: 34 39 46;            /* canvas.default  #22272e */
+  --z-bg-softer: 29 33 38;
+  --z-bg-1: 45 51 59;          /* canvas.subtle   #2d333b */
+  --z-bg-2: 55 62 71;          /* #373e47 */
+  --z-bg-3: 68 76 86;          /* border.default  #444c56 */
+  --z-bg-4: 118 131 144;       /* fg.subtle       #768390 */
+  --z-fg: 173 186 199;         /* fg.default      #adbac7 */
+  --z-fg-1: 173 186 199;
+  --z-fg-2: 118 131 144;
+  --z-grey-2: 118 131 144;
+  --z-grey-1: 99 110 123;
+  --z-grey-0: 83 93 104;
+  --z-grey-dim: 68 76 86;
+  --z-accent: 83 155 245;      /* accent.fg       #539bf5 */
+  --z-accent-soft: 232 129 35; /* open.fg         #e88123 */
+  --z-accent-muted: 87 171 90; /* success.fg      #57ab5a */
+  --z-red: 229 83 75;          /* danger.fg       #e5534b */
+  --z-green: 87 171 90;
+  --z-yellow: 198 144 38;      /* attention.fg    #c69026 */
+  --z-blue: 83 155 245;
+  --z-purple: 181 126 220;     /* done.fg         #b57edc */
+  --z-aqua: 86 196 180;
+  --z-shadow: 0 0 0;
+}
+
+/* ---- github-light-colorblind (Protanopia / Deuteranopia) ----------- */
+:root[data-theme='github-light-colorblind'] {
+  color-scheme: light;
+  --z-bg: 255 255 255;
+  --z-bg-softer: 246 248 250;
+  --z-bg-1: 246 248 250;
+  --z-bg-2: 234 238 242;
+  --z-bg-3: 208 215 222;
+  --z-bg-4: 175 184 193;
+  --z-fg: 31 35 40;
+  --z-fg-1: 31 35 40;
+  --z-fg-2: 60 67 76;
+  --z-grey-2: 80 87 96;
+  --z-grey-1: 110 119 129;
+  --z-grey-0: 141 149 158;
+  --z-grey-dim: 216 222 228;
+  --z-accent: 9 105 218;       /* accent.fg    #0969da */
+  --z-accent-soft: 188 76 0;   /* open.fg      #bc4c00 */
+  --z-accent-muted: 5 80 174;  /* success → blue (was green) #0550ae */
+  --z-red: 172 94 0;           /* danger → orange  #ac5e00 */
+  --z-green: 5 80 174;         /* green → blue */
+  --z-yellow: 154 103 0;
+  --z-blue: 9 105 218;
+  --z-purple: 130 80 223;
+  --z-aqua: 27 124 131;
+  --z-shadow: 42 38 32;
+}
+
+/* ---- github-light-tritanopia --------------------------------------- */
+:root[data-theme='github-light-tritanopia'] {
+  color-scheme: light;
+  --z-bg: 255 255 255;
+  --z-bg-softer: 246 248 250;
+  --z-bg-1: 246 248 250;
+  --z-bg-2: 234 238 242;
+  --z-bg-3: 208 215 222;
+  --z-bg-4: 175 184 193;
+  --z-fg: 31 35 40;
+  --z-fg-1: 31 35 40;
+  --z-fg-2: 60 67 76;
+  --z-grey-2: 80 87 96;
+  --z-grey-1: 110 119 129;
+  --z-grey-0: 141 149 158;
+  --z-grey-dim: 216 222 228;
+  --z-accent: 9 105 218;
+  --z-accent-soft: 188 76 0;
+  --z-accent-muted: 26 127 55;
+  --z-red: 210 34 81;          /* danger shifted  #d22251 */
+  --z-green: 26 127 55;
+  --z-yellow: 188 76 0;        /* attention → orange to help tritans */
+  --z-blue: 9 105 218;
+  --z-purple: 130 80 223;
+  --z-aqua: 27 124 131;
+  --z-shadow: 42 38 32;
+}
+
+/* ---- github-dark-high-contrast ------------------------------------- */
+:root[data-theme='github-dark-high-contrast'] {
+  color-scheme: dark;
+  --z-bg: 0 0 0;               /* pure black canvas for max contrast */
+  --z-bg-softer: 0 0 0;
+  --z-bg-1: 14 17 23;          /* panels slightly above black */
+  --z-bg-2: 28 33 43;
+  --z-bg-3: 155 163 178;       /* bright borders — HC hallmark */
+  --z-bg-4: 190 196 210;
+  --z-fg: 255 255 255;         /* absolute white */
+  --z-fg-1: 255 255 255;
+  --z-fg-2: 220 222 228;
+  --z-grey-2: 220 222 228;
+  --z-grey-1: 190 196 210;
+  --z-grey-0: 155 163 178;
+  --z-grey-dim: 88 96 110;
+  --z-accent: 113 183 255;     /* accent.fg       #71b7ff */
+  --z-accent-soft: 255 148 68; /* open.fg         #ff9444 */
+  --z-accent-muted: 38 205 92; /* success.fg      #26cd4d */
+  --z-red: 255 106 105;        /* danger.fg       #ff6a69 */
+  --z-green: 38 205 92;
+  --z-yellow: 246 161 47;      /* attention.fg    #f6a147 */
+  --z-blue: 113 183 255;
+  --z-purple: 184 135 255;
+  --z-aqua: 86 196 180;
+  --z-shadow: 0 0 0;
+}
+
+/* ---- github-dark-colorblind (Protanopia / Deuteranopia) ----------- */
+:root[data-theme='github-dark-colorblind'] {
+  color-scheme: dark;
+  --z-bg: 13 17 23;
+  --z-bg-softer: 1 4 9;
+  --z-bg-1: 22 27 34;
+  --z-bg-2: 33 38 45;
+  --z-bg-3: 48 54 61;
+  --z-bg-4: 110 118 129;
+  --z-fg: 230 237 243;
+  --z-fg-1: 230 237 243;
+  --z-fg-2: 125 133 144;
+  --z-grey-2: 125 133 144;
+  --z-grey-1: 110 118 129;
+  --z-grey-0: 72 79 88;
+  --z-grey-dim: 48 54 61;
+  --z-accent: 47 129 247;      /* accent stays blue */
+  --z-accent-soft: 236 119 66; /* open.fg → orange  #ec7742 */
+  --z-accent-muted: 88 166 255;/* success → blue  #58a6ff */
+  --z-red: 236 119 66;         /* danger → orange (distinct from blue) */
+  --z-green: 88 166 255;       /* "green" now reads as blue for colorblind */
+  --z-yellow: 210 153 34;
+  --z-blue: 47 129 247;
+  --z-purple: 163 113 247;
+  --z-aqua: 86 196 180;
+  --z-shadow: 0 0 0;
+}
+
+/* ---- github-dark-tritanopia --------------------------------------- */
+:root[data-theme='github-dark-tritanopia'] {
+  color-scheme: dark;
+  --z-bg: 13 17 23;
+  --z-bg-softer: 1 4 9;
+  --z-bg-1: 22 27 34;
+  --z-bg-2: 33 38 45;
+  --z-bg-3: 48 54 61;
+  --z-bg-4: 110 118 129;
+  --z-fg: 230 237 243;
+  --z-fg-1: 230 237 243;
+  --z-fg-2: 125 133 144;
+  --z-grey-2: 125 133 144;
+  --z-grey-1: 110 118 129;
+  --z-grey-0: 72 79 88;
+  --z-grey-dim: 48 54 61;
+  --z-accent: 47 129 247;
+  --z-accent-soft: 247 129 102;
+  --z-accent-muted: 63 185 80;
+  --z-red: 255 120 140;        /* pink shifted  #ff788c */
+  --z-green: 63 185 80;
+  --z-yellow: 247 129 102;     /* yellow → orange for tritans */
+  --z-blue: 47 129 247;
+  --z-purple: 163 113 247;
+  --z-aqua: 86 196 180;
+  --z-shadow: 0 0 0;
 }
 
 html,
@@ -17,13 +609,96 @@ body,
   height: 100%;
   margin: 0;
   padding: 0;
-  font-family: theme('fontFamily.sans');
-  background: theme('colors.paper.100');
+  font-family: var(
+    --z-interface-font,
+    -apple-system,
+    BlinkMacSystemFont,
+    'SF Pro Text',
+    Inter,
+    system-ui,
+    sans-serif
+  );
+  background: transparent;
   color: theme('colors.ink.900');
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   user-select: none;
   overflow: hidden;
+}
+
+body {
+  background: transparent;
+}
+
+/* Translucent paper tint applied over whatever the window material is.
+   Uses the active theme's bg tokens so light/dark both get their own
+   ambient wash. */
+#root {
+  background: linear-gradient(
+    180deg,
+    rgb(var(--z-bg-softer) / 0.55) 0%,
+    rgb(var(--z-bg) / 0.75) 100%
+  );
+}
+
+/* On Windows/Linux (no backdrop-filter support) paint a solid background
+   so the glass panels still have something to sit on. */
+@supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+  body {
+    background: rgb(var(--z-bg));
+  }
+}
+
+/* --- Reusable glass surfaces ------------------------------------------ */
+
+.glass-panel {
+  background: rgb(var(--z-bg) / var(--z-glass-a1));
+  -webkit-backdrop-filter: saturate(var(--z-glass-sat)) blur(var(--z-glass-blur));
+  backdrop-filter: saturate(var(--z-glass-sat)) blur(var(--z-glass-blur));
+  box-shadow: var(--glass-shadow);
+}
+
+.glass-raised {
+  background: rgb(var(--z-bg-softer) / 0.88);
+  -webkit-backdrop-filter: saturate(var(--z-glass-sat)) blur(calc(var(--z-glass-blur) + 4px));
+  backdrop-filter: saturate(var(--z-glass-sat)) blur(calc(var(--z-glass-blur) + 4px));
+  box-shadow: var(--glass-shadow);
+}
+
+.glass-sidebar {
+  background: linear-gradient(
+    180deg,
+    rgb(var(--z-bg-softer) / var(--z-glass-a1)) 0%,
+    rgb(var(--z-bg) / var(--z-glass-a2)) 100%
+  );
+  -webkit-backdrop-filter: saturate(var(--z-glass-sat)) blur(var(--z-glass-blur));
+  backdrop-filter: saturate(var(--z-glass-sat)) blur(var(--z-glass-blur));
+  border-right: 1px solid var(--glass-stroke);
+}
+
+.glass-column {
+  background: linear-gradient(
+    180deg,
+    rgb(var(--z-bg-softer) / var(--z-glass-a2)) 0%,
+    rgb(var(--z-bg) / var(--z-glass-a3)) 100%
+  );
+  -webkit-backdrop-filter: saturate(var(--z-glass-sat)) blur(calc(var(--z-glass-blur) - 2px));
+  backdrop-filter: saturate(var(--z-glass-sat)) blur(calc(var(--z-glass-blur) - 2px));
+  border-right: 1px solid var(--glass-stroke);
+}
+
+.glass-titlebar {
+  background: rgb(var(--z-bg) / var(--z-glass-a3));
+  -webkit-backdrop-filter: saturate(var(--z-glass-sat)) blur(var(--z-glass-blur));
+  backdrop-filter: saturate(var(--z-glass-sat)) blur(var(--z-glass-blur));
+  border-bottom: 1px solid var(--glass-stroke);
+}
+
+.glass-header {
+  background: rgb(var(--z-bg) / var(--z-glass-a4));
+  -webkit-backdrop-filter: saturate(var(--z-glass-sat)) blur(calc(var(--z-glass-blur) - 2px));
+  backdrop-filter: saturate(var(--z-glass-sat)) blur(calc(var(--z-glass-blur) - 2px));
+  border-bottom: 1px solid var(--glass-stroke);
 }
 
 input,
@@ -48,7 +723,7 @@ textarea,
   background-clip: padding-box;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(42, 38, 32, 0.32);
+  background: rgb(var(--z-shadow) / 0.32);
   background-clip: padding-box;
   border: 2px solid transparent;
 }
@@ -65,40 +740,134 @@ textarea,
   -webkit-app-region: no-drag;
 }
 
-/* --- CodeMirror paper theme --------------------------------------------- */
+/* --- CodeMirror editor theme ------------------------------------------- */
 
 .cm-editor {
   background: transparent !important;
-  font-family: theme('fontFamily.sans');
-  font-size: 16px;
-  line-height: 1.7;
-  color: theme('colors.ink.900');
+  /* Text font (editor + preview body). Falls back to SF Mono so
+     writing feels code-ish out of the box. */
+  font-family: var(
+    --z-text-font,
+    'SF Mono',
+    'SFMono-Regular',
+    ui-monospace,
+    'JetBrains Mono',
+    Menlo,
+    Consolas,
+    'Liberation Mono',
+    monospace
+  );
+  font-size: var(--z-editor-font-size, 16px);
+  line-height: var(--z-editor-line-height, 1.7);
+  color: rgb(var(--z-fg));
   height: 100%;
+  contain: layout style;
 }
 .cm-editor.cm-focused {
   outline: none !important;
 }
 .cm-editor .cm-scroller {
   font-family: inherit;
-  padding: 8px 0 40vh 0;
-  overflow: auto;
+  padding: 16px 0 35vh 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
 }
 .cm-editor .cm-content {
-  max-width: 760px;
+  /* No hard cap — text reflows to fill whatever the editor column is. */
+  max-width: none;
   margin: 0 auto;
-  padding: 0 8px;
-  caret-color: theme('colors.accent.DEFAULT');
+  padding: 0 32px;
+  caret-color: rgb(var(--z-accent));
+  /* CM's built-in theme sets its own line-height on cm-content; force
+     inherit so our --z-editor-line-height CSS var actually wins. */
+  line-height: inherit;
 }
 .cm-editor .cm-line {
   padding: 0;
+  line-height: inherit;
 }
 .cm-editor .cm-cursor,
 .cm-editor .cm-dropCursor {
-  border-left-color: theme('colors.accent.DEFAULT');
+  border-left: 2px solid rgb(var(--z-accent));
 }
 .cm-editor .cm-selectionBackground,
 .cm-editor ::selection {
-  background: rgba(233, 123, 60, 0.18) !important;
+  background: rgb(var(--z-accent) / 0.22) !important;
+}
+
+/* --- Vim block cursor (normal mode) ---------------------------------- */
+/*
+ * @replit/codemirror-vim inserts a `.cm-fat-cursor` element in normal mode
+ * and renders it as a 1px outline on webkit, which looks like a thin
+ * line. We want an Obsidian/Vim-style solid block.
+ */
+.cm-editor .cm-fat-cursor,
+.cm-editor.cm-focused .cm-fat-cursor {
+  background: rgb(var(--z-accent) / 0.55) !important;
+  outline: none !important;
+  border: none !important;
+  min-width: 0.55em;
+  color: rgb(var(--z-fg)) !important;
+  mix-blend-mode: multiply;
+}
+:root[data-theme^='dark'] .cm-editor .cm-fat-cursor,
+:root[data-theme^='dark'] .cm-editor.cm-focused .cm-fat-cursor {
+  mix-blend-mode: screen;
+}
+/* Secondary/inactive fat cursor */
+.cm-editor .cm-fat-cursor.cm-cursor-secondary {
+  background: rgb(var(--z-grey-1) / 0.4) !important;
+  outline: none !important;
+}
+/* When in fat-cursor mode, hide the thin bar cursor entirely */
+.cm-editor.cm-focused .cm-fat-cursor ~ .cm-cursor,
+.cm-editor .cm-fat-cursor ~ .cm-cursor {
+  display: none;
+}
+
+/* --- Vim ex command panel (`:` / `/` / `?` input at the bottom) ----- */
+/*
+ * @replit/codemirror-vim mounts its command input as a CM panel. The
+ * default styling is bare white — replace it with theme-aware colors
+ * that match the active Gruvbox / Catppuccin / GitHub / Tokyo Night
+ * palette, and use the same monospace stack as the editor.
+ */
+.cm-editor .cm-panels,
+.cm-editor .cm-panels-bottom,
+.cm-editor .cm-panels-top {
+  background: rgb(var(--z-bg-softer)) !important;
+  border-color: rgb(var(--z-bg-3)) !important;
+  color: rgb(var(--z-fg)) !important;
+}
+.cm-editor .cm-vim-panel {
+  background: rgb(var(--z-bg-softer)) !important;
+  color: rgb(var(--z-fg)) !important;
+  font-family: 'SF Mono', 'SFMono-Regular', ui-monospace, 'JetBrains Mono',
+    Menlo, Consolas, monospace !important;
+  border-top: 1px solid rgb(var(--z-bg-3));
+  padding: 4px 10px !important;
+}
+.cm-editor .cm-vim-panel input,
+.cm-editor .cm-vim-panel textarea {
+  background: transparent !important;
+  color: rgb(var(--z-fg)) !important;
+  caret-color: rgb(var(--z-accent)) !important;
+  font-family: inherit !important;
+  font-size: 0.95em !important;
+  outline: none !important;
+  border: none !important;
+  width: 100%;
+}
+.cm-editor .cm-vim-panel ::selection,
+.cm-editor .cm-vim-panel input::selection {
+  background: rgb(var(--z-accent) / 0.3) !important;
+  color: inherit !important;
+}
+/* Vim status text (e.g. the mode indicator "-- INSERT --") */
+.cm-editor .cm-vim-panel span,
+.cm-editor .cm-vim-panel div {
+  color: rgb(var(--z-fg-2));
 }
 .cm-editor .cm-activeLine {
   background: transparent;
@@ -128,46 +897,76 @@ textarea,
 .cm-editor .tok-heading3 {
   font-size: 1.15em;
 }
+/*
+ * All editor content tokens share the same primary foreground color so
+ * there's no distracting gray-on-white hierarchy. Only accent-linked
+ * tokens (links, URLs) break from the norm.
+ */
+.cm-editor .tok-heading,
+.cm-editor .tok-heading1,
+.cm-editor .tok-heading2,
+.cm-editor .tok-heading3,
+.cm-editor .tok-heading4,
+.cm-editor .tok-heading5,
+.cm-editor .tok-heading6,
+.cm-editor .tok-emphasis,
+.cm-editor .tok-strong,
+.cm-editor .tok-quote,
+.cm-editor .tok-list,
+.cm-editor .tok-meta {
+  color: rgb(var(--z-fg));
+}
 .cm-editor .tok-emphasis {
   font-style: italic;
-  color: theme('colors.ink.800');
 }
 .cm-editor .tok-strong {
   font-weight: 700;
-  color: theme('colors.ink.900');
+}
+.cm-editor .tok-quote {
+  font-style: italic;
 }
 .cm-editor .tok-link,
 .cm-editor .tok-url {
-  color: theme('colors.accent.DEFAULT');
+  color: rgb(var(--z-accent));
   text-decoration: none;
 }
 .cm-editor .tok-monospace {
-  font-family: theme('fontFamily.mono');
+  font-family: var(
+    --z-mono-font,
+    'SF Mono',
+    'SFMono-Regular',
+    ui-monospace,
+    'JetBrains Mono',
+    Menlo,
+    Consolas,
+    monospace
+  );
   font-size: 0.92em;
-  background: theme('colors.paper.200');
+  background: rgb(var(--z-bg-2));
   padding: 1px 4px;
   border-radius: 4px;
-  color: theme('colors.ink.800');
-}
-.cm-editor .tok-quote {
-  color: theme('colors.ink.600');
-  font-style: italic;
-}
-.cm-editor .tok-list {
-  color: theme('colors.ink.700');
-}
-.cm-editor .tok-meta {
-  color: theme('colors.ink.500');
+  color: rgb(var(--z-fg));
 }
 
 /* --- Rendered markdown (preview) --------------------------------------- */
 
 .prose-zen {
-  max-width: 760px;
-  margin: 0 auto;
-  padding: 0 8px 40vh;
-  font-size: 16px;
-  line-height: 1.7;
+  max-width: none;
+  margin: 0;
+  padding: 16px 32px 40vh;
+  font-family: var(
+    --z-text-font,
+    'SF Mono',
+    'SFMono-Regular',
+    ui-monospace,
+    'JetBrains Mono',
+    Menlo,
+    Consolas,
+    'Liberation Mono',
+    monospace
+  );
+  font-size: var(--z-editor-font-size, 16px);
+  line-height: var(--z-editor-line-height, 1.7);
   color: theme('colors.ink.900');
 }
 .prose-zen h1,
@@ -241,7 +1040,16 @@ textarea,
   border-radius: 0 8px 8px 0;
 }
 .prose-zen code {
-  font-family: theme('fontFamily.mono');
+  font-family: var(
+    --z-mono-font,
+    'SF Mono',
+    'SFMono-Regular',
+    ui-monospace,
+    'JetBrains Mono',
+    Menlo,
+    Consolas,
+    monospace
+  );
   font-size: 0.9em;
   background: theme('colors.paper.200');
   padding: 1px 6px;
@@ -332,46 +1140,41 @@ textarea,
   font-weight: 600;
   margin-bottom: 0.35em;
 }
-.prose-zen .callout[data-callout='note'] {
-  border-color: #c5dcf5;
-  background: #f3f8ff;
+.prose-zen .callout[data-callout='note'],
+.prose-zen .callout[data-callout='info'] {
+  border-color: rgb(var(--z-blue) / 0.35);
+  background: rgb(var(--z-blue) / 0.08);
 }
-.prose-zen .callout[data-callout='note'] .callout-title {
-  color: #2563a5;
+.prose-zen .callout[data-callout='note'] .callout-title,
+.prose-zen .callout[data-callout='info'] .callout-title {
+  color: rgb(var(--z-blue));
 }
 .prose-zen .callout[data-callout='tip'],
 .prose-zen .callout[data-callout='hint'] {
-  border-color: #c7e4cb;
-  background: #f3faf4;
+  border-color: rgb(var(--z-green) / 0.35);
+  background: rgb(var(--z-green) / 0.08);
 }
 .prose-zen .callout[data-callout='tip'] .callout-title,
 .prose-zen .callout[data-callout='hint'] .callout-title {
-  color: #2e7d3a;
+  color: rgb(var(--z-green));
 }
 .prose-zen .callout[data-callout='warning'],
 .prose-zen .callout[data-callout='warn'] {
-  border-color: #f2dcb4;
-  background: #fdf7ea;
+  border-color: rgb(var(--z-yellow) / 0.4);
+  background: rgb(var(--z-yellow) / 0.08);
 }
 .prose-zen .callout[data-callout='warning'] .callout-title,
 .prose-zen .callout[data-callout='warn'] .callout-title {
-  color: #a36800;
+  color: rgb(var(--z-yellow));
 }
 .prose-zen .callout[data-callout='danger'],
 .prose-zen .callout[data-callout='error'] {
-  border-color: #f2c6c0;
-  background: #fdf1ef;
+  border-color: rgb(var(--z-red) / 0.35);
+  background: rgb(var(--z-red) / 0.08);
 }
 .prose-zen .callout[data-callout='danger'] .callout-title,
 .prose-zen .callout[data-callout='error'] .callout-title {
-  color: #b4321f;
-}
-.prose-zen .callout[data-callout='info'] {
-  border-color: #cdd7e4;
-  background: #f5f7fa;
-}
-.prose-zen .callout[data-callout='info'] .callout-title {
-  color: #445873;
+  color: rgb(var(--z-red));
 }
 
 /* Mermaid diagram container */
@@ -390,4 +1193,38 @@ textarea,
 /* Fade between list items + general transitions */
 .list-row {
   transition: background-color 120ms ease, color 120ms ease;
+}
+
+/* --- Themed range slider (used in SettingsModal) ----------------------- */
+.zen-slider {
+  background: rgb(var(--z-bg-3));
+}
+.zen-slider::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 9999px;
+  background: rgb(var(--z-bg-3));
+}
+.zen-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  margin-top: -6px;
+  border-radius: 9999px;
+  background: rgb(var(--z-accent));
+  border: 2px solid rgb(var(--z-bg));
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.2);
+  cursor: pointer;
+}
+.zen-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 9999px;
+  background: rgb(var(--z-accent));
+  border: 2px solid rgb(var(--z-bg));
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.2);
+  cursor: pointer;
+}
+.zen-slider:focus {
+  outline: none;
 }

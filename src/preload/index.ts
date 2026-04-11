@@ -10,6 +10,7 @@ import type {
 
 const api = {
   platform: (): Promise<NodeJS.Platform> => ipcRenderer.invoke(IPC.APP_PLATFORM),
+  listSystemFonts: (): Promise<string[]> => ipcRenderer.invoke(IPC.APP_LIST_FONTS),
 
   getCurrentVault: (): Promise<VaultInfo | null> => ipcRenderer.invoke(IPC.VAULT_GET_CURRENT),
   pickVault: (): Promise<VaultInfo | null> => ipcRenderer.invoke(IPC.VAULT_PICK),
@@ -34,6 +35,10 @@ const api = {
     ipcRenderer.invoke(IPC.VAULT_ARCHIVE_NOTE, relPath),
   unarchiveNote: (relPath: string): Promise<NoteMeta> =>
     ipcRenderer.invoke(IPC.VAULT_UNARCHIVE_NOTE, relPath),
+  duplicateNote: (relPath: string): Promise<NoteMeta> =>
+    ipcRenderer.invoke(IPC.VAULT_DUPLICATE_NOTE, relPath),
+  revealNote: (relPath: string): Promise<void> =>
+    ipcRenderer.invoke(IPC.VAULT_REVEAL_NOTE, relPath),
 
   onVaultChange: (cb: (ev: VaultChangeEvent) => void): (() => void) => {
     const listener = (_: unknown, ev: VaultChangeEvent): void => cb(ev)

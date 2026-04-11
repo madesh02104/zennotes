@@ -7,38 +7,58 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Warm paper palette inspired by the reference screenshot
+        // All colors resolve to CSS custom properties defined in index.css.
+        // Values are space-separated RGB triplets so Tailwind's opacity
+        // modifiers (e.g. `bg-paper-100/50`) keep working.
         paper: {
-          50: '#fdfbf7',
-          100: '#faf7f0',
-          200: '#f5f0e6',
-          300: '#ebe4d5',
-          400: '#d9d0bd',
-          500: '#b8ad94'
+          50: 'rgb(var(--z-bg-softer) / <alpha-value>)',
+          100: 'rgb(var(--z-bg) / <alpha-value>)',
+          200: 'rgb(var(--z-bg-1) / <alpha-value>)',
+          300: 'rgb(var(--z-bg-2) / <alpha-value>)',
+          400: 'rgb(var(--z-bg-3) / <alpha-value>)',
+          500: 'rgb(var(--z-bg-4) / <alpha-value>)'
         },
         ink: {
-          900: '#2a2620',
-          800: '#3a332a',
-          700: '#4e4537',
-          600: '#6a6050',
-          500: '#8a8073',
-          400: '#a89f90',
-          300: '#c4baa9'
+          900: 'rgb(var(--z-fg) / <alpha-value>)',
+          800: 'rgb(var(--z-fg-1) / <alpha-value>)',
+          700: 'rgb(var(--z-fg-2) / <alpha-value>)',
+          600: 'rgb(var(--z-grey-2) / <alpha-value>)',
+          500: 'rgb(var(--z-grey-1) / <alpha-value>)',
+          400: 'rgb(var(--z-grey-0) / <alpha-value>)',
+          300: 'rgb(var(--z-grey-dim) / <alpha-value>)'
         },
         accent: {
-          DEFAULT: '#e97b3c',
-          soft: '#f39568',
-          muted: '#f5b895'
+          DEFAULT: 'rgb(var(--z-accent) / <alpha-value>)',
+          soft: 'rgb(var(--z-accent-soft) / <alpha-value>)',
+          muted: 'rgb(var(--z-accent-muted) / <alpha-value>)'
         }
       },
       fontFamily: {
-        sans: ['-apple-system', 'BlinkMacSystemFont', '"SF Pro Text"', '"Inter"', 'system-ui', 'sans-serif'],
-        serif: ['"Iowan Old Style"', '"Source Serif Pro"', 'Georgia', 'serif'],
-        mono: ['"JetBrains Mono"', '"SF Mono"', 'Menlo', 'monospace']
+        sans: [
+          '-apple-system',
+          'BlinkMacSystemFont',
+          '"SF Pro Text"',
+          '"Inter"',
+          'system-ui',
+          'sans-serif'
+        ],
+        serif: [
+          '"Iowan Old Style"',
+          '"Source Serif Pro"',
+          'Georgia',
+          'serif'
+        ],
+        mono: [
+          '"JetBrains Mono"',
+          '"SF Mono"',
+          'Menlo',
+          'monospace'
+        ]
       },
       boxShadow: {
-        panel: '0 1px 0 0 rgba(42, 38, 32, 0.04), 0 8px 28px -12px rgba(42, 38, 32, 0.12)',
-        float: '0 20px 60px -20px rgba(42, 38, 32, 0.25)'
+        panel:
+          '0 1px 0 0 rgb(var(--z-shadow) / 0.04), 0 8px 28px -12px rgb(var(--z-shadow) / 0.18)',
+        float: '0 20px 60px -20px rgb(var(--z-shadow) / 0.28)'
       }
     }
   },

@@ -1,25 +1,30 @@
 import { useMemo } from 'react'
 import { useStore } from '../store'
+import { extractTags } from '../lib/tags'
 import type { NoteFolder } from '@shared/ipc'
 import {
   ArchiveIcon,
-  ChatIcon,
   FeedbackIcon,
   InboxIcon,
+  PanelLeftIcon,
   PlusIcon,
   SearchIcon,
   SettingsIcon,
   TagIcon,
   TrashIcon
 } from './icons'
+import { VaultBadge } from './VaultBadge'
 
 export function Sidebar(): JSX.Element {
   const vault = useStore((s) => s.vault)
   const notes = useStore((s) => s.notes)
+  const activeNote = useStore((s) => s.activeNote)
   const view = useStore((s) => s.view)
   const setView = useStore((s) => s.setView)
   const setSearchOpen = useStore((s) => s.setSearchOpen)
   const createAndOpen = useStore((s) => s.createAndOpen)
+  const toggleSidebar = useStore((s) => s.toggleSidebar)
+  const setSettingsOpen = useStore((s) => s.setSettingsOpen)
 
   const counts = useMemo(() => {
     const c: Record<NoteFolder, number> = { inbox: 0, archive: 0, trash: 0 }
@@ -27,34 +32,48 @@ export function Sidebar(): JSX.Element {
     return c
   }, [notes])
 
-  // Tag extraction is handled in main; trash notes are excluded from the index.
+  // Build the tag index. For every note we trust the tag list the
+  // main process computed on the last save, EXCEPT the note that's
+  // currently open in the editor — for that one we re-extract tags
+  // from the in-memory body so new hashtags appear the instant the
+  // user types them, without waiting for the debounced save. Trash
+  // notes are excluded from the index.
   const tags = useMemo(() => {
     const counter = new Map<string, number>()
     for (const n of notes) {
       if (n.folder === 'trash') continue
-      for (const t of n.tags) counter.set(t, (counter.get(t) ?? 0) + 1)
+      const isActive = activeNote && activeNote.path === n.path
+      const list = isActive ? extractTags(activeNote!.body) : n.tags
+      for (const t of list) counter.set(t, (counter.get(t) ?? 0) + 1)
     }
     return [...counter.entries()].sort((a, b) => a[0].localeCompare(b[0]))
-  }, [notes])
+  }, [notes, activeNote])
 
   return (
-    <aside className="flex w-[232px] shrink-0 flex-col border-r border-paper-300/70 bg-paper-50/70 px-3 pb-3 pt-3">
+    <aside className="glass-sidebar flex w-[232px] shrink-0 flex-col px-3 pb-3 pt-3">
       <div className="flex items-center justify-between px-2 pb-3">
-        <div className="flex items-center gap-2">
-          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-accent to-accent-soft text-[11px] font-semibold text-white shadow-sm">
-            {vault?.name.slice(0, 1).toUpperCase() ?? 'Z'}
-          </div>
+        <div className="flex min-w-0 items-center gap-2">
+          <VaultBadge name={vault?.name ?? 'ZenNotes'} size={28} />
           <div className="truncate text-sm font-medium text-ink-800">
             {vault?.name ?? 'ZenNotes'}
           </div>
         </div>
-        <button
-          className="flex h-6 w-6 items-center justify-center rounded-md text-ink-500 hover:bg-paper-200 hover:text-ink-800"
-          onClick={() => void createAndOpen('inbox')}
-          title="New note"
-        >
-          <PlusIcon />
-        </button>
+        <div className="flex items-center gap-0.5">
+          <button
+            className="flex h-6 w-6 items-center justify-center rounded-md text-ink-500 hover:bg-paper-200 hover:text-ink-800"
+            onClick={() => void createAndOpen('inbox')}
+            title="New note"
+          >
+            <PlusIcon />
+          </button>
+          <button
+            className="flex h-6 w-6 items-center justify-center rounded-md text-ink-500 hover:bg-paper-200 hover:text-ink-800"
+            onClick={toggleSidebar}
+            title="Hide sidebar (⌘\\)"
+          >
+            <PanelLeftIcon />
+          </button>
+        </div>
       </div>
 
       <nav className="flex flex-col gap-0.5">
@@ -78,7 +97,6 @@ export function Sidebar(): JSX.Element {
           active={view.kind === 'folder' && view.folder === 'archive'}
           onClick={() => setView({ kind: 'folder', folder: 'archive' })}
         />
-        <Row icon={<ChatIcon />} label="Chat" onClick={() => undefined} disabled />
       </nav>
 
       <div className="mt-5 px-2 pb-1 text-[11px] font-medium uppercase tracking-wide text-ink-500">
@@ -102,7 +120,7 @@ export function Sidebar(): JSX.Element {
       </div>
 
       <div className="mt-auto flex flex-col gap-0.5 pt-4">
-        <Row icon={<SettingsIcon />} label="Settings" disabled onClick={() => undefined} />
+        <Row icon={<SettingsIcon />} label="Settings" onClick={() => setSettingsOpen(true)} />
         <Row icon={<FeedbackIcon />} label="Share feedback" disabled onClick={() => undefined} />
         <Row
           icon={<TrashIcon />}

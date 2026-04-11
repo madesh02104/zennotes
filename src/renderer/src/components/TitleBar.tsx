@@ -12,7 +12,7 @@ export function TitleBar(): JSX.Element {
 
   return (
     <div
-      className="drag-region flex h-11 shrink-0 items-center border-b border-paper-300/70 bg-paper-100 px-4 text-xs text-ink-500"
+      className="drag-region glass-titlebar flex h-11 shrink-0 items-center px-4 text-xs text-ink-500"
       style={{ paddingLeft: isMac ? 80 : 12 }}
     >
       <div className="flex-1 text-center tracking-wide">

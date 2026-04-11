@@ -269,6 +269,29 @@ export async function deleteNote(root: string, rel: string): Promise<void> {
   await fs.rm(abs, { force: true })
 }
 
+export async function duplicateNote(root: string, rel: string): Promise<NoteMeta> {
+  const abs = resolveSafe(root, rel)
+  const folder = folderOf(root, abs)
+  if (!folder) throw new Error(`Note not in a known folder: ${rel}`)
+  const dir = path.dirname(abs)
+  const ext = path.extname(abs)
+  const baseTitle = path.basename(abs, ext)
+  const copyTitle = await uniqueTitle(dir, `${baseTitle} copy`)
+  const destAbs = path.join(dir, `${copyTitle}${ext}`)
+  const body = await fs.readFile(abs, 'utf8')
+  await fs.writeFile(destAbs, body, 'utf8')
+  return await readMeta(root, destAbs, folder)
+}
+
+/**
+ * Returns the absolute path for a note, for use with `shell.showItemInFolder`
+ * (Finder reveal). Path resolution is validated the same way as other
+ * vault operations.
+ */
+export function absolutePath(root: string, rel: string): string {
+  return resolveSafe(root, rel)
+}
+
 const WELCOME_NOTE = `# Welcome to ZenNotes
 
 ZenNotes is a **file-based** markdown notes app made for focus and deep work. Every note is a plain \`.md\` file in your vault — yours to keep, sync, and version however you like.
@@ -277,7 +300,7 @@ ZenNotes is a **file-based** markdown notes app made for focus and deep work. Ev
 
 - **GitHub-flavored markdown** — tables, task lists, footnotes, strikethrough
 - **Wiki links** — jump between notes with [[double brackets]]
-- **Tags** — drop #ideas or #today anywhere and they'll appear in the sidebar
+- **Tags** — write a hashtag like \`#project\` in any note and it appears in the sidebar
 - **Math** — inline like $e^{i\\pi}+1=0$ or as blocks
 - **Callouts** — Obsidian-style \`> [!note]\` blocks
 - **Mermaid diagrams** — code-fenced \`\`\`mermaid blocks render inline
@@ -286,7 +309,6 @@ ZenNotes is a **file-based** markdown notes app made for focus and deep work. Ev
 ## Try it
 
 - [ ] Write your first note
-- [ ] Add a tag like #welcome
 - [ ] Link to [[another note]]
 
 > [!tip]

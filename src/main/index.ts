@@ -1,12 +1,16 @@
-import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, session, shell } from 'electron'
+import { execFile } from 'node:child_process'
+import { promises as fsp } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { IPC } from '@shared/ipc'
 import type { NoteFolder, VaultChangeEvent, VaultInfo } from '@shared/ipc'
 import {
+  absolutePath,
   archiveNote,
   createNote,
   deleteNote,
+  duplicateNote,
   emptyTrash,
   ensureVaultLayout,
   listNotes,
@@ -33,6 +37,7 @@ function isMac(): boolean {
 }
 
 function createWindow(): void {
+  const mac = isMac()
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 820,
@@ -40,9 +45,23 @@ function createWindow(): void {
     minHeight: 600,
     show: false,
     autoHideMenuBar: true,
-    titleBarStyle: isMac() ? 'hiddenInset' : 'hidden',
+    titleBarStyle: mac ? 'hiddenInset' : 'hidden',
     trafficLightPosition: { x: 16, y: 16 },
-    backgroundColor: '#faf7f0',
+    // Apple Liquid Glass: we want system materials to show through the
+    // window chrome. On macOS 26+ Electron maps `vibrancy: 'fullscreen-ui'`
+    // to the new glass material; older macOS versions fall back to the
+    // traditional vibrancy behaviour automatically.
+    ...(mac
+      ? {
+          vibrancy: 'under-window' as const,
+          visualEffectState: 'active' as const,
+          backgroundColor: '#00000000',
+          transparent: true
+        }
+      : {
+          backgroundColor: '#faf7f0',
+          icon: path.join(__dirname, '../../build/icon.png')
+        }),
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.js'),
       sandbox: false,
@@ -83,8 +102,120 @@ function requireVault(): VaultInfo {
   return currentVault
 }
 
+/**
+ * Enumerate installed font families for the font picker.
+ *
+ * On macOS we call `system_profiler SPFontsDataType -json` and pull the
+ * `typefaces[].family` field out of each entry — that's the actual
+ * family name users see in Font Book (`JetBrains Mono`, `SF Mono`),
+ * not the raw filename. Falls back to the `font-list` package on other
+ * platforms.
+ */
+function listFontFamiliesMac(): Promise<string[]> {
+  return new Promise((resolve) => {
+    execFile(
+      '/usr/sbin/system_profiler',
+      ['SPFontsDataType', '-json'],
+      { maxBuffer: 200 * 1024 * 1024 },
+      async (err, stdout) => {
+        if (err) {
+          console.error('system_profiler failed', err)
+          resolve([])
+          return
+        }
+        try {
+          const data = JSON.parse(stdout) as {
+            SPFontsDataType: Array<{
+              _name?: string
+              typefaces?: Array<{ family?: string; _name?: string }>
+            }>
+          }
+          const entries = data.SPFontsDataType || []
+          const families = new Set<string>()
+          for (const entry of entries) {
+            const faces = entry.typefaces || []
+            for (const f of faces) {
+              const name = f.family?.trim()
+              if (!name) continue
+              // Skip macOS private system fonts (leading dot, e.g.
+              // `.SF NS`, `.SF Arabic`) — they're meant for the OS,
+              // not user-selectable text.
+              if (name.startsWith('.')) continue
+              families.add(name)
+            }
+          }
+          // Also include every file name that might not appear as a
+          // registered typeface — rare but gives us an extra safety net
+          // for fonts that were activated after boot and aren't yet in
+          // the system_profiler cache.
+          try {
+            const homeFonts = path.join(app.getPath('home'), 'Library', 'Fonts')
+            const files = await fsp.readdir(homeFonts)
+            for (const f of files) {
+              if (/\.(ttf|otf|ttc|otc)$/i.test(f)) {
+                // Not a family name but a filename — only add if we
+                // can't find any family that shares its stem.
+                const stem = f.replace(/\.(ttf|otf|ttc|otc)$/i, '')
+                const guess = stem.replace(/[-_]/g, ' ').replace(/\s+/g, ' ').trim()
+                if (guess && ![...families].some((fam) => guess.toLowerCase().startsWith(fam.toLowerCase()))) {
+                  // leave unmatched file stems out of the picker — they
+                  // rarely map cleanly to a family the user would pick.
+                }
+              }
+            }
+          } catch {
+            /* ignore */
+          }
+          resolve(
+            [...families].sort((a, b) =>
+              a.localeCompare(b, undefined, { sensitivity: 'base' })
+            )
+          )
+        } catch (e) {
+          console.error('failed to parse system_profiler JSON', e)
+          resolve([])
+        }
+      }
+    )
+  })
+}
+
+async function listFontFamilies(): Promise<string[]> {
+  if (process.platform === 'darwin') {
+    const list = await listFontFamiliesMac()
+    if (list.length > 0) return list
+  }
+  // Cross-platform fallback via the `font-list` package.
+  try {
+    const mod = (await import('font-list')) as unknown as {
+      getFonts?: () => Promise<string[]>
+      default?: { getFonts?: () => Promise<string[]> }
+    }
+    const getFonts = mod.getFonts ?? mod.default?.getFonts
+    if (!getFonts) return []
+    const raw = await getFonts()
+    const unique = new Set<string>()
+    for (const f of raw) {
+      const name = f.replace(/^"|"$/g, '').trim()
+      if (name) unique.add(name)
+    }
+    return [...unique].sort((a, b) =>
+      a.localeCompare(b, undefined, { sensitivity: 'base' })
+    )
+  } catch (err) {
+    console.error('font-list fallback failed', err)
+    return []
+  }
+}
+
 function registerIpc(): void {
   ipcMain.handle(IPC.APP_PLATFORM, () => process.platform)
+
+  ipcMain.handle(IPC.APP_LIST_FONTS, async () => {
+    const list = await listFontFamilies()
+    console.log(`listFontFamilies: returning ${list.length} families`)
+    return list
+  })
 
   ipcMain.handle(IPC.VAULT_GET_CURRENT, async () => {
     if (currentVault) return currentVault
@@ -164,6 +295,17 @@ function registerIpc(): void {
     return await unarchiveNote(v.root, relPath)
   })
 
+  ipcMain.handle(IPC.VAULT_DUPLICATE_NOTE, async (_e, relPath: string) => {
+    const v = requireVault()
+    return await duplicateNote(v.root, relPath)
+  })
+
+  ipcMain.handle(IPC.VAULT_REVEAL_NOTE, async (_e, relPath: string) => {
+    const v = requireVault()
+    const abs = absolutePath(v.root, relPath)
+    shell.showItemInFolder(abs)
+  })
+
   ipcMain.on(IPC.WINDOW_MINIMIZE, () => mainWindow?.minimize())
   ipcMain.on(IPC.WINDOW_TOGGLE_MAXIMIZE, () => {
     if (!mainWindow) return
@@ -174,6 +316,28 @@ function registerIpc(): void {
 }
 
 app.whenReady().then(async () => {
+  // Auto-grant the Local Font Access permission so `queryLocalFonts()`
+  // can enumerate system fonts without a prompt. This is our own app
+  // talking to our own vault — no third-party surface.
+  session.defaultSession.setPermissionRequestHandler((_wc, permission, callback) => {
+    // 'local-fonts' is not in Electron's published permission union yet,
+    // but Chromium emits it when the renderer calls `queryLocalFonts()`.
+    if ((permission as string) === 'local-fonts') return callback(true)
+    callback(false)
+  })
+
+  // macOS dock icon. `BrowserWindow.icon` has no effect on macOS — the
+  // dock picks up whatever the running binary advertises. During
+  // `npm run dev` that's Electron's default, so we force our own.
+  if (isMac() && app.dock) {
+    try {
+      const iconPath = path.join(__dirname, '../../build/icon.png')
+      app.dock.setIcon(iconPath)
+    } catch (err) {
+      console.error('Failed to set dock icon', err)
+    }
+  }
+
   registerIpc()
   createWindow()
 
