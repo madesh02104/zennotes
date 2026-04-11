@@ -27,6 +27,7 @@ function App(): JSX.Element {
   const textFont = useStore((s) => s.textFont)
   const monoFont = useStore((s) => s.monoFont)
   const transparentUi = useStore((s) => s.transparentUi)
+  const darkSidebar = useStore((s) => s.darkSidebar)
 
   useEffect(() => {
     void init()
@@ -91,6 +92,15 @@ function App(): JSX.Element {
     if (transparentUi) html.removeAttribute('data-opaque')
     else html.setAttribute('data-opaque', '')
   }, [transparentUi])
+
+  // Sidebar darken toggle: when on, the sidebar reads `--z-bg-1`
+  // (one step darker than the main canvas `--z-bg`) regardless of
+  // theme, giving a subtle chrome/content separation.
+  useEffect(() => {
+    const html = document.documentElement
+    if (darkSidebar) html.setAttribute('data-dark-sidebar', '')
+    else html.removeAttribute('data-dark-sidebar')
+  }, [darkSidebar])
 
   useEffect(() => {
     const handler = (e: KeyboardEvent): void => {

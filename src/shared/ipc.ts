@@ -5,6 +5,7 @@ export const IPC = {
   VAULT_PICK: 'vault:pick',
   VAULT_GET_CURRENT: 'vault:get-current',
   VAULT_LIST_NOTES: 'vault:list-notes',
+  VAULT_LIST_FOLDERS: 'vault:list-folders',
   VAULT_READ_NOTE: 'vault:read-note',
   VAULT_WRITE_NOTE: 'vault:write-note',
   VAULT_CREATE_NOTE: 'vault:create-note',
@@ -58,6 +59,13 @@ export interface NoteContent extends NoteMeta {
 export interface VaultInfo {
   root: string
   name: string
+}
+
+export interface FolderEntry {
+  /** Top-level folder (inbox / archive / trash). */
+  folder: NoteFolder
+  /** POSIX subpath relative to the top-level folder, "" for the top-level itself. */
+  subpath: string
 }
 
 export type VaultChangeKind = 'add' | 'change' | 'unlink'

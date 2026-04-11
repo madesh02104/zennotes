@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { IPC } from '@shared/ipc'
 import type {
+  FolderEntry,
   NoteContent,
   NoteFolder,
   NoteMeta,
@@ -16,6 +17,8 @@ const api = {
   pickVault: (): Promise<VaultInfo | null> => ipcRenderer.invoke(IPC.VAULT_PICK),
 
   listNotes: (): Promise<NoteMeta[]> => ipcRenderer.invoke(IPC.VAULT_LIST_NOTES),
+  listFolders: (): Promise<FolderEntry[]> =>
+    ipcRenderer.invoke(IPC.VAULT_LIST_FOLDERS),
   readNote: (relPath: string): Promise<NoteContent> =>
     ipcRenderer.invoke(IPC.VAULT_READ_NOTE, relPath),
   writeNote: (relPath: string, body: string): Promise<NoteMeta> =>

@@ -694,6 +694,48 @@ body {
   border-bottom: 1px solid var(--glass-stroke);
 }
 
+/* --- Dark sidebar override -------------------------------------------- *
+ * When `data-dark-sidebar` is set, the sidebar surface pulls from a
+ * darkened tint of the theme background rather than the main canvas
+ * color. For light themes this mixes ~8% black, for dark themes ~12%
+ * black — always one visible step darker than the editor area.
+ */
+:root[data-dark-sidebar] .glass-sidebar {
+  background: linear-gradient(
+    rgb(0 0 0 / 0.08),
+    rgb(0 0 0 / 0.08)
+  ), rgb(var(--z-bg) / var(--z-glass-a1));
+}
+:root[data-dark-sidebar][data-theme^='dark-'] .glass-sidebar,
+:root[data-dark-sidebar][data-theme='apple-dark'] .glass-sidebar,
+:root[data-dark-sidebar][data-theme^='catppuccin-frappe'] .glass-sidebar,
+:root[data-dark-sidebar][data-theme^='catppuccin-macchiato'] .glass-sidebar,
+:root[data-dark-sidebar][data-theme^='catppuccin-mocha'] .glass-sidebar,
+:root[data-dark-sidebar][data-theme^='github-dark'] .glass-sidebar {
+  background: linear-gradient(
+    rgb(0 0 0 / 0.28),
+    rgb(0 0 0 / 0.28)
+  ), rgb(var(--z-bg) / var(--z-glass-a1));
+}
+/* Same darken applied when the UI is opaque (no backdrop blur). */
+:root[data-dark-sidebar][data-opaque] .glass-sidebar {
+  background: linear-gradient(
+    rgb(0 0 0 / 0.08),
+    rgb(0 0 0 / 0.08)
+  ), rgb(var(--z-bg));
+}
+:root[data-dark-sidebar][data-opaque][data-theme^='dark-'] .glass-sidebar,
+:root[data-dark-sidebar][data-opaque][data-theme='apple-dark'] .glass-sidebar,
+:root[data-dark-sidebar][data-opaque][data-theme^='catppuccin-frappe'] .glass-sidebar,
+:root[data-dark-sidebar][data-opaque][data-theme^='catppuccin-macchiato'] .glass-sidebar,
+:root[data-dark-sidebar][data-opaque][data-theme^='catppuccin-mocha'] .glass-sidebar,
+:root[data-dark-sidebar][data-opaque][data-theme^='github-dark'] .glass-sidebar {
+  background: linear-gradient(
+    rgb(0 0 0 / 0.28),
+    rgb(0 0 0 / 0.28)
+  ), rgb(var(--z-bg));
+}
+
 /* --- Opaque mode override --------------------------------------------- *
  * When the user turns off "Translucent interface" in Settings, the
  * root element gets a `data-opaque` attribute. This kills all glass

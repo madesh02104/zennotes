@@ -1,5 +1,12 @@
 import { create } from 'zustand'
-import type { NoteContent, NoteFolder, NoteMeta, VaultChangeEvent, VaultInfo } from '@shared/ipc'
+import type {
+  FolderEntry,
+  NoteContent,
+  NoteFolder,
+  NoteMeta,
+  VaultChangeEvent,
+  VaultInfo
+} from '@shared/ipc'
 import { DEFAULT_THEME_ID, THEMES, type ThemeFamily, type ThemeMode } from './lib/themes'
 
 export type NoteSortOrder =
@@ -46,6 +53,8 @@ interface Prefs {
   /** Collapse the dedicated note list column and render notes inside
    *  the sidebar tree (Obsidian "File Explorer" layout). */
   unifiedSidebar: boolean
+  /** Tint the sidebar surface a step darker than the main canvas. */
+  darkSidebar: boolean
 }
 const DEFAULT_PREFS: Prefs = {
   vimMode: true,
@@ -63,7 +72,8 @@ const DEFAULT_PREFS: Prefs = {
   noteListWidth: 300,
   noteSortOrder: 'updated-desc',
   autoReveal: true,
-  unifiedSidebar: true
+  unifiedSidebar: true,
+  darkSidebar: true
 }
 /** Coerce any loaded prefs blob into a valid Prefs object, dropping
  *  anything unknown (e.g. tokyo-night left over from earlier versions). */
@@ -130,7 +140,11 @@ function normalizePrefs(p: Partial<Prefs>): Prefs {
     unifiedSidebar:
       typeof p.unifiedSidebar === 'boolean'
         ? p.unifiedSidebar
-        : DEFAULT_PREFS.unifiedSidebar
+        : DEFAULT_PREFS.unifiedSidebar,
+    darkSidebar:
+      typeof p.darkSidebar === 'boolean'
+        ? p.darkSidebar
+        : DEFAULT_PREFS.darkSidebar
   }
 }
 function loadPrefs(): Prefs {
@@ -241,6 +255,7 @@ function collectPrefs(s: {
   noteSortOrder: NoteSortOrder
   autoReveal: boolean
   unifiedSidebar: boolean
+  darkSidebar: boolean
 }): Prefs {
   return {
     vimMode: s.vimMode,
@@ -258,7 +273,8 @@ function collectPrefs(s: {
     noteListWidth: s.noteListWidth,
     noteSortOrder: s.noteSortOrder,
     autoReveal: s.autoReveal,
-    unifiedSidebar: s.unifiedSidebar
+    unifiedSidebar: s.unifiedSidebar,
+    darkSidebar: s.darkSidebar
   }
 }
 
@@ -278,6 +294,7 @@ export type View =
 interface Store {
   vault: VaultInfo | null
   notes: NoteMeta[]
+  folders: FolderEntry[]
   view: View
   selectedPath: string | null
   activeNote: NoteContent | null
@@ -305,6 +322,10 @@ interface Store {
   noteSortOrder: NoteSortOrder
   autoReveal: boolean
   unifiedSidebar: boolean
+  darkSidebar: boolean
+  /** Sidebar tree collapsed-folder keys. Kept in the store so the
+   *  state survives Sidebar unmount/mount (e.g. toggling the sidebar). */
+  collapsedFolders: string[]
 
   setVault: (v: VaultInfo | null) => void
   setNotes: (notes: NoteMeta[]) => void
@@ -340,6 +361,9 @@ interface Store {
   setNoteSortOrder: (order: NoteSortOrder) => void
   setAutoReveal: (on: boolean) => void
   setUnifiedSidebar: (on: boolean) => void
+  setDarkSidebar: (on: boolean) => void
+  toggleCollapseFolder: (key: string) => void
+  setCollapsedFolders: (keys: string[]) => void
   /** Rewrite `#oldTag` → `#newTag` across every non-trash note. */
   renameTag: (oldTag: string, newTag: string) => Promise<void>
   /** Remove `#tag` from every non-trash note. */
@@ -366,6 +390,7 @@ interface Store {
 export const useStore = create<Store>((set, get) => ({
   vault: null,
   notes: [],
+  folders: [],
   view: { kind: 'folder', folder: 'inbox', subpath: '' },
   selectedPath: null,
   activeNote: null,
@@ -392,6 +417,8 @@ export const useStore = create<Store>((set, get) => ({
   noteSortOrder: loadPrefs().noteSortOrder,
   autoReveal: loadPrefs().autoReveal,
   unifiedSidebar: loadPrefs().unifiedSidebar,
+  darkSidebar: loadPrefs().darkSidebar,
+  collapsedFolders: [],
 
   setVault: (v) => set({ vault: v }),
   setNotes: (notes) => set({ notes }),
@@ -414,10 +441,13 @@ export const useStore = create<Store>((set, get) => ({
 
   refreshNotes: async () => {
     try {
-      const notes = await window.zen.listNotes()
-      set({ notes })
+      const [notes, folders] = await Promise.all([
+        window.zen.listNotes(),
+        window.zen.listFolders()
+      ])
+      set({ notes, folders })
     } catch (err) {
-      console.error('listNotes failed', err)
+      console.error('refresh failed', err)
     }
   },
 
@@ -587,6 +617,17 @@ export const useStore = create<Store>((set, get) => ({
     set({ unifiedSidebar: on })
     savePrefs(collectPrefs(get()))
   },
+  setDarkSidebar: (on) => {
+    set({ darkSidebar: on })
+    savePrefs(collectPrefs(get()))
+  },
+  toggleCollapseFolder: (key) =>
+    set((s) =>
+      s.collapsedFolders.includes(key)
+        ? { collapsedFolders: s.collapsedFolders.filter((k) => k !== key) }
+        : { collapsedFolders: [...s.collapsedFolders, key] }
+    ),
+  setCollapsedFolders: (keys) => set({ collapsedFolders: keys }),
 
   renameTag: async (oldTag, newTag) => {
     await rewriteTagAcrossVault(get, oldTag, newTag)

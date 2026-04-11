@@ -32,6 +32,7 @@ import {
 export function Sidebar(): JSX.Element {
   const vault = useStore((s) => s.vault)
   const notes = useStore((s) => s.notes)
+  const allFolders = useStore((s) => s.folders)
   const activeNote = useStore((s) => s.activeNote)
   const view = useStore((s) => s.view)
   const setView = useStore((s) => s.setView)
@@ -118,30 +119,31 @@ export function Sidebar(): JSX.Element {
     note: NoteMeta
   } | null>(null)
   const refreshNotes = useStore((s) => s.refreshNotes)
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
-  const toggleCollapse = (key: string): void => {
-    setCollapsed((prev) => {
-      const next = new Set(prev)
-      if (next.has(key)) next.delete(key)
-      else next.add(key)
-      return next
-    })
-  }
+  const collapsedList = useStore((s) => s.collapsedFolders)
+  const toggleCollapseAction = useStore((s) => s.toggleCollapseFolder)
+  const setCollapsedFoldersAction = useStore((s) => s.setCollapsedFolders)
+  const collapsed = useMemo(() => new Set(collapsedList), [collapsedList])
+  const toggleCollapse = toggleCollapseAction
+  const setCollapsed = (next: Set<string>): void =>
+    setCollapsedFoldersAction([...next])
 
-  // Build a folder tree per top-level (inbox + archive) from the notes
-  // list. Trash is rendered separately as a single row.
+  // Build a folder tree per top-level (inbox + archive). Uses the
+  // folders index from main so empty subfolders still appear in the
+  // tree alongside ones that have notes. Trash is rendered separately.
   const trees = useMemo(
     () => ({
       inbox: buildTree(
         notes.filter((n) => n.folder === 'inbox'),
-        'inbox'
+        'inbox',
+        allFolders.filter((f) => f.folder === 'inbox')
       ),
       archive: buildTree(
         notes.filter((n) => n.folder === 'archive'),
-        'archive'
+        'archive',
+        allFolders.filter((f) => f.folder === 'archive')
       )
     }),
-    [notes]
+    [notes, allFolders]
   )
 
   const trashCount = useMemo(
@@ -206,17 +208,16 @@ export function Sidebar(): JSX.Element {
       acc = acc ? `${acc}/${parts[i]}` : parts[i]
       ancestors.push(`${folder}:${acc}`)
     }
-    setCollapsed((prev) => {
-      let next: Set<string> | null = null
-      for (const key of ancestors) {
-        if (prev.has(key)) {
-          if (!next) next = new Set(prev)
-          next.delete(key)
-        }
+    const prev = new Set(useStore.getState().collapsedFolders)
+    let changed = false
+    for (const key of ancestors) {
+      if (prev.has(key)) {
+        prev.delete(key)
+        changed = true
       }
-      return next ?? prev
-    })
-  }, [autoReveal, activePath])
+    }
+    if (changed) setCollapsedFoldersAction([...prev])
+  }, [autoReveal, activePath, setCollapsedFoldersAction])
 
   // Aggregate hashtags across non-trash notes, with the active note
   // re-computed from its live body.
@@ -576,22 +577,20 @@ export function Sidebar(): JSX.Element {
         </div>
       </div>
 
-      {/* Search + top-level utility rows */}
-      <div className="flex flex-col gap-0.5 px-3">
-        <SidebarRow
-          icon={<SearchIcon />}
-          label="Search"
+      {/* Search + toolbar on one row */}
+      <div className="flex items-center gap-1 px-3">
+        <button
           onClick={() => setSearchOpen(true)}
-          trailing={
-            <kbd className="rounded bg-paper-200 px-1 py-0.5 text-[10px] text-ink-500">
-              ⌘P
-            </kbd>
-          }
-        />
-      </div>
-
-      {/* Toolbar: new note, new folder, sort, auto-reveal, collapse all */}
-      <div className="mt-2 flex items-center justify-center gap-0.5 px-4">
+          className="group flex h-7 flex-1 min-w-0 items-center gap-2 rounded-md px-2 text-left text-sm text-ink-700 transition-colors hover:bg-paper-200/70 hover:text-ink-900"
+          title="Search (⌘P)"
+        >
+          <SearchIcon />
+          <span className="flex-1 truncate">Search</span>
+          <kbd className="rounded bg-paper-200 px-1 py-0.5 text-[10px] text-ink-500">
+            ⌘P
+          </kbd>
+        </button>
+        <div className="flex shrink-0 items-center gap-0.5">
         <IconBtn
           title="New note"
           onClick={() => {
@@ -654,6 +653,7 @@ export function Sidebar(): JSX.Element {
         >
           <ExpandAllIcon />
         </IconBtn>
+        </div>
       </div>
 
       {/* Main scrollable tree area */}
@@ -833,7 +833,11 @@ interface TreeNode {
   children: TreeNode[]
 }
 
-function buildTree(notes: NoteMeta[], topFolder: NoteFolder): TreeNode {
+function buildTree(
+  notes: NoteMeta[],
+  topFolder: NoteFolder,
+  folders: { folder: NoteFolder; subpath: string }[]
+): TreeNode {
   const root: TreeNode = {
     name: topFolder,
     subpath: '',
@@ -843,6 +847,33 @@ function buildTree(notes: NoteMeta[], topFolder: NoteFolder): TreeNode {
   const byPath = new Map<string, TreeNode>()
   byPath.set('', root)
 
+  const ensureFolder = (subpath: string): TreeNode => {
+    const existing = byPath.get(subpath)
+    if (existing) return existing
+    const segments = subpath.split('/')
+    let parent = root
+    let acc = ''
+    for (const seg of segments) {
+      acc = acc ? `${acc}/${seg}` : seg
+      let node = byPath.get(acc)
+      if (!node) {
+        node = { name: seg, subpath: acc, notes: [], children: [] }
+        byPath.set(acc, node)
+        parent.children.push(node)
+      }
+      parent = node
+    }
+    return parent
+  }
+
+  // First pass: create nodes for every folder on disk (this is what
+  // keeps empty folders visible in the tree).
+  for (const f of folders) {
+    if (!f.subpath) continue
+    ensureFolder(f.subpath)
+  }
+
+  // Second pass: place every note inside its parent folder node.
   for (const n of notes) {
     const parts = n.path.split('/')
     const segments = parts.slice(1, -1)
@@ -850,19 +881,8 @@ function buildTree(notes: NoteMeta[], topFolder: NoteFolder): TreeNode {
       root.notes.push(n)
       continue
     }
-    let parent = root
-    let acc = ''
-    for (let i = 0; i < segments.length; i++) {
-      acc = acc ? `${acc}/${segments[i]}` : segments[i]
-      let node = byPath.get(acc)
-      if (!node) {
-        node = { name: segments[i], subpath: acc, notes: [], children: [] }
-        byPath.set(acc, node)
-        parent.children.push(node)
-      }
-      if (i === segments.length - 1) node.notes.push(n)
-      parent = node
-    }
+    const parent = ensureFolder(segments.join('/'))
+    parent.notes.push(n)
   }
 
   const sortNode = (node: TreeNode): void => {

@@ -1,7 +1,13 @@
 import { promises as fs, type Dirent } from 'node:fs'
 import path from 'node:path'
 import { app } from 'electron'
-import type { NoteContent, NoteFolder, NoteMeta, VaultInfo } from '@shared/ipc'
+import type {
+  FolderEntry,
+  NoteContent,
+  NoteFolder,
+  NoteMeta,
+  VaultInfo
+} from '@shared/ipc'
 
 const CONFIG_FILE = 'zennotes.config.json'
 const FOLDERS: NoteFolder[] = ['inbox', 'archive', 'trash']
@@ -142,6 +148,36 @@ async function walk(dir: string): Promise<string[]> {
     } else if (entry.isFile() && entry.name.toLowerCase().endsWith('.md')) {
       out.push(full)
     }
+  }
+  return out
+}
+
+/**
+ * Walk every directory under the three top-level folders and return a
+ * flat list of folder entries. This is the source of truth for the
+ * sidebar tree — empty folders that contain no notes are otherwise
+ * invisible, because notes are the only things we track per-file.
+ */
+export async function listFolders(root: string): Promise<FolderEntry[]> {
+  const out: FolderEntry[] = []
+  for (const folder of FOLDERS) {
+    const topAbs = path.join(root, folder)
+    const walk = async (dirAbs: string, subpath: string): Promise<void> => {
+      let entries: Dirent[]
+      try {
+        entries = await fs.readdir(dirAbs, { withFileTypes: true })
+      } catch {
+        return
+      }
+      for (const e of entries) {
+        if (!e.isDirectory()) continue
+        if (e.name.startsWith('.')) continue
+        const nextSub = subpath ? `${subpath}/${e.name}` : e.name
+        out.push({ folder, subpath: nextSub })
+        await walk(path.join(dirAbs, e.name), nextSub)
+      }
+    }
+    await walk(topAbs, '')
   }
   return out
 }

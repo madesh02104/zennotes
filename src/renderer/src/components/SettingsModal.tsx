@@ -30,6 +30,8 @@ export function SettingsModal(): JSX.Element {
   const setTransparentUi = useStore((s) => s.setTransparentUi)
   const unifiedSidebar = useStore((s) => s.unifiedSidebar)
   const setUnifiedSidebar = useStore((s) => s.setUnifiedSidebar)
+  const darkSidebar = useStore((s) => s.darkSidebar)
+  const setDarkSidebar = useStore((s) => s.setDarkSidebar)
 
   // Lazy-load the system font list on mount. Retried on every mount
   // when the list comes back empty (IPC failure / no fonts yet).
@@ -289,6 +291,12 @@ export function SettingsModal(): JSX.Element {
                 description="Show notes inside the sidebar tree (Obsidian File Explorer style) and hide the separate note list column."
                 value={unifiedSidebar}
                 onChange={setUnifiedSidebar}
+              />
+              <ToggleRow
+                label="Dark sidebar"
+                description="Tint the sidebar one step darker than the main canvas so the chrome reads as a separate surface."
+                value={darkSidebar}
+                onChange={setDarkSidebar}
               />
               <ToggleRow
                 label="Translucent interface"
