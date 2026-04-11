@@ -2,9 +2,25 @@ import { create } from 'zustand'
 import type { NoteContent, NoteFolder, NoteMeta, VaultChangeEvent, VaultInfo } from '@shared/ipc'
 import { DEFAULT_THEME_ID, THEMES, type ThemeFamily, type ThemeMode } from './lib/themes'
 
+export type NoteSortOrder =
+  | 'updated-desc'
+  | 'updated-asc'
+  | 'created-desc'
+  | 'created-asc'
+  | 'name-asc'
+  | 'name-desc'
+
 const PREFS_KEY = 'zen:prefs:v2'
 const VALID_FAMILIES: ThemeFamily[] = ['apple', 'gruvbox', 'catppuccin', 'github']
 const VALID_MODES: ThemeMode[] = ['light', 'dark', 'auto']
+const VALID_SORTS: NoteSortOrder[] = [
+  'updated-desc',
+  'updated-asc',
+  'created-desc',
+  'created-asc',
+  'name-asc',
+  'name-desc'
+]
 
 interface Prefs {
   vimMode: boolean
@@ -20,10 +36,16 @@ interface Prefs {
   textFont: string | null
   /** Font used for inline code + fenced code blocks + frontmatter. */
   monoFont: string | null
-  /** Ctrl/Cmd + scroll adjusts editor font size. */
-  quickFontSizeAdjust: boolean
   /** Enable the Liquid Glass translucency. When off the UI is opaque. */
   transparentUi: boolean
+  sidebarWidth: number
+  noteListWidth: number
+  noteSortOrder: NoteSortOrder
+  /** Auto-expand the sidebar tree to reveal the currently open note. */
+  autoReveal: boolean
+  /** Collapse the dedicated note list column and render notes inside
+   *  the sidebar tree (Obsidian "File Explorer" layout). */
+  unifiedSidebar: boolean
 }
 const DEFAULT_PREFS: Prefs = {
   vimMode: true,
@@ -36,8 +58,12 @@ const DEFAULT_PREFS: Prefs = {
   interfaceFont: null,
   textFont: null,
   monoFont: null,
-  quickFontSizeAdjust: true,
-  transparentUi: true
+  transparentUi: true,
+  sidebarWidth: 232,
+  noteListWidth: 300,
+  noteSortOrder: 'updated-desc',
+  autoReveal: true,
+  unifiedSidebar: true
 }
 /** Coerce any loaded prefs blob into a valid Prefs object, dropping
  *  anything unknown (e.g. tokyo-night left over from earlier versions). */
@@ -81,14 +107,30 @@ function normalizePrefs(p: Partial<Prefs>): Prefs {
       typeof p.monoFont === 'string' || p.monoFont === null
         ? (p.monoFont as string | null)
         : DEFAULT_PREFS.monoFont,
-    quickFontSizeAdjust:
-      typeof p.quickFontSizeAdjust === 'boolean'
-        ? p.quickFontSizeAdjust
-        : DEFAULT_PREFS.quickFontSizeAdjust,
     transparentUi:
       typeof p.transparentUi === 'boolean'
         ? p.transparentUi
-        : DEFAULT_PREFS.transparentUi
+        : DEFAULT_PREFS.transparentUi,
+    sidebarWidth:
+      typeof p.sidebarWidth === 'number'
+        ? Math.min(520, Math.max(160, p.sidebarWidth))
+        : DEFAULT_PREFS.sidebarWidth,
+    noteListWidth:
+      typeof p.noteListWidth === 'number'
+        ? Math.min(560, Math.max(200, p.noteListWidth))
+        : DEFAULT_PREFS.noteListWidth,
+    noteSortOrder:
+      p.noteSortOrder && VALID_SORTS.includes(p.noteSortOrder)
+        ? p.noteSortOrder
+        : DEFAULT_PREFS.noteSortOrder,
+    autoReveal:
+      typeof p.autoReveal === 'boolean'
+        ? p.autoReveal
+        : DEFAULT_PREFS.autoReveal,
+    unifiedSidebar:
+      typeof p.unifiedSidebar === 'boolean'
+        ? p.unifiedSidebar
+        : DEFAULT_PREFS.unifiedSidebar
   }
 }
 function loadPrefs(): Prefs {
@@ -108,6 +150,79 @@ function savePrefs(p: Prefs): void {
   }
 }
 
+/**
+ * Rewrite every occurrence of `#oldTag` across all non-trash notes.
+ * When `newTag` is null the hashtag is stripped (delete semantics);
+ * otherwise it's replaced with `#newTag`.
+ *
+ * We only rewrite notes whose cached tag list contains `oldTag` (so
+ * the iteration is bounded by the sidebar index) and we match tags
+ * with a word-boundary regex so `#test` doesn't accidentally chew
+ * into `#testing`. Fenced / inline code spans are left alone.
+ */
+async function rewriteTagAcrossVault(
+  get: () => { notes: NoteMeta[]; activeNote: NoteContent | null },
+  oldTag: string,
+  newTag: string | null
+): Promise<void> {
+  const { notes, activeNote } = get()
+  const escaped = oldTag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  // Match `#tag` preceded by start/whitespace and followed by a non
+  // tag-character or end-of-string, keeping the leading separator.
+  const pattern = new RegExp(`(^|\\s)#${escaped}(?=[^\\w\\-/]|$)`, 'gm')
+
+  const rewriteBody = (src: string): string => {
+    // Preserve code fences and inline code exactly. Split the body
+    // into alternating "safe" and "code" segments, rewrite only the
+    // safe ones, then re-stitch.
+    const fenceRe = /(```[\s\S]*?```|`[^`\n]*`)/g
+    const parts: string[] = []
+    let last = 0
+    let m: RegExpExecArray | null
+    while ((m = fenceRe.exec(src)) !== null) {
+      parts.push(src.slice(last, m.index)) // prose
+      parts.push(m[0]) // code (kept as-is)
+      last = fenceRe.lastIndex
+    }
+    parts.push(src.slice(last))
+    for (let i = 0; i < parts.length; i += 2) {
+      parts[i] = parts[i].replace(
+        pattern,
+        newTag === null ? '$1' : `$1#${newTag}`
+      )
+    }
+    return parts.join('')
+  }
+
+  for (const note of notes) {
+    if (note.folder === 'trash') continue
+    if (!note.tags.includes(oldTag)) continue
+    try {
+      const content = await window.zen.readNote(note.path)
+      const next = rewriteBody(content.body)
+      if (next !== content.body) {
+        await window.zen.writeNote(note.path, next)
+      }
+    } catch (err) {
+      console.error('rewriteTagAcrossVault: failed on', note.path, err)
+    }
+  }
+
+  // Keep the currently-edited note's in-memory body in sync so the
+  // editor reflects the change without a reload.
+  if (activeNote) {
+    try {
+      const fresh = await window.zen.readNote(activeNote.path)
+      useStore.setState({ activeNote: fresh })
+    } catch {
+      /* ignore — note may have been moved/deleted */
+    }
+  }
+
+  // Refresh the sidebar tag index.
+  await useStore.getState().refreshNotes()
+}
+
 /** Snapshot prefs-shaped fields out of the live store. */
 function collectPrefs(s: {
   vimMode: boolean
@@ -120,8 +235,12 @@ function collectPrefs(s: {
   interfaceFont: string | null
   textFont: string | null
   monoFont: string | null
-  quickFontSizeAdjust: boolean
   transparentUi: boolean
+  sidebarWidth: number
+  noteListWidth: number
+  noteSortOrder: NoteSortOrder
+  autoReveal: boolean
+  unifiedSidebar: boolean
 }): Prefs {
   return {
     vimMode: s.vimMode,
@@ -134,13 +253,26 @@ function collectPrefs(s: {
     interfaceFont: s.interfaceFont,
     textFont: s.textFont,
     monoFont: s.monoFont,
-    quickFontSizeAdjust: s.quickFontSizeAdjust,
-    transparentUi: s.transparentUi
+    transparentUi: s.transparentUi,
+    sidebarWidth: s.sidebarWidth,
+    noteListWidth: s.noteListWidth,
+    noteSortOrder: s.noteSortOrder,
+    autoReveal: s.autoReveal,
+    unifiedSidebar: s.unifiedSidebar
   }
 }
 
 export type View =
-  | { kind: 'folder'; folder: NoteFolder }
+  | {
+      kind: 'folder'
+      folder: NoteFolder
+      /**
+       * Subfolder path relative to the top-level folder, POSIX-style.
+       * Empty = the top-level itself. Examples: "", "Work",
+       * "Work/Research".
+       */
+      subpath: string
+    }
   | { kind: 'tag'; tag: string }
 
 interface Store {
@@ -167,8 +299,12 @@ interface Store {
   interfaceFont: string | null
   textFont: string | null
   monoFont: string | null
-  quickFontSizeAdjust: boolean
   transparentUi: boolean
+  sidebarWidth: number
+  noteListWidth: number
+  noteSortOrder: NoteSortOrder
+  autoReveal: boolean
+  unifiedSidebar: boolean
 
   setVault: (v: VaultInfo | null) => void
   setNotes: (notes: NoteMeta[]) => void
@@ -179,7 +315,7 @@ interface Store {
   updateActiveBody: (body: string) => void
   persistActive: () => Promise<void>
   renameActive: (nextTitle: string) => Promise<void>
-  createAndOpen: (folder: NoteFolder) => Promise<void>
+  createAndOpen: (folder: NoteFolder, subpath?: string) => Promise<void>
   trashActive: () => Promise<void>
   restoreActive: () => Promise<void>
   archiveActive: () => Promise<void>
@@ -198,8 +334,31 @@ interface Store {
   setInterfaceFont: (family: string | null) => void
   setTextFont: (family: string | null) => void
   setMonoFont: (family: string | null) => void
-  setQuickFontSizeAdjust: (on: boolean) => void
   setTransparentUi: (on: boolean) => void
+  setSidebarWidth: (px: number) => void
+  setNoteListWidth: (px: number) => void
+  setNoteSortOrder: (order: NoteSortOrder) => void
+  setAutoReveal: (on: boolean) => void
+  setUnifiedSidebar: (on: boolean) => void
+  /** Rewrite `#oldTag` → `#newTag` across every non-trash note. */
+  renameTag: (oldTag: string, newTag: string) => Promise<void>
+  /** Remove `#tag` from every non-trash note. */
+  deleteTag: (tag: string) => Promise<void>
+  createFolder: (folder: NoteFolder, subpath: string) => Promise<void>
+  renameFolder: (
+    folder: NoteFolder,
+    oldSubpath: string,
+    newSubpath: string
+  ) => Promise<void>
+  deleteFolder: (folder: NoteFolder, subpath: string) => Promise<void>
+  duplicateFolder: (folder: NoteFolder, subpath: string) => Promise<void>
+  revealFolder: (folder: NoteFolder, subpath: string) => Promise<void>
+  /** Move a note to a different folder + subpath. */
+  moveNote: (
+    relPath: string,
+    targetFolder: NoteFolder,
+    targetSubpath: string
+  ) => Promise<void>
   init: () => Promise<void>
   openVaultPicker: () => Promise<void>
 }
@@ -207,7 +366,7 @@ interface Store {
 export const useStore = create<Store>((set, get) => ({
   vault: null,
   notes: [],
-  view: { kind: 'folder', folder: 'inbox' },
+  view: { kind: 'folder', folder: 'inbox', subpath: '' },
   selectedPath: null,
   activeNote: null,
   loadingNote: false,
@@ -227,8 +386,12 @@ export const useStore = create<Store>((set, get) => ({
   interfaceFont: loadPrefs().interfaceFont,
   textFont: loadPrefs().textFont,
   monoFont: loadPrefs().monoFont,
-  quickFontSizeAdjust: loadPrefs().quickFontSizeAdjust,
   transparentUi: loadPrefs().transparentUi,
+  sidebarWidth: loadPrefs().sidebarWidth,
+  noteListWidth: loadPrefs().noteListWidth,
+  noteSortOrder: loadPrefs().noteSortOrder,
+  autoReveal: loadPrefs().autoReveal,
+  unifiedSidebar: loadPrefs().unifiedSidebar,
 
   setVault: (v) => set({ vault: v }),
   setNotes: (notes) => set({ notes }),
@@ -312,11 +475,11 @@ export const useStore = create<Store>((set, get) => ({
     }
   },
 
-  createAndOpen: async (folder) => {
+  createAndOpen: async (folder, subpath = '') => {
     try {
-      const meta = await window.zen.createNote(folder)
+      const meta = await window.zen.createNote(folder, undefined, subpath)
       await get().refreshNotes()
-      set({ view: { kind: 'folder', folder } })
+      set({ view: { kind: 'folder', folder, subpath } })
       await get().selectNote(meta.path)
     } catch (err) {
       console.error('createNote failed', err)
@@ -398,13 +561,114 @@ export const useStore = create<Store>((set, get) => ({
     set({ monoFont: family })
     savePrefs(collectPrefs(get()))
   },
-  setQuickFontSizeAdjust: (on) => {
-    set({ quickFontSizeAdjust: on })
-    savePrefs(collectPrefs(get()))
-  },
   setTransparentUi: (on) => {
     set({ transparentUi: on })
     savePrefs(collectPrefs(get()))
+  },
+  setSidebarWidth: (px) => {
+    const clamped = Math.min(520, Math.max(160, Math.round(px)))
+    set({ sidebarWidth: clamped })
+    savePrefs(collectPrefs(get()))
+  },
+  setNoteListWidth: (px) => {
+    const clamped = Math.min(560, Math.max(200, Math.round(px)))
+    set({ noteListWidth: clamped })
+    savePrefs(collectPrefs(get()))
+  },
+  setNoteSortOrder: (order) => {
+    set({ noteSortOrder: order })
+    savePrefs(collectPrefs(get()))
+  },
+  setAutoReveal: (on) => {
+    set({ autoReveal: on })
+    savePrefs(collectPrefs(get()))
+  },
+  setUnifiedSidebar: (on) => {
+    set({ unifiedSidebar: on })
+    savePrefs(collectPrefs(get()))
+  },
+
+  renameTag: async (oldTag, newTag) => {
+    await rewriteTagAcrossVault(get, oldTag, newTag)
+  },
+  deleteTag: async (tag) => {
+    await rewriteTagAcrossVault(get, tag, null)
+  },
+
+  createFolder: async (folder, subpath) => {
+    await window.zen.createFolder(folder, subpath)
+    await get().refreshNotes()
+    set({ view: { kind: 'folder', folder, subpath } })
+  },
+
+  renameFolder: async (folder, oldSubpath, newSubpath) => {
+    await window.zen.renameFolder(folder, oldSubpath, newSubpath)
+    await get().refreshNotes()
+    // If the current view was inside the folder we just renamed,
+    // rewrite its subpath so we stay on the same folder visually.
+    const v = get().view
+    if (v.kind === 'folder' && v.folder === folder) {
+      if (v.subpath === oldSubpath) {
+        set({ view: { ...v, subpath: newSubpath } })
+      } else if (v.subpath.startsWith(`${oldSubpath}/`)) {
+        const tail = v.subpath.slice(oldSubpath.length + 1)
+        set({ view: { ...v, subpath: `${newSubpath}/${tail}` } })
+      }
+    }
+    // Active note's path will have changed too — re-read it if needed.
+    const active = get().activeNote
+    if (active && active.folder === folder && active.path.includes(`/${oldSubpath}/`)) {
+      // Find the renamed path by refreshing; the file-watcher race is
+      // already handled by refreshNotes above. Re-read from the new
+      // location if we can find it, otherwise drop the active note.
+      const notes = get().notes
+      const match = notes.find((n) => n.path.endsWith('/' + active.title + '.md'))
+      if (match) await get().selectNote(match.path)
+      else set({ activeNote: null, selectedPath: null })
+    }
+  },
+
+  deleteFolder: async (folder, subpath) => {
+    await window.zen.deleteFolder(folder, subpath)
+    await get().refreshNotes()
+    // If the current view lived inside the deleted folder, bounce
+    // back to the top-level.
+    const v = get().view
+    if (
+      v.kind === 'folder' &&
+      v.folder === folder &&
+      (v.subpath === subpath || v.subpath.startsWith(`${subpath}/`))
+    ) {
+      set({ view: { kind: 'folder', folder, subpath: '' } })
+    }
+    // Drop the active note if it was inside that folder.
+    const active = get().activeNote
+    if (active && active.path.startsWith(`${folder}/${subpath}/`)) {
+      set({ activeNote: null, selectedPath: null })
+    }
+  },
+
+  duplicateFolder: async (folder, subpath) => {
+    const newSubpath = await window.zen.duplicateFolder(folder, subpath)
+    await get().refreshNotes()
+    set({ view: { kind: 'folder', folder, subpath: newSubpath } })
+  },
+
+  revealFolder: async (folder, subpath) => {
+    await window.zen.revealFolder(folder, subpath)
+  },
+
+  moveNote: async (relPath, targetFolder, targetSubpath) => {
+    try {
+      const meta = await window.zen.moveNote(relPath, targetFolder, targetSubpath)
+      await get().refreshNotes()
+      // If the moved note was the currently open one, follow it.
+      if (get().selectedPath === relPath) {
+        await get().selectNote(meta.path)
+      }
+    } catch (err) {
+      console.error('moveNote failed', err)
+    }
   },
 
   init: async () => {
@@ -427,7 +691,7 @@ export const useStore = create<Store>((set, get) => ({
   openVaultPicker: async () => {
     const vault = await window.zen.pickVault()
     if (vault) {
-      set({ vault, view: { kind: 'folder', folder: 'inbox' } })
+      set({ vault, view: { kind: 'folder', folder: 'inbox', subpath: '' } })
       await get().refreshNotes()
     }
   }

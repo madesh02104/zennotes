@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, session, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, session, shell } from 'electron'
 import { execFile } from 'node:child_process'
 import { promises as fsp } from 'node:fs'
 import path from 'node:path'
@@ -8,15 +8,21 @@ import type { NoteFolder, VaultChangeEvent, VaultInfo } from '@shared/ipc'
 import {
   absolutePath,
   archiveNote,
+  createFolder,
   createNote,
+  deleteFolder,
   deleteNote,
+  duplicateFolder,
   duplicateNote,
   emptyTrash,
   ensureVaultLayout,
+  folderAbsolutePath,
   listNotes,
   loadConfig,
+  moveNote,
   moveToTrash,
   readNote,
+  renameFolder,
   renameNote,
   restoreFromTrash,
   saveConfig,
@@ -255,10 +261,13 @@ function registerIpc(): void {
     return await writeNote(v.root, relPath, body)
   })
 
-  ipcMain.handle(IPC.VAULT_CREATE_NOTE, async (_e, folder: NoteFolder, title?: string) => {
-    const v = requireVault()
-    return await createNote(v.root, folder, title)
-  })
+  ipcMain.handle(
+    IPC.VAULT_CREATE_NOTE,
+    async (_e, folder: NoteFolder, title?: string, subpath = '') => {
+      const v = requireVault()
+      return await createNote(v.root, folder, title, subpath)
+    }
+  )
 
   ipcMain.handle(IPC.VAULT_RENAME_NOTE, async (_e, relPath: string, nextTitle: string) => {
     const v = requireVault()
@@ -306,6 +315,55 @@ function registerIpc(): void {
     shell.showItemInFolder(abs)
   })
 
+  ipcMain.handle(
+    IPC.VAULT_MOVE_NOTE,
+    async (_e, relPath: string, targetFolder: NoteFolder, targetSubpath: string) => {
+      const v = requireVault()
+      return await moveNote(v.root, relPath, targetFolder, targetSubpath)
+    }
+  )
+
+  ipcMain.handle(
+    IPC.VAULT_CREATE_FOLDER,
+    async (_e, folder: NoteFolder, subpath: string) => {
+      const v = requireVault()
+      await createFolder(v.root, folder, subpath)
+    }
+  )
+
+  ipcMain.handle(
+    IPC.VAULT_RENAME_FOLDER,
+    async (_e, folder: NoteFolder, oldSubpath: string, newSubpath: string) => {
+      const v = requireVault()
+      return await renameFolder(v.root, folder, oldSubpath, newSubpath)
+    }
+  )
+
+  ipcMain.handle(
+    IPC.VAULT_DELETE_FOLDER,
+    async (_e, folder: NoteFolder, subpath: string) => {
+      const v = requireVault()
+      await deleteFolder(v.root, folder, subpath)
+    }
+  )
+
+  ipcMain.handle(
+    IPC.VAULT_DUPLICATE_FOLDER,
+    async (_e, folder: NoteFolder, subpath: string) => {
+      const v = requireVault()
+      return await duplicateFolder(v.root, folder, subpath)
+    }
+  )
+
+  ipcMain.handle(
+    IPC.VAULT_REVEAL_FOLDER,
+    async (_e, folder: NoteFolder, subpath: string) => {
+      const v = requireVault()
+      const abs = folderAbsolutePath(v.root, folder, subpath)
+      await shell.openPath(abs)
+    }
+  )
+
   ipcMain.on(IPC.WINDOW_MINIMIZE, () => mainWindow?.minimize())
   ipcMain.on(IPC.WINDOW_TOGGLE_MAXIMIZE, () => {
     if (!mainWindow) return
@@ -313,6 +371,87 @@ function registerIpc(): void {
     else mainWindow.maximize()
   })
   ipcMain.on(IPC.WINDOW_CLOSE, () => mainWindow?.close())
+}
+
+// Set the app name before the ready event so the dock / menu bar /
+// About panel all show "ZenNotes" instead of the default "Electron"
+// during dev. electron-builder handles this for packaged builds via
+// `productName`, but in `npm run dev` we have to announce it ourselves.
+app.setName('ZenNotes')
+if (isMac()) {
+  app.setAboutPanelOptions({
+    applicationName: 'ZenNotes',
+    applicationVersion: app.getVersion()
+  })
+}
+
+function installAppMenu(): void {
+  if (!isMac()) {
+    // On Windows/Linux we keep `autoHideMenuBar: true` and skip the menu.
+    Menu.setApplicationMenu(null)
+    return
+  }
+  const template: Electron.MenuItemConstructorOptions[] = [
+    {
+      label: 'ZenNotes',
+      submenu: [
+        { label: 'About ZenNotes', role: 'about' },
+        { type: 'separator' },
+        {
+          label: 'Settings…',
+          accelerator: 'CmdOrCtrl+,',
+          click: () => {
+            mainWindow?.webContents.send('menu:open-settings')
+          }
+        },
+        { type: 'separator' },
+        { role: 'services' },
+        { type: 'separator' },
+        { role: 'hide', label: 'Hide ZenNotes' },
+        { role: 'hideOthers' },
+        { role: 'unhide' },
+        { type: 'separator' },
+        { role: 'quit', label: 'Quit ZenNotes' }
+      ]
+    },
+    {
+      label: 'Edit',
+      submenu: [
+        { role: 'undo' },
+        { role: 'redo' },
+        { type: 'separator' },
+        { role: 'cut' },
+        { role: 'copy' },
+        { role: 'paste' },
+        { role: 'pasteAndMatchStyle' },
+        { role: 'selectAll' }
+      ]
+    },
+    {
+      label: 'View',
+      submenu: [
+        { role: 'reload' },
+        { role: 'forceReload' },
+        { role: 'toggleDevTools' },
+        { type: 'separator' },
+        { role: 'resetZoom' },
+        { role: 'zoomIn' },
+        { role: 'zoomOut' },
+        { type: 'separator' },
+        { role: 'togglefullscreen' }
+      ]
+    },
+    {
+      label: 'Window',
+      submenu: [
+        { role: 'minimize' },
+        { role: 'zoom' },
+        { type: 'separator' },
+        { role: 'front' }
+      ]
+    }
+  ]
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template))
 }
 
 app.whenReady().then(async () => {
@@ -338,6 +477,7 @@ app.whenReady().then(async () => {
     }
   }
 
+  installAppMenu()
   registerIpc()
   createWindow()
 

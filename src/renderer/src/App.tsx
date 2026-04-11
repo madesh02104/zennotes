@@ -16,6 +16,7 @@ function App(): JSX.Element {
   const setSearchOpen = useStore((s) => s.setSearchOpen)
   const sidebarOpen = useStore((s) => s.sidebarOpen)
   const noteListOpen = useStore((s) => s.noteListOpen)
+  const unifiedSidebar = useStore((s) => s.unifiedSidebar)
   const settingsOpen = useStore((s) => s.settingsOpen)
   const themeId = useStore((s) => s.themeId)
   const themeFamily = useStore((s) => s.themeFamily)
@@ -81,22 +82,14 @@ function App(): JSX.Element {
     )
   }, [editorFontSize, editorLineHeight, interfaceFont, textFont, monoFont])
 
-  // Simple transparency toggle. When off we force the glass panels to
-  // full opacity so nothing bleeds through; when on we restore the
-  // theme-default translucency by clearing the inline overrides.
+  // Transparency toggle. When off we flip an attribute on <html> that
+  // CSS reads to remove backdrop-filter and pin every glass surface to
+  // a solid theme color — the only reliable way to make the UI feel
+  // fully opaque on top of macOS vibrancy.
   useEffect(() => {
     const html = document.documentElement
-    if (transparentUi) {
-      html.style.removeProperty('--z-glass-a1')
-      html.style.removeProperty('--z-glass-a2')
-      html.style.removeProperty('--z-glass-a3')
-      html.style.removeProperty('--z-glass-a4')
-    } else {
-      html.style.setProperty('--z-glass-a1', '1')
-      html.style.setProperty('--z-glass-a2', '1')
-      html.style.setProperty('--z-glass-a3', '1')
-      html.style.setProperty('--z-glass-a4', '1')
-    }
+    if (transparentUi) html.removeAttribute('data-opaque')
+    else html.setAttribute('data-opaque', '')
   }, [transparentUi])
 
   useEffect(() => {
@@ -105,7 +98,7 @@ function App(): JSX.Element {
       const key = e.key.toLowerCase()
       const state = useStore.getState()
 
-      if (mod && key === 'k') {
+      if (mod && key === 'p') {
         e.preventDefault()
         setSearchOpen(!state.searchOpen)
         return
@@ -114,14 +107,14 @@ function App(): JSX.Element {
         setSearchOpen(false)
         return
       }
-      // ⌘\ — toggle sidebar
-      if (mod && !e.shiftKey && (e.key === '\\' || e.code === 'Backslash')) {
+      // ⌘1 — toggle sidebar
+      if (mod && (e.key === '1' || e.code === 'Digit1')) {
         e.preventDefault()
         state.toggleSidebar()
         return
       }
-      // ⌘⇧\ — toggle the note list
-      if (mod && e.shiftKey && (e.key === '\\' || e.code === 'Backslash' || e.key === '|')) {
+      // ⌘2 — toggle the note list
+      if (mod && (e.key === '2' || e.code === 'Digit2')) {
         e.preventDefault()
         state.toggleNoteList()
         return
@@ -158,7 +151,7 @@ function App(): JSX.Element {
       <TitleBar />
       <div className="flex min-h-0 flex-1">
         {sidebarOpen && <Sidebar />}
-        {noteListOpen && <NoteList />}
+        {noteListOpen && !unifiedSidebar && <NoteList />}
         <Editor />
       </div>
       {searchOpen && <SearchPalette />}

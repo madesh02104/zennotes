@@ -17,6 +17,12 @@ export const IPC = {
   VAULT_UNARCHIVE_NOTE: 'vault:unarchive-note',
   VAULT_DUPLICATE_NOTE: 'vault:duplicate-note',
   VAULT_REVEAL_NOTE: 'vault:reveal-note',
+  VAULT_MOVE_NOTE: 'vault:move-note',
+  VAULT_CREATE_FOLDER: 'vault:create-folder',
+  VAULT_RENAME_FOLDER: 'vault:rename-folder',
+  VAULT_DELETE_FOLDER: 'vault:delete-folder',
+  VAULT_DUPLICATE_FOLDER: 'vault:duplicate-folder',
+  VAULT_REVEAL_FOLDER: 'vault:reveal-folder',
   APP_LIST_FONTS: 'app:list-fonts',
   VAULT_ON_CHANGE: 'vault:on-change',
   WINDOW_TOGGLE_MAXIMIZE: 'window:toggle-maximize',
@@ -38,6 +44,8 @@ export interface NoteMeta {
   size: number
   /** Extracted #tags (unique, lowercase not enforced). */
   tags: string[]
+  /** Outbound [[wikilink]] targets (note titles), unique. */
+  wikilinks: string[]
   /** First ~200 chars of the body stripped of markdown noise, for list previews. */
   excerpt: string
 }

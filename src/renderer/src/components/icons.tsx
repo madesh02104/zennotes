@@ -111,6 +111,48 @@ export const MoreIcon = (p: IconProps): JSX.Element => (
   </I>
 )
 
+export const FolderPlusIcon = (p: IconProps): JSX.Element => (
+  <I {...p}>
+    <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" />
+    <path d="M12 12v4" />
+    <path d="M10 14h4" />
+  </I>
+)
+
+export const NotePlusIcon = (p: IconProps): JSX.Element => (
+  <I {...p}>
+    <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-9" />
+    <path d="M14 3v6h6" />
+    <path d="M12 13v4" />
+    <path d="M10 15h4" />
+  </I>
+)
+
+export const SortIcon = (p: IconProps): JSX.Element => (
+  <I {...p}>
+    <path d="M3 6h13" />
+    <path d="M3 12h9" />
+    <path d="M3 18h5" />
+    <path d="m17 8 3-3 3 3" />
+    <path d="M20 5v14" />
+  </I>
+)
+
+export const TargetIcon = (p: IconProps): JSX.Element => (
+  <I {...p}>
+    <circle cx="12" cy="12" r="9" />
+    <circle cx="12" cy="12" r="5" />
+    <circle cx="12" cy="12" r="1" />
+  </I>
+)
+
+export const ExpandAllIcon = (p: IconProps): JSX.Element => (
+  <I {...p}>
+    <path d="m7 15 5 5 5-5" />
+    <path d="m7 9 5-5 5 5" />
+  </I>
+)
+
 export const ArrowUpRightIcon = (p: IconProps): JSX.Element => (
   <I {...p}>
     <path d="M7 17 17 7" />

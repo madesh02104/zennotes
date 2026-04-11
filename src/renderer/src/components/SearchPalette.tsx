@@ -79,7 +79,7 @@ export function SearchPalette(): JSX.Element {
             className="w-full bg-transparent text-base text-ink-900 outline-none placeholder:text-ink-400"
           />
         </div>
-        <div className="max-h-[50vh] overflow-y-auto py-1">
+        <div className="max-h-[50vh] overflow-x-hidden overflow-y-auto py-1">
           {results.length === 0 ? (
             <div className="px-4 py-6 text-center text-sm text-ink-400">No matches.</div>
           ) : (
@@ -89,13 +89,15 @@ export function SearchPalette(): JSX.Element {
                 onClick={() => open(n)}
                 onMouseMove={() => setActive(i)}
                 className={[
-                  'flex w-full flex-col gap-0.5 px-4 py-2 text-left',
+                  'flex w-full min-w-0 items-center gap-3 px-4 py-2 text-left',
                   i === active ? 'bg-paper-200' : 'hover:bg-paper-200/70'
                 ].join(' ')}
               >
-                <span className="truncate text-sm font-medium text-ink-900">{n.title}</span>
-                <span className="truncate text-xs text-ink-500">
-                  {n.folder} · {n.excerpt || 'Empty note'}
+                <span className="min-w-0 flex-1 truncate text-sm font-medium text-ink-900">
+                  {n.title}
+                </span>
+                <span className="shrink-0 text-[11px] uppercase tracking-wide text-ink-400">
+                  {n.folder}
                 </span>
               </button>
             ))

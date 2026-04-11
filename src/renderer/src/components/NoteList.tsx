@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useStore } from '../store'
 import type { NoteMeta } from '@shared/ipc'
 import {
@@ -9,7 +9,10 @@ import {
   TrashIcon
 } from './icons'
 import { ContextMenu, type ContextMenuItem } from './ContextMenu'
+import { ResizeHandle } from './ResizeHandle'
 import { extractTags } from '../lib/tags'
+import { setDragPayload } from '../lib/dnd'
+import { usePrompt } from './PromptModal'
 
 function formatDate(ms: number): string {
   const d = new Date(ms)
@@ -31,6 +34,11 @@ export function NoteList(): JSX.Element {
   const createAndOpen = useStore((s) => s.createAndOpen)
   const toggleNoteList = useStore((s) => s.toggleNoteList)
   const refreshNotes = useStore((s) => s.refreshNotes)
+  const noteListWidth = useStore((s) => s.noteListWidth)
+  const setNoteListWidth = useStore((s) => s.setNoteListWidth)
+  const noteSortOrder = useStore((s) => s.noteSortOrder)
+  const renameActive = useStore((s) => s.renameActive)
+  const { prompt, modal: promptModal } = usePrompt()
   const [menu, setMenu] = useState<{ x: number; y: number; note: NoteMeta } | null>(null)
   const emptyTrash = async (): Promise<void> => {
     await window.zen.emptyTrash()
@@ -86,10 +94,30 @@ export function NoteList(): JSX.Element {
     }
 
     const items: ContextMenuItem[] = []
-    items.push({ label: 'Open', icon: <ArrowUpRightIcon />, onSelect: onOpen })
+    items.push({ label: 'Open', onSelect: onOpen })
 
     if (n.folder !== 'trash') {
-      items.push({ label: 'New Note', icon: <PlusIcon />, onSelect: onNew, hint: '⌘N' })
+      items.push({
+        label: 'Rename…',
+        onSelect: async () => {
+          const next = await prompt({
+            title: 'Rename note',
+            initialValue: n.title,
+            okLabel: 'Rename',
+            validate: (v) => {
+              if (/[\\/]/.test(v)) return 'Title cannot contain / or \\'
+              return null
+            }
+          })
+          if (!next || next === n.title) return
+          if (selectedPath === n.path) {
+            await renameActive(next)
+          } else {
+            await window.zen.renameNote(n.path, next)
+            await refreshNotes()
+          }
+        }
+      })
       items.push({ label: 'Duplicate', onSelect: onDuplicate })
     }
     items.push({ label: 'Copy as Wiki Link', onSelect: onCopyWikilink })
@@ -133,12 +161,22 @@ export function NoteList(): JSX.Element {
     return items
   }, [menu, refreshNotes, selectedPath, selectNote])
 
+  /**
+   * Filter notes for the current view. For folder views we match the
+   * top-level folder AND, when a subpath is active, limit to notes
+   * inside that subfolder (including deeper descendants). For tag
+   * views we match against the tag index — with live re-extraction
+   * from the active note's body so newly typed hashtags work instantly.
+   */
   const filtered = useMemo<NoteMeta[]>(() => {
     if (view.kind === 'folder') {
-      return notes.filter((n) => n.folder === view.folder)
+      const prefix = view.subpath
+        ? `${view.folder}/${view.subpath}/`
+        : `${view.folder}/`
+      return notes.filter(
+        (n) => n.folder === view.folder && n.path.startsWith(prefix)
+      )
     }
-    // Tag view: use live-extracted tags for the currently-open note so
-    // newly typed hashtags are reflected immediately.
     return notes.filter((n) => {
       if (n.folder === 'trash') return false
       if (activeNote && activeNote.path === n.path) {
@@ -148,15 +186,85 @@ export function NoteList(): JSX.Element {
     })
   }, [notes, view, activeNote])
 
+  /**
+   * Stable ordering: we want the list sorted by updatedAt when the user
+   * switches views or the set of notes changes, but not re-sorted every
+   * time an edit bumps a single note's mtime (that makes the row the
+   * user is typing in jump to the top mid-sentence). We cache the last
+   * known ordering as a path list, and only rebuild it when the view
+   * changes or a note is added / removed.
+   */
+  const orderRef = useRef<{ viewKey: string; paths: string[] }>({
+    viewKey: '',
+    paths: []
+  })
+  const viewKey =
+    view.kind === 'folder' ? `folder:${view.folder}:${view.subpath}` : `tag:${view.tag}`
+  const sortComparator = useMemo(() => {
+    switch (noteSortOrder) {
+      case 'updated-asc':
+        return (a: NoteMeta, b: NoteMeta) => a.updatedAt - b.updatedAt
+      case 'created-desc':
+        return (a: NoteMeta, b: NoteMeta) => b.createdAt - a.createdAt
+      case 'created-asc':
+        return (a: NoteMeta, b: NoteMeta) => a.createdAt - b.createdAt
+      case 'name-asc':
+        return (a: NoteMeta, b: NoteMeta) =>
+          a.title.localeCompare(b.title, undefined, { sensitivity: 'base' })
+      case 'name-desc':
+        return (a: NoteMeta, b: NoteMeta) =>
+          b.title.localeCompare(a.title, undefined, { sensitivity: 'base' })
+      case 'updated-desc':
+      default:
+        return (a: NoteMeta, b: NoteMeta) => b.updatedAt - a.updatedAt
+    }
+  }, [noteSortOrder])
+
+  const orderedFiltered = useMemo(() => {
+    const prev = orderRef.current
+    const currentSet = new Set(filtered.map((n) => n.path))
+
+    const viewChanged = prev.viewKey !== viewKey + ':' + noteSortOrder
+    const prevKnown = new Set(prev.paths)
+    const added = filtered.filter((n) => !prevKnown.has(n.path))
+    const removed = prev.paths.filter((p) => !currentSet.has(p))
+    const structuralChange = added.length > 0 || removed.length > 0
+
+    if (viewChanged || structuralChange || prev.paths.length === 0) {
+      const fresh = filtered.slice().sort(sortComparator)
+      orderRef.current = {
+        viewKey: viewKey + ':' + noteSortOrder,
+        paths: fresh.map((n) => n.path)
+      }
+      return fresh
+    }
+
+    // Reuse the previous order but swap in the new NoteMeta references
+    // (so updated `updatedAt` / tags / excerpt still flow through to
+    // the row without changing position).
+    const byPath = new Map(filtered.map((n) => [n.path, n] as const))
+    const result: NoteMeta[] = []
+    for (const p of prev.paths) {
+      const n = byPath.get(p)
+      if (n) result.push(n)
+    }
+    return result
+  }, [filtered, viewKey, sortComparator, noteSortOrder])
+
   const heading =
     view.kind === 'folder'
-      ? view.folder[0].toUpperCase() + view.folder.slice(1)
+      ? view.subpath
+        ? view.subpath.split('/').slice(-1)[0]
+        : view.folder[0].toUpperCase() + view.folder.slice(1)
       : `#${view.tag}`
 
   const newTargetFolder = view.kind === 'folder' && view.folder !== 'trash' ? view.folder : 'inbox'
 
   return (
-    <section className="glass-column flex w-[300px] shrink-0 flex-col">
+    <section
+      className="glass-column relative flex shrink-0 flex-col"
+      style={{ width: noteListWidth }}
+    >
       <header className="glass-header flex h-12 shrink-0 items-center justify-between px-4">
         <div className="flex items-baseline gap-2">
           <h2 className="text-sm font-semibold text-ink-900">{heading}</h2>
@@ -180,7 +288,7 @@ export function NoteList(): JSX.Element {
           </button>
           <button
             className="flex h-6 w-6 items-center justify-center rounded-md text-ink-500 hover:bg-paper-200 hover:text-ink-800"
-            title="Hide note list (⌘⇧\)"
+            title="Hide note list (⌘2)"
             onClick={toggleNoteList}
           >
             <ColumnsIcon />
@@ -193,10 +301,10 @@ export function NoteList(): JSX.Element {
           <div className="px-4 py-10 text-center text-sm text-ink-400">
             {view.kind === 'folder' && view.folder === 'trash'
               ? 'Trash is empty.'
-              : 'No notes yet.'}
+              : 'No notes here yet.'}
           </div>
         ) : (
-          filtered.map((n) => (
+          orderedFiltered.map((n) => (
             <NoteRow
               key={n.path}
               note={n}
@@ -218,6 +326,15 @@ export function NoteList(): JSX.Element {
           onClose={() => setMenu(null)}
         />
       )}
+      {promptModal}
+
+      <ResizeHandle
+        getWidth={() => noteListWidth}
+        onResize={(next) => {
+          if (next === 0) return
+          setNoteListWidth(next)
+        }}
+      />
     </section>
   )
 }
@@ -237,6 +354,8 @@ function NoteRow({
     <button
       onClick={onSelect}
       onContextMenu={onContextMenu}
+      draggable
+      onDragStart={(e) => setDragPayload(e, { kind: 'note', path: note.path })}
       className={[
         'list-row mb-1 flex w-full flex-col gap-1 rounded-lg px-3 py-2 text-left',
         active ? 'bg-paper-200' : 'hover:bg-paper-200/60'

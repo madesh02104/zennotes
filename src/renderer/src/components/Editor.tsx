@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Compartment, EditorState } from '@codemirror/state'
 import { EditorView, keymap, drawSelection, highlightActiveLine } from '@codemirror/view'
-import { vim, Vim } from '@replit/codemirror-vim'
+import { vim } from '@replit/codemirror-vim'
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { languages } from '@codemirror/language-data'
@@ -12,6 +12,7 @@ import { autocompletion, completionKeymap } from '@codemirror/autocomplete'
 import { useStore } from '../store'
 import { livePreviewPlugin } from '../lib/cm-live-preview'
 import { Preview } from './Preview'
+import { StatusBar } from './StatusBar'
 import {
   ArchiveIcon,
   ArrowUpRightIcon,
@@ -20,41 +21,6 @@ import {
   PanelLeftIcon,
   TrashIcon
 } from './icons'
-
-// Register Zen-specific Vim actions + leader bindings once. The Vim
-// singleton is initialized on import, so this runs before any view is
-// constructed. Leader is Space (VS Code / Obsidian convention).
-let vimConfigured = false
-function configureVim(): void {
-  if (vimConfigured) return
-  vimConfigured = true
-
-  // defineAction takes a (cm, actionArgs, vim) callback; we only need
-  // to bounce into our zustand store. mapCommand then binds a key
-  // sequence to that action in normal mode.
-  Vim.defineAction('zenSearch', () => {
-    useStore.getState().setSearchOpen(true)
-  })
-  Vim.defineAction('zenToggleNoteList', () => {
-    useStore.getState().toggleNoteList()
-  })
-  Vim.defineAction('zenToggleSidebar', () => {
-    useStore.getState().toggleSidebar()
-  })
-  Vim.defineAction('zenNewNote', () => {
-    void useStore.getState().createAndOpen('inbox')
-  })
-
-  const ctx = { context: 'normal' as const }
-  // <Space> f — fuzzy search
-  Vim.mapCommand('<Space>f', 'action', 'zenSearch', {}, ctx)
-  // <Space> e — toggle the note list (inbox column)
-  Vim.mapCommand('<Space>e', 'action', 'zenToggleNoteList', {}, ctx)
-  // <Space> b — toggle the main sidebar
-  Vim.mapCommand('<Space>b', 'action', 'zenToggleSidebar', {}, ctx)
-  // <Space> n — new note in inbox
-  Vim.mapCommand('<Space>n', 'action', 'zenNewNote', {}, ctx)
-}
 
 const paperHighlight = HighlightStyle.define([
   { tag: t.heading1, class: 'tok-heading1' },
@@ -119,7 +85,6 @@ export function Editor(): JSX.Element {
         return
       }
       if (viewRef.current) return
-      configureVim()
       // Vim and live-preview each live in their own Compartment so
       // toggling them at runtime just dispatches a reconfigure effect —
       // no view teardown, no lost state. Vim must be placed BEFORE the
@@ -257,19 +222,19 @@ export function Editor(): JSX.Element {
         <header className="glass-header flex h-12 shrink-0 items-center justify-between gap-3 px-4">
           <div className="flex min-w-0 flex-1 items-center gap-1">
             {!sidebarOpen && (
-              <IconBtn title="Show sidebar (⌘\)" onClick={toggleSidebar}>
+              <IconBtn title="Show sidebar (⌘1)" onClick={toggleSidebar}>
                 <PanelLeftIcon />
               </IconBtn>
             )}
             {!noteListOpen && (
-              <IconBtn title="Show note list (⌘⇧\)" onClick={toggleNoteList}>
+              <IconBtn title="Show note list (⌘2)" onClick={toggleNoteList}>
                 <ColumnsIcon />
               </IconBtn>
             )}
-            <TitleInput
-              title={activeNote.title}
-              onCommit={(v) => {
-                if (v && v !== activeNote.title) void renameActive(v)
+            <Breadcrumb
+              note={activeNote}
+              onRename={(next) => {
+                if (next && next !== activeNote.title) void renameActive(next)
               }}
             />
           </div>
@@ -298,6 +263,7 @@ export function Editor(): JSX.Element {
           </div>
         )}
       </div>
+      {activeNote && <StatusBar note={activeNote} />}
     </section>
   )
 }
@@ -347,34 +313,96 @@ function IconBtn({
   )
 }
 
-function TitleInput({
-  title,
-  onCommit
+function Breadcrumb({
+  note,
+  onRename
 }: {
-  title: string
-  onCommit: (v: string) => void
+  note: { path: string; title: string; folder: string }
+  onRename: (next: string) => void
 }): JSX.Element {
-  const [value, setValue] = useState(title)
-  useEffect(() => setValue(title), [title])
+  const setView = useStore((s) => s.setView)
+  const [editing, setEditing] = useState(false)
+  const [value, setValue] = useState(note.title)
+  const inputRef = useRef<HTMLInputElement | null>(null)
+
+  useEffect(() => setValue(note.title), [note.title])
+  useEffect(() => {
+    if (editing) {
+      requestAnimationFrame(() => {
+        inputRef.current?.focus()
+        inputRef.current?.select()
+      })
+    }
+  }, [editing])
+
+  // `note.path` is vault-relative like "inbox/Work/Research/foo.md".
+  // We render the trail of ancestor folders + the title as the last
+  // segment. Every segment is the same `text-sm`, only the last is
+  // bold — matching Obsidian's breadcrumb style.
+  const parts = note.path.split('/')
+  const topFolder = parts[0] as 'inbox' | 'archive' | 'trash'
+  const segments = parts.slice(1, -1)
+
+  const ancestors: { label: string; onClick: () => void }[] = [
+    {
+      label: topFolder.charAt(0).toUpperCase() + topFolder.slice(1),
+      onClick: () => setView({ kind: 'folder', folder: topFolder, subpath: '' })
+    }
+  ]
+  let acc = ''
+  for (const seg of segments) {
+    acc = acc ? `${acc}/${seg}` : seg
+    const subpath = acc
+    ancestors.push({
+      label: seg,
+      onClick: () => setView({ kind: 'folder', folder: topFolder, subpath })
+    })
+  }
+
   return (
-    <input
-      value={value}
-      onChange={(e) => setValue(e.target.value)}
-      onBlur={() => onCommit(value.trim())}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter') {
-          ;(e.target as HTMLInputElement).blur()
-        } else if (e.key === 'Escape') {
-          setValue(title)
-          ;(e.target as HTMLInputElement).blur()
-        }
-      }}
-      className="w-[50%] min-w-[200px] max-w-[520px] truncate bg-transparent text-base font-semibold text-ink-900 outline-none placeholder:text-ink-400"
-      style={{
-        fontFamily:
-          'var(--z-text-font, "SF Mono", "SFMono-Regular", ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace)'
-      }}
-      placeholder="Untitled"
-    />
+    <div className="flex min-w-0 shrink items-center gap-1 overflow-hidden text-sm text-ink-500">
+      {ancestors.map((c, i) => (
+        <span key={i} className="flex shrink-0 items-center gap-1">
+          <button
+            onClick={c.onClick}
+            className="truncate rounded px-1 hover:bg-paper-200/70 hover:text-ink-800"
+            title={`Go to ${c.label}`}
+          >
+            {c.label}
+          </button>
+          <span className="text-ink-400">›</span>
+        </span>
+      ))}
+      {editing ? (
+        <input
+          ref={inputRef}
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onBlur={() => {
+            onRename(value.trim())
+            setEditing(false)
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              ;(e.target as HTMLInputElement).blur()
+            } else if (e.key === 'Escape') {
+              setValue(note.title)
+              setEditing(false)
+            }
+          }}
+          className="min-w-[80px] max-w-[360px] rounded bg-paper-200/60 px-1 text-sm font-semibold text-ink-900 outline-none"
+        />
+      ) : (
+        <button
+          type="button"
+          onDoubleClick={() => setEditing(true)}
+          title="Double-click to rename"
+          className="truncate rounded px-1 text-sm font-semibold text-ink-900 hover:bg-paper-200/70"
+        >
+          {note.title || 'Untitled'}
+        </button>
+      )}
+    </div>
   )
 }
+

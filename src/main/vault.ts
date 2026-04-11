@@ -71,6 +71,21 @@ function extractTags(body: string): string[] {
   return [...seen]
 }
 
+/** Pull unique `[[wikilink]]` targets out of markdown text. Supports
+ *  `[[target|label]]` by discarding the label. Ignores fenced/inline code. */
+function extractWikilinks(body: string): string[] {
+  const stripped = body
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/`[^`\n]*`/g, ' ')
+  const re = /\[\[([^\]|]+?)(?:\|[^\]]+)?\]\]/g
+  const seen = new Set<string>()
+  let m: RegExpExecArray | null
+  while ((m = re.exec(stripped)) !== null) {
+    seen.add(m[1].trim())
+  }
+  return [...seen]
+}
+
 /** Build a short plaintext preview from markdown. */
 function buildExcerpt(body: string): string {
   const withoutFront = body.replace(/^---\n[\s\S]*?\n---\n/, '')
@@ -107,6 +122,7 @@ async function readMeta(
     updatedAt: stat.mtimeMs,
     size: stat.size,
     tags: extractTags(body),
+    wikilinks: extractWikilinks(body),
     excerpt: buildExcerpt(body)
   }
 }
@@ -185,10 +201,14 @@ async function uniqueTitle(dir: string, baseTitle: string): Promise<string> {
 export async function createNote(
   root: string,
   folder: NoteFolder,
-  title?: string
+  title?: string,
+  subpath = ''
 ): Promise<NoteMeta> {
   const base = (title && title.trim()) || 'Untitled'
-  const dir = path.join(root, folder)
+  const clean = subpath.replace(/^\/+|\/+$/g, '')
+  const dir = clean
+    ? resolveSafe(root, path.posix.join(folder, clean))
+    : path.join(root, folder)
   await fs.mkdir(dir, { recursive: true })
   const finalTitle = await uniqueTitle(dir, base)
   const abs = path.join(dir, `${finalTitle}.md`)
@@ -267,6 +287,160 @@ export async function emptyTrash(root: string): Promise<void> {
 export async function deleteNote(root: string, rel: string): Promise<void> {
   const abs = resolveSafe(root, rel)
   await fs.rm(abs, { force: true })
+}
+
+/* ---------- Folder operations ---------------------------------------- */
+
+/**
+ * Create a subfolder at `{topFolder}/{subpath}`. Missing parents are
+ * created recursively (so the caller can pass `Work/Research/2026`
+ * and it just works).
+ */
+export async function createFolder(
+  root: string,
+  topFolder: NoteFolder,
+  subpath: string
+): Promise<void> {
+  const trimmed = subpath.replace(/^\/+|\/+$/g, '')
+  if (!trimmed) throw new Error('Folder name is required')
+  const abs = resolveSafe(root, path.posix.join(topFolder, trimmed))
+  await fs.mkdir(abs, { recursive: true })
+}
+
+/**
+ * Rename or move a subfolder. `newSubpath` is the full target path
+ * relative to `{topFolder}` — e.g. rename `Work/Research` → `Projects/Research`
+ * also moves it into `Projects`. Refuses to move into itself or a
+ * descendant, and refuses to touch the top-level folder.
+ */
+export async function renameFolder(
+  root: string,
+  topFolder: NoteFolder,
+  oldSubpath: string,
+  newSubpath: string
+): Promise<string> {
+  const oldClean = oldSubpath.replace(/^\/+|\/+$/g, '')
+  const newClean = newSubpath.replace(/^\/+|\/+$/g, '')
+  if (!oldClean) throw new Error('Cannot rename the top-level folder')
+  if (!newClean) throw new Error('Target folder name is required')
+
+  const oldAbs = resolveSafe(root, path.posix.join(topFolder, oldClean))
+  const newAbs = resolveSafe(root, path.posix.join(topFolder, newClean))
+  if (newAbs === oldAbs) return newClean
+
+  const sep = path.sep
+  if ((newAbs + sep).startsWith(oldAbs + sep)) {
+    throw new Error('Cannot move a folder into itself')
+  }
+
+  // Refuse to overwrite a different existing folder.
+  try {
+    await fs.access(newAbs)
+    throw new Error(`A folder already exists at "${newClean}"`)
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e
+  }
+
+  await fs.mkdir(path.dirname(newAbs), { recursive: true })
+  await fs.rename(oldAbs, newAbs)
+  return newClean
+}
+
+/**
+ * Delete a subfolder and everything inside. Refuses to touch the
+ * top-level `inbox`/`archive`/`trash` folders themselves.
+ */
+export async function deleteFolder(
+  root: string,
+  topFolder: NoteFolder,
+  subpath: string
+): Promise<void> {
+  const clean = subpath.replace(/^\/+|\/+$/g, '')
+  if (!clean) throw new Error('Cannot delete the top-level folder')
+  const abs = resolveSafe(root, path.posix.join(topFolder, clean))
+  await fs.rm(abs, { recursive: true, force: true })
+}
+
+/**
+ * Duplicate a subfolder (recursively, with all its contents) next to
+ * itself, appending " copy" (and " copy 2", " copy 3" on conflict) to
+ * the leaf name.
+ */
+export async function duplicateFolder(
+  root: string,
+  topFolder: NoteFolder,
+  subpath: string
+): Promise<string> {
+  const clean = subpath.replace(/^\/+|\/+$/g, '')
+  if (!clean) throw new Error('Cannot duplicate the top-level folder')
+  const oldAbs = resolveSafe(root, path.posix.join(topFolder, clean))
+  const parentAbs = path.dirname(oldAbs)
+  const baseName = path.basename(oldAbs)
+  let copyName = `${baseName} copy`
+  let n = 1
+  while (true) {
+    try {
+      await fs.access(path.join(parentAbs, copyName))
+      n += 1
+      copyName = `${baseName} copy ${n}`
+    } catch {
+      break
+    }
+  }
+  const newAbs = path.join(parentAbs, copyName)
+  await fs.cp(oldAbs, newAbs, { recursive: true })
+  return path
+    .relative(path.join(root, topFolder), newAbs)
+    .split(path.sep)
+    .join('/')
+}
+
+/** Build the absolute on-disk path for a vault folder / subfolder. */
+export function folderAbsolutePath(
+  root: string,
+  topFolder: NoteFolder,
+  subpath: string
+): string {
+  const clean = subpath.replace(/^\/+|\/+$/g, '')
+  return clean
+    ? resolveSafe(root, path.posix.join(topFolder, clean))
+    : path.join(root, topFolder)
+}
+
+/* ---------- Notes ---------------------------------------------------- */
+
+/**
+ * Move a note to a different folder / subfolder. Renames on disk
+ * (preserving the filename, appending a numeric suffix if there's a
+ * collision), then re-reads meta for the new location.
+ */
+export async function moveNote(
+  root: string,
+  oldRel: string,
+  targetFolder: NoteFolder,
+  targetSubpath: string
+): Promise<NoteMeta> {
+  const oldAbs = resolveSafe(root, oldRel)
+  const filename = path.basename(oldAbs)
+  const cleanSub = targetSubpath.replace(/^\/+|\/+$/g, '')
+  const destDir = cleanSub
+    ? resolveSafe(root, path.posix.join(targetFolder, cleanSub))
+    : path.join(root, targetFolder)
+
+  // No-op if the source already lives at the destination.
+  if (path.dirname(oldAbs) === destDir) {
+    const folder = folderOf(root, oldAbs)
+    if (!folder) throw new Error(`Note not in a known folder: ${oldRel}`)
+    return await readMeta(root, oldAbs, folder)
+  }
+
+  await fs.mkdir(destDir, { recursive: true })
+  const ext = path.extname(filename)
+  const baseTitle = path.basename(filename, ext)
+  const finalTitle = await uniqueTitle(destDir, baseTitle)
+  const destAbs = path.join(destDir, `${finalTitle}${ext}`)
+  await fs.rename(oldAbs, destAbs)
+  return await readMeta(root, destAbs, targetFolder)
 }
 
 export async function duplicateNote(root: string, rel: string): Promise<NoteMeta> {

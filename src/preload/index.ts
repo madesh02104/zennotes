@@ -20,8 +20,12 @@ const api = {
     ipcRenderer.invoke(IPC.VAULT_READ_NOTE, relPath),
   writeNote: (relPath: string, body: string): Promise<NoteMeta> =>
     ipcRenderer.invoke(IPC.VAULT_WRITE_NOTE, relPath, body),
-  createNote: (folder: NoteFolder, title?: string): Promise<NoteMeta> =>
-    ipcRenderer.invoke(IPC.VAULT_CREATE_NOTE, folder, title),
+  createNote: (
+    folder: NoteFolder,
+    title?: string,
+    subpath?: string
+  ): Promise<NoteMeta> =>
+    ipcRenderer.invoke(IPC.VAULT_CREATE_NOTE, folder, title, subpath),
   renameNote: (relPath: string, nextTitle: string): Promise<NoteMeta> =>
     ipcRenderer.invoke(IPC.VAULT_RENAME_NOTE, relPath, nextTitle),
   deleteNote: (relPath: string): Promise<void> =>
@@ -39,6 +43,26 @@ const api = {
     ipcRenderer.invoke(IPC.VAULT_DUPLICATE_NOTE, relPath),
   revealNote: (relPath: string): Promise<void> =>
     ipcRenderer.invoke(IPC.VAULT_REVEAL_NOTE, relPath),
+  moveNote: (
+    relPath: string,
+    targetFolder: NoteFolder,
+    targetSubpath: string
+  ): Promise<NoteMeta> =>
+    ipcRenderer.invoke(IPC.VAULT_MOVE_NOTE, relPath, targetFolder, targetSubpath),
+  createFolder: (folder: NoteFolder, subpath: string): Promise<void> =>
+    ipcRenderer.invoke(IPC.VAULT_CREATE_FOLDER, folder, subpath),
+  renameFolder: (
+    folder: NoteFolder,
+    oldSubpath: string,
+    newSubpath: string
+  ): Promise<string> =>
+    ipcRenderer.invoke(IPC.VAULT_RENAME_FOLDER, folder, oldSubpath, newSubpath),
+  deleteFolder: (folder: NoteFolder, subpath: string): Promise<void> =>
+    ipcRenderer.invoke(IPC.VAULT_DELETE_FOLDER, folder, subpath),
+  duplicateFolder: (folder: NoteFolder, subpath: string): Promise<string> =>
+    ipcRenderer.invoke(IPC.VAULT_DUPLICATE_FOLDER, folder, subpath),
+  revealFolder: (folder: NoteFolder, subpath: string): Promise<void> =>
+    ipcRenderer.invoke(IPC.VAULT_REVEAL_FOLDER, folder, subpath),
 
   onVaultChange: (cb: (ev: VaultChangeEvent) => void): (() => void) => {
     const listener = (_: unknown, ev: VaultChangeEvent): void => cb(ev)

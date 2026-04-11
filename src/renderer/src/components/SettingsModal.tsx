@@ -26,10 +26,10 @@ export function SettingsModal(): JSX.Element {
   const setTextFont = useStore((s) => s.setTextFont)
   const monoFont = useStore((s) => s.monoFont)
   const setMonoFont = useStore((s) => s.setMonoFont)
-  const quickFontSizeAdjust = useStore((s) => s.quickFontSizeAdjust)
-  const setQuickFontSizeAdjust = useStore((s) => s.setQuickFontSizeAdjust)
   const transparentUi = useStore((s) => s.transparentUi)
   const setTransparentUi = useStore((s) => s.setTransparentUi)
+  const unifiedSidebar = useStore((s) => s.unifiedSidebar)
+  const setUnifiedSidebar = useStore((s) => s.setUnifiedSidebar)
 
   // Lazy-load the system font list on mount. Retried on every mount
   // when the list comes back empty (IPC failure / no fonts yet).
@@ -281,15 +281,15 @@ export function SettingsModal(): JSX.Element {
                 onChange={setEditorLineHeight}
                 format={(v) => v.toFixed(2)}
               />
-              <ToggleRow
-                label="Quick font size adjustment"
-                description="Cmd + scroll or trackpad pinch to resize editor text."
-                value={quickFontSizeAdjust}
-                onChange={setQuickFontSizeAdjust}
-              />
             </Section>
 
             <Section title="Appearance · Advanced">
+              <ToggleRow
+                label="Unified sidebar"
+                description="Show notes inside the sidebar tree (Obsidian File Explorer style) and hide the separate note list column."
+                value={unifiedSidebar}
+                onChange={setUnifiedSidebar}
+              />
               <ToggleRow
                 label="Translucent interface"
                 description="Blur the sidebar, note list, and editor header over the window material. Turn off for a fully opaque UI."
