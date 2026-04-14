@@ -802,7 +802,7 @@ export function VimNav(): JSX.Element | null {
     if (!el) return
     const itemType = el.dataset.sidebarType
     if (itemType === 'folder') {
-      const folder = el.dataset.sidebarFolder as 'inbox' | 'archive' | 'trash'
+      const folder = el.dataset.sidebarFolder as 'inbox' | 'quick' | 'archive' | 'trash'
       const subpath = el.dataset.sidebarSubpath ?? ''
       state.setView({ kind: 'folder', folder, subpath })
       const collapseKey = el.dataset.sidebarKey

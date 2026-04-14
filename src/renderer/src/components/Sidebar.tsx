@@ -16,12 +16,14 @@ import {
   SettingsIcon,
   SortIcon,
   TargetIcon,
-  TrashIcon
+  TrashIcon,
+  ZapIcon
 } from './icons'
 import { ContextMenu, type ContextMenuItem } from './ContextMenu'
 import { ResizeHandle } from './ResizeHandle'
 import { VaultBadge } from './VaultBadge'
 import { usePrompt } from './PromptModal'
+import { resolveQuickNoteTitle } from '../lib/quick-note-title'
 import {
   hasZenItem,
   readDragPayload,
@@ -47,6 +49,7 @@ export function Sidebar(): JSX.Element {
   const setView = useStore((s) => s.setView)
   const setSearchOpen = useStore((s) => s.setSearchOpen)
   const createAndOpen = useStore((s) => s.createAndOpen)
+  const quickNoteDateTitle = useStore((s) => s.quickNoteDateTitle)
   const toggleSidebar = useStore((s) => s.toggleSidebar)
   const setFocusedPanel = useStore((s) => s.setFocusedPanel)
   const setSettingsOpen = useStore((s) => s.setSettingsOpen)
@@ -142,11 +145,17 @@ export function Sidebar(): JSX.Element {
   const setCollapsed = (next: Set<string>): void =>
     setCollapsedFoldersAction([...next])
 
-  // Build a folder tree per top-level (inbox + archive). Uses the
-  // folders index from main so empty subfolders still appear in the
-  // tree alongside ones that have notes. Trash is rendered separately.
+  // Build a folder tree per top-level (quick + inbox + archive). Uses
+  // the folders index from main so empty subfolders still appear in
+  // the tree alongside ones that have notes. Trash is rendered
+  // separately.
   const trees = useMemo(
     () => ({
+      quick: buildTree(
+        notes.filter((n) => n.folder === 'quick'),
+        'quick',
+        allFolders.filter((f) => f.folder === 'quick')
+      ),
       inbox: buildTree(
         notes.filter((n) => n.folder === 'inbox'),
         'inbox',
@@ -261,8 +270,11 @@ export function Sidebar(): JSX.Element {
         onSelect: async () => {
           await createAndOpen(folder, subpath)
         }
-      },
-      {
+      }
+    ]
+    // Quick Notes is a flat folder — no nested subfolders allowed.
+    if (folder !== 'quick') {
+      items.push({
         label: 'New folder',
         onSelect: async () => {
           const name = await prompt({
@@ -284,8 +296,8 @@ export function Sidebar(): JSX.Element {
             window.alert((err as Error).message)
           }
         }
-      }
-    ]
+      })
+    }
 
     if (!isTop) {
       items.push({ kind: 'separator' })
@@ -437,13 +449,19 @@ export function Sidebar(): JSX.Element {
       }
     })
     items.push({
+      label: 'Open in Floating Window',
+      onSelect: async () => {
+        await window.zen.openNoteWindow(n.path)
+      }
+    })
+    items.push({
       label: 'Reveal in Finder',
       onSelect: async () => {
         await window.zen.revealNote(n.path)
       }
     })
     items.push({ kind: 'separator' })
-    if (n.folder === 'inbox') {
+    if (n.folder === 'inbox' || n.folder === 'quick') {
       items.push({
         label: 'Archive',
         icon: <ArchiveIcon />,
@@ -702,10 +720,14 @@ export function Sidebar(): JSX.Element {
           title="New folder"
           onClick={async () => {
             const view = useStore.getState().view
+            // Quick Notes is intentionally flat — fall back to inbox
+            // when the user is currently viewing it.
+            const noFolders =
+              view.kind === 'folder' && (view.folder === 'trash' || view.folder === 'quick')
             const parentFolder: NoteFolder =
-              view.kind === 'folder' && view.folder !== 'trash' ? view.folder : 'inbox'
+              view.kind === 'folder' && !noFolders ? view.folder : 'inbox'
             const parentSub =
-              view.kind === 'folder' && view.folder !== 'trash' ? view.subpath : ''
+              view.kind === 'folder' && !noFolders ? view.subpath : ''
             const name = await prompt({
               title: 'New folder',
               placeholder: 'Folder name',
@@ -753,6 +775,46 @@ export function Sidebar(): JSX.Element {
 
       {/* Main scrollable tree area */}
       <div className="mt-3 flex min-h-0 flex-1 flex-col overflow-y-auto px-3">
+        <FolderTreeRoot
+          label="Quick Notes"
+          icon={<ZapIcon />}
+          folder="quick"
+          tree={trees.quick}
+          isFolderActive={isFolderActive}
+          collapsed={collapsed}
+          toggleCollapse={toggleCollapse}
+          setView={setView}
+          onContextMenu={openFolderMenu}
+          showNotes={unifiedSidebar}
+          selectedPath={selectedPath}
+          onSelectNote={(p) => void selectNote(p)}
+          onNoteContextMenu={(e, n) => {
+            e.preventDefault()
+            setNoteMenu({ x: e.clientX, y: e.clientY, path: n.path })
+          }}
+          sortComparator={treeSortComparator}
+          onDropOnFolder={handleDropOnFolder}
+          idxCounter={idxCounter.current}
+          vimCursor={vimCursor}
+          sidebarFocused={isSidebarFocused}
+          groupByKind={groupByKind}
+          headerAction={
+            <button
+              type="button"
+              title="New Quick Note (⇧⌘N)"
+              aria-label="New Quick Note"
+              onClick={(e) => {
+                e.stopPropagation()
+                const title = resolveQuickNoteTitle(notes, quickNoteDateTitle)
+                void createAndOpen('quick', '', { title, focusTitle: true })
+              }}
+              className="mr-1 flex h-6 w-6 items-center justify-center rounded-md bg-current/0 text-current transition-colors hover:bg-current/15"
+            >
+              <PlusIcon width={16} height={16} strokeWidth={2.5} />
+            </button>
+          }
+        />
+
         <FolderTreeRoot
           label="Inbox"
           icon={<InboxIcon />}
@@ -1135,11 +1197,15 @@ function FolderTreeRoot({
   idxCounter,
   vimCursor,
   sidebarFocused,
-  groupByKind
+  groupByKind,
+  headerAction
 }: {
   label: string
   icon: JSX.Element
   tree: TreeNode
+  /** Optional inline action shown on the right of the header row,
+   *  revealed on hover. Used to surface a quick "+" for Quick Notes. */
+  headerAction?: JSX.Element
 } & TreeRenderProps): JSX.Element {
   const rootKey = `${folder}:`
   const isCollapsed = collapsed.has(rootKey)
@@ -1190,6 +1256,7 @@ function FolderTreeRoot({
         vimHighlight={vimCursor === myIdx}
         sidebarFocused={sidebarFocused}
         sidebarData={{ type: 'folder', folder, subpath: '', key: rootKey }}
+        trailing={headerAction}
       />
       {!isCollapsed && (
         <>
@@ -1387,6 +1454,7 @@ function NoteLeaf({
   return (
     <button
       onClick={onSelect}
+      onDoubleClick={() => void window.zen.openNoteWindow(note.path)}
       onContextMenu={onContextMenu}
       draggable
       onDragStart={(e) => setDragPayload(e, { kind: 'note', path: note.path })}
@@ -1459,7 +1527,8 @@ function TreeRow({
   sidebarIdx,
   vimHighlight,
   sidebarFocused = false,
-  sidebarData
+  sidebarData,
+  trailing
 }: {
   icon: JSX.Element
   label: string
@@ -1481,6 +1550,8 @@ function TreeRow({
   vimHighlight?: boolean
   sidebarFocused?: boolean
   sidebarData?: { type: string; folder: string; subpath: string; key: string }
+  /** Optional inline action(s) shown on the right edge, revealed on hover. */
+  trailing?: JSX.Element
 }): JSX.Element {
   const strongActive = active && (!sidebarFocused || !!vimHighlight)
 
@@ -1567,6 +1638,7 @@ function TreeRow({
       {sidebarFocused && vimHighlight && (
         <RowKeyHint active={active} keyLabel="m" compact={typeof count === 'number' && count > 0} />
       )}
+      {trailing && <span className="shrink-0">{trailing}</span>}
       {typeof count === 'number' && count > 0 && (
         <span
           className={[

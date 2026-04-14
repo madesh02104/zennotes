@@ -11,7 +11,7 @@ export type DragPayload =
       /** Leaf pane id the tab was dragged from, when the source is a tab. */
       sourcePaneId?: string
     }
-  | { kind: 'folder'; folder: 'inbox' | 'archive' | 'trash'; subpath: string }
+  | { kind: 'folder'; folder: 'inbox' | 'quick' | 'archive' | 'trash'; subpath: string }
 
 export const ZEN_DND_MIME = 'application/x-zen-item'
 export const ZEN_DND_TEXT_MIME = 'text/x-zen-item'

@@ -168,10 +168,16 @@ export function NoteList(): JSX.Element {
       items.push({ label: 'Duplicate', onSelect: onDuplicate })
     }
     items.push({ label: 'Copy as Wiki Link', onSelect: onCopyWikilink })
+    items.push({
+      label: 'Open in Floating Window',
+      onSelect: async () => {
+        await window.zen.openNoteWindow(n.path)
+      }
+    })
     items.push({ label: 'Reveal in Finder', onSelect: onReveal })
     items.push({ kind: 'separator' })
 
-    if (n.folder === 'inbox') {
+    if (n.folder === 'inbox' || n.folder === 'quick') {
       items.push({ label: 'Archive', icon: <ArchiveIcon />, onSelect: onArchive })
       items.push({
         label: 'Move to Trash',
@@ -502,6 +508,7 @@ function NoteRow({
   return (
     <button
       onClick={onSelect}
+      onDoubleClick={() => void window.zen.openNoteWindow(note.path)}
       onContextMenu={onContextMenu}
       draggable
       onDragStart={(e) => setDragPayload(e, { kind: 'note', path: note.path })}

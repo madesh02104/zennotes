@@ -182,6 +182,7 @@ export function EditorPane({ pane }: { pane: PaneLeaf }): JSX.Element {
   const lineNumberMode = useStore((s) => s.lineNumberMode)
   const textFont = useStore((s) => s.textFont)
   const tabsEnabled = useStore((s) => s.tabsEnabled)
+  const wordWrap = useStore((s) => s.wordWrap)
 
   const [mode, setMode] = useState<Mode>('edit')
   const [connectionsOpen, setConnectionsOpen] = useState(false)
@@ -199,6 +200,7 @@ export function EditorPane({ pane }: { pane: PaneLeaf }): JSX.Element {
   const vimCompartmentRef = useRef<Compartment | null>(null)
   const livePreviewCompartmentRef = useRef<Compartment | null>(null)
   const lineNumbersCompartmentRef = useRef<Compartment | null>(null)
+  const wordWrapCompartmentRef = useRef<Compartment | null>(null)
   const ignoreEditorScrollRef = useRef(false)
   const ignorePreviewScrollRef = useRef(false)
   /**
@@ -247,9 +249,11 @@ export function EditorPane({ pane }: { pane: PaneLeaf }): JSX.Element {
       const vimCompartment = new Compartment()
       const livePreviewCompartment = new Compartment()
       const lineNumbersCompartment = new Compartment()
+      const wordWrapCompartment = new Compartment()
       vimCompartmentRef.current = vimCompartment
       livePreviewCompartmentRef.current = livePreviewCompartment
       lineNumbersCompartmentRef.current = lineNumbersCompartment
+      wordWrapCompartmentRef.current = wordWrapCompartment
       const s0 = useStore.getState()
       const initialPath = findLeaf(s0.paneLayout, paneId)?.activeTab ?? null
       const initialContent = initialPath ? s0.noteContents[initialPath] ?? null : null
@@ -260,7 +264,7 @@ export function EditorPane({ pane }: { pane: PaneLeaf }): JSX.Element {
           history(),
           drawSelection(),
           highlightActiveLine(),
-          EditorView.lineWrapping,
+          wordWrapCompartment.of(s0.wordWrap ? EditorView.lineWrapping : []),
           markdown({ base: markdownLanguage, codeLanguages: languages, addKeymap: true }),
           syntaxHighlighting(paperHighlight),
           syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
@@ -351,6 +355,14 @@ export function EditorPane({ pane }: { pane: PaneLeaf }): JSX.Element {
     if (!view || !comp) return
     view.dispatch({ effects: comp.reconfigure(lineNumberExtension(lineNumberMode)) })
   }, [lineNumberMode])
+  useEffect(() => {
+    const view = viewRef.current
+    const comp = wordWrapCompartmentRef.current
+    if (!view || !comp) return
+    view.dispatch({
+      effects: comp.reconfigure(wordWrap ? EditorView.lineWrapping : [])
+    })
+  }, [wordWrap])
 
   // Re-measure CM on prefs that change line geometry.
   useEffect(() => {
@@ -760,6 +772,12 @@ export function EditorPane({ pane }: { pane: PaneLeaf }): JSX.Element {
         label: 'Pin as Reference',
         onSelect: async () => {
           await useStore.getState().pinReference(path)
+        }
+      },
+      {
+        label: 'Open in Floating Window',
+        onSelect: async () => {
+          await window.zen.openNoteWindow(path)
         }
       },
       { label: 'Reveal in Finder', onSelect: async () => window.zen.revealNote(path) }
@@ -1219,7 +1237,7 @@ function Breadcrumb({
   }, [autoFocus, editing, onAutoFocusHandled])
 
   const parts = note.path.split('/')
-  const topFolder = parts[0] as 'inbox' | 'archive' | 'trash'
+  const topFolder = parts[0] as 'inbox' | 'quick' | 'archive' | 'trash'
   const segments = parts.slice(1, -1)
   const ancestors: { label: string; onClick: () => void }[] = [
     {

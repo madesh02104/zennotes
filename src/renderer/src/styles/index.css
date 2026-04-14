@@ -1076,7 +1076,9 @@ textarea,
   font-family: inherit;
   padding: 16px 0 35vh 0;
   overflow-y: auto;
-  overflow-x: hidden;
+  /* `auto` so long lines can scroll horizontally when word wrap is
+     off — wrapping mode keeps things short and no scrollbar appears. */
+  overflow-x: auto;
   overscroll-behavior: contain;
 }
 .cm-editor .cm-content {

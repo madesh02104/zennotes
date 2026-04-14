@@ -9,6 +9,7 @@
 import { useStore } from '../store'
 import { promptApp } from '../components/PromptHost'
 import { focusPaneInDirection } from './pane-nav'
+import { resolveQuickNoteTitle } from './quick-note-title'
 
 export interface Command {
   /** Stable identifier — used as React key and for analytics. */
@@ -33,6 +34,18 @@ export function buildCommands(): Command[] {
 
   /* ---------------- Note actions ---------------- */
   cmds.push(
+    {
+      id: 'note.new.quick',
+      title: 'New Quick Note',
+      category: 'Note',
+      shortcut: '⇧⌘N',
+      keywords: 'scratch capture jot',
+      run: () => {
+        const s = getState()
+        const title = resolveQuickNoteTitle(s.notes, s.quickNoteDateTitle)
+        return s.createAndOpen('quick', '', { title, focusTitle: true })
+      }
+    },
     {
       id: 'note.new.inbox',
       title: 'New Note in Inbox',
@@ -93,7 +106,10 @@ export function buildCommands(): Command[] {
       id: 'note.archive',
       title: 'Archive Note',
       category: 'Note',
-      when: () => getState().activeNote?.folder === 'inbox',
+      when: () => {
+        const f = getState().activeNote?.folder
+        return f === 'inbox' || f === 'quick'
+      },
       run: () => getState().archiveActive()
     },
     {
@@ -138,6 +154,17 @@ export function buildCommands(): Command[] {
       run: async () => {
         const p = getState().selectedPath
         if (p) await window.zen.revealNote(p)
+      }
+    },
+    {
+      id: 'note.float',
+      title: 'Open in Floating Window',
+      category: 'Note',
+      keywords: 'popout window detach',
+      when: () => !!getState().selectedPath,
+      run: async () => {
+        const p = getState().selectedPath
+        if (p) await window.zen.openNoteWindow(p)
       }
     },
     {
@@ -322,6 +349,13 @@ export function buildCommands(): Command[] {
       run: () => getState().setSearchOpen(true)
     },
     {
+      id: 'nav.folder.quick',
+      title: 'Go to Quick Notes',
+      category: 'Go',
+      keywords: 'quick scratch',
+      run: () => getState().setView({ kind: 'folder', folder: 'quick', subpath: '' })
+    },
+    {
       id: 'nav.folder.inbox',
       title: 'Go to Inbox',
       category: 'Go',
@@ -450,6 +484,14 @@ export function buildCommands(): Command[] {
       title: getState().tabsEnabled ? 'Disable Tabs' : 'Enable Tabs',
       category: 'Editor',
       run: () => getState().setTabsEnabled(!getState().tabsEnabled)
+    },
+    {
+      id: 'editor.word-wrap.toggle',
+      title: getState().wordWrap ? 'Disable Word Wrap' : 'Enable Word Wrap',
+      category: 'Editor',
+      shortcut: '⌥Z',
+      keywords: 'wrap line soft hard',
+      run: () => getState().setWordWrap(!getState().wordWrap)
     },
     {
       id: 'editor.auto-reveal.toggle',

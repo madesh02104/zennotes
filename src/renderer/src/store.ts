@@ -104,6 +104,12 @@ interface Prefs {
   pinnedRefVisible: boolean
   pinnedRefWidth: number
   pinnedRefMode: 'edit' | 'preview'
+  /** When true, "New Quick Note" auto-titles to today's date
+   *  (YYYY-MM-DD), appending " (2)", " (3)" etc. for collisions. */
+  quickNoteDateTitle: boolean
+  /** When true, long lines wrap inside the editor. When false they
+   *  scroll horizontally — same as a coding editor's "Word Wrap". */
+  wordWrap: boolean
 }
 const DEFAULT_PREFS: Prefs = {
   vimMode: true,
@@ -130,7 +136,9 @@ const DEFAULT_PREFS: Prefs = {
   pinnedRefPath: null,
   pinnedRefVisible: true,
   pinnedRefWidth: 420,
-  pinnedRefMode: 'edit'
+  pinnedRefMode: 'edit',
+  quickNoteDateTitle: false,
+  wordWrap: true
 }
 /** Coerce any loaded prefs blob into a valid Prefs object, dropping
  *  anything unknown (e.g. tokyo-night left over from earlier versions). */
@@ -226,7 +234,13 @@ function normalizePrefs(p: Partial<Prefs>): Prefs {
     pinnedRefMode:
       p.pinnedRefMode === 'edit' || p.pinnedRefMode === 'preview'
         ? p.pinnedRefMode
-        : DEFAULT_PREFS.pinnedRefMode
+        : DEFAULT_PREFS.pinnedRefMode,
+    quickNoteDateTitle:
+      typeof p.quickNoteDateTitle === 'boolean'
+        ? p.quickNoteDateTitle
+        : DEFAULT_PREFS.quickNoteDateTitle,
+    wordWrap:
+      typeof p.wordWrap === 'boolean' ? p.wordWrap : DEFAULT_PREFS.wordWrap
   }
 }
 function loadPrefs(): Prefs {
@@ -478,6 +492,8 @@ function collectPrefs(s: {
   pinnedRefVisible: boolean
   pinnedRefWidth: number
   pinnedRefMode: 'edit' | 'preview'
+  quickNoteDateTitle: boolean
+  wordWrap: boolean
 }): Prefs {
   return {
     vimMode: s.vimMode,
@@ -504,7 +520,9 @@ function collectPrefs(s: {
     pinnedRefPath: s.pinnedRefPath,
     pinnedRefVisible: s.pinnedRefVisible,
     pinnedRefWidth: s.pinnedRefWidth,
-    pinnedRefMode: s.pinnedRefMode
+    pinnedRefMode: s.pinnedRefMode,
+    quickNoteDateTitle: s.quickNoteDateTitle,
+    wordWrap: s.wordWrap
   }
 }
 
@@ -574,6 +592,13 @@ interface Store {
   pinnedRefVisible: boolean
   pinnedRefWidth: number
   pinnedRefMode: 'edit' | 'preview'
+
+  /** Auto-title new Quick Notes to today's date instead of the
+   *  default "Quick Note <ts>" pattern. */
+  quickNoteDateTitle: boolean
+
+  /** Whether long lines wrap or scroll horizontally in the editor. */
+  wordWrap: boolean
 
   /** Vim navigation: which panel is keyboard-focused. */
   focusedPanel: Panel | null
@@ -654,6 +679,9 @@ interface Store {
   togglePinnedRefVisible: () => void
   setPinnedRefWidth: (px: number) => void
   setPinnedRefMode: (mode: 'edit' | 'preview') => void
+
+  setQuickNoteDateTitle: (on: boolean) => void
+  setWordWrap: (on: boolean) => void
   setFocusedPanel: (panel: Panel | null) => void
   setSidebarCursorIndex: (idx: number) => void
   setNoteListCursorIndex: (idx: number) => void
@@ -738,6 +766,15 @@ interface Store {
 /** Debounced per-path save timers. Module-scoped so they survive re-renders. */
 const pathSaveTimers = new Map<string, ReturnType<typeof setTimeout>>()
 const PATH_SAVE_DEBOUNCE_MS = 350
+
+/**
+ * The body we most recently wrote to each path. The vault file watcher
+ * inevitably echoes our own writes back through `applyChange` after a
+ * short delay — when we recognise the echo (disk body === what we
+ * wrote) we skip the refresh. Without this, edits made between save
+ * completion and echo arrival get rolled back to the older disk body.
+ */
+const lastWrittenByPath = new Map<string, string>()
 
 function activeFieldsFrom(
   layout: PaneLayout,
@@ -965,6 +1002,8 @@ export const useStore = create<Store>((set, get) => {
   pinnedRefVisible: loadPrefs().pinnedRefVisible,
   pinnedRefWidth: loadPrefs().pinnedRefWidth,
   pinnedRefMode: loadPrefs().pinnedRefMode,
+  quickNoteDateTitle: loadPrefs().quickNoteDateTitle,
+  wordWrap: loadPrefs().wordWrap,
   focusedPanel: null,
   sidebarCursorIndex: 0,
   noteListCursorIndex: 0,
@@ -1091,6 +1130,11 @@ export const useStore = create<Store>((set, get) => {
     if (ev.kind === 'change') {
       try {
         const content = await window.zen.readNote(ev.path)
+        // Drop the watcher echo of our own writes. Without this, an
+        // edit made between save-completion and echo-arrival gets
+        // overwritten with the older disk body and the user sees
+        // their last keystroke (often Enter) reverted.
+        if (lastWrittenByPath.get(ev.path) === content.body) return
         set((s) => {
           const existing = s.noteContents[ev.path]
           // Ignore noise — only push when disk differs from our buffer.
@@ -1155,7 +1199,11 @@ export const useStore = create<Store>((set, get) => {
       pathSaveTimers.delete(path)
     }
     try {
-      const meta = await window.zen.writeNote(path, content.body)
+      // Snapshot the body BEFORE the await so we know what hit disk
+      // even if the user keeps typing while the write resolves.
+      const writtenBody = content.body
+      lastWrittenByPath.set(path, writtenBody)
+      const meta = await window.zen.writeNote(path, writtenBody)
       set((cur) => {
         const dirty = { ...cur.noteDirty, [path]: false }
         return {
@@ -1566,6 +1614,16 @@ export const useStore = create<Store>((set, get) => {
 
   setPinnedRefMode: (mode) => {
     set({ pinnedRefMode: mode })
+    savePrefs(collectPrefs(get()))
+  },
+
+  setQuickNoteDateTitle: (on) => {
+    set({ quickNoteDateTitle: on })
+    savePrefs(collectPrefs(get()))
+  },
+
+  setWordWrap: (on) => {
+    set({ wordWrap: on })
     savePrefs(collectPrefs(get()))
   },
   setFocusedPanel: (panel) => set({ focusedPanel: panel }),

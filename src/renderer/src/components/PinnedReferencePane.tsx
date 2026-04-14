@@ -324,7 +324,7 @@ export function PinnedReferencePane(): JSX.Element | null {
           title={`Reveal ${title} in the sidebar`}
           onClick={() => {
             const parts = pinnedRefPath.split('/')
-            const top = parts[0] as 'inbox' | 'archive' | 'trash'
+            const top = parts[0] as 'inbox' | 'quick' | 'archive' | 'trash'
             const subpath = parts.slice(1, -1).join('/')
             setView({ kind: 'folder', folder: top, subpath })
           }}

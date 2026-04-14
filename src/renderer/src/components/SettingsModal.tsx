@@ -13,6 +13,10 @@ export function SettingsModal(): JSX.Element {
   const setLivePreview = useStore((s) => s.setLivePreview)
   const tabsEnabled = useStore((s) => s.tabsEnabled)
   const setTabsEnabled = useStore((s) => s.setTabsEnabled)
+  const quickNoteDateTitle = useStore((s) => s.quickNoteDateTitle)
+  const setQuickNoteDateTitle = useStore((s) => s.setQuickNoteDateTitle)
+  const wordWrap = useStore((s) => s.wordWrap)
+  const setWordWrap = useStore((s) => s.setWordWrap)
   const vault = useStore((s) => s.vault)
   const openVaultPicker = useStore((s) => s.openVaultPicker)
   const themeId = useStore((s) => s.themeId)
@@ -261,6 +265,18 @@ export function SettingsModal(): JSX.Element {
                 description="Open notes in tabs and allow note-drag split view. Turn off to keep the current single-note behavior."
                 value={tabsEnabled}
                 onChange={setTabsEnabled}
+              />
+              <ToggleRow
+                label="Word wrap"
+                description="Wrap long lines to the editor width. Turn off to scroll horizontally instead — same toggle as a coding editor."
+                value={wordWrap}
+                onChange={setWordWrap}
+              />
+              <ToggleRow
+                label="Date-titled Quick Notes"
+                description="New Quick Notes are named YYYY-MM-DD instead of a timestamp. A second note on the same day becomes “YYYY-MM-DD (2)”, then (3), and so on."
+                value={quickNoteDateTitle}
+                onChange={setQuickNoteDateTitle}
               />
             </Section>
 

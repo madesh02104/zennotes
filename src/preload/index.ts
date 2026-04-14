@@ -134,7 +134,9 @@ const api = {
 
   windowMinimize: (): void => ipcRenderer.send(IPC.WINDOW_MINIMIZE),
   windowToggleMaximize: (): void => ipcRenderer.send(IPC.WINDOW_TOGGLE_MAXIMIZE),
-  windowClose: (): void => ipcRenderer.send(IPC.WINDOW_CLOSE)
+  windowClose: (): void => ipcRenderer.send(IPC.WINDOW_CLOSE),
+  openNoteWindow: (relPath: string): Promise<void> =>
+    ipcRenderer.invoke(IPC.WINDOW_OPEN_NOTE, relPath)
 }
 
 export type ZenApi = typeof api

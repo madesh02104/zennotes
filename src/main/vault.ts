@@ -13,7 +13,7 @@ import type {
 } from '@shared/ipc'
 
 const CONFIG_FILE = 'zennotes.config.json'
-const FOLDERS: NoteFolder[] = ['inbox', 'archive', 'trash']
+const FOLDERS: NoteFolder[] = ['inbox', 'quick', 'archive', 'trash']
 const PRIMARY_ATTACHMENTS_DIR = 'attachements'
 const LEGACY_ATTACHMENTS_DIRS = ['_assets']
 const ATTACHMENTS_DIRS = [PRIMARY_ATTACHMENTS_DIR, ...LEGACY_ATTACHMENTS_DIRS]

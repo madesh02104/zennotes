@@ -2,7 +2,7 @@ import type { NoteFolder, NoteMeta } from '@shared/ipc'
 
 type NoteRef = Pick<NoteMeta, 'path' | 'title' | 'folder'>
 
-const TOP_FOLDERS: NoteFolder[] = ['inbox', 'archive', 'trash']
+const TOP_FOLDERS: NoteFolder[] = ['inbox', 'quick', 'archive', 'trash']
 const INVALID_NOTE_PATH_CHARS = /[\\:*?"<>|#^\[\]]/
 const FENCED_CODE_BLOCK_RE = /(^|\n)```[^\n]*\n[\s\S]*?\n```[ \t]*(?=\n|$)/g
 

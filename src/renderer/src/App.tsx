@@ -12,6 +12,7 @@ import { VimNav } from './components/VimNav'
 import { EmptyVault } from './components/EmptyVault'
 import { PromptHost } from './components/PromptHost'
 import { PinnedReferencePane } from './components/PinnedReferencePane'
+import { resolveQuickNoteTitle } from './lib/quick-note-title'
 
 function App(): JSX.Element {
   const vault = useStore((s) => s.vault)
@@ -114,6 +115,19 @@ function App(): JSX.Element {
         // ⇧⌘P — command palette
         e.preventDefault()
         setCommandPaletteOpen(!state.commandPaletteOpen)
+        return
+      }
+      if (mod && e.shiftKey && key === 'n') {
+        // ⇧⌘N — new quick note
+        e.preventDefault()
+        const title = resolveQuickNoteTitle(state.notes, state.quickNoteDateTitle)
+        void state.createAndOpen('quick', '', { title, focusTitle: true })
+        return
+      }
+      if (e.altKey && !e.metaKey && !e.ctrlKey && !e.shiftKey && key === 'z') {
+        // ⌥Z — toggle word wrap (matches VSCode/Sublime convention)
+        e.preventDefault()
+        state.setWordWrap(!state.wordWrap)
         return
       }
       if (mod && !e.shiftKey && key === 'p') {

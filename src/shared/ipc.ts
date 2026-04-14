@@ -33,10 +33,11 @@ export const IPC = {
   WINDOW_TOGGLE_MAXIMIZE: 'window:toggle-maximize',
   WINDOW_MINIMIZE: 'window:minimize',
   WINDOW_CLOSE: 'window:close',
+  WINDOW_OPEN_NOTE: 'window:open-note',
   APP_PLATFORM: 'app:platform'
 } as const
 
-export type NoteFolder = 'inbox' | 'archive' | 'trash'
+export type NoteFolder = 'inbox' | 'quick' | 'archive' | 'trash'
 
 export interface NoteMeta {
   /** Path relative to the vault root, always POSIX-style. */
@@ -90,7 +91,7 @@ export interface VaultInfo {
 }
 
 export interface FolderEntry {
-  /** Top-level folder (inbox / archive / trash). */
+  /** Top-level folder (inbox / quick / archive / trash). */
   folder: NoteFolder
   /** POSIX subpath relative to the top-level folder, "" for the top-level itself. */
   subpath: string

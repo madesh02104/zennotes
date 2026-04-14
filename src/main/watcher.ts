@@ -2,7 +2,7 @@ import path from 'node:path'
 import chokidar, { FSWatcher } from 'chokidar'
 import type { NoteFolder, VaultChangeEvent, VaultChangeKind } from '@shared/ipc'
 
-const FOLDERS: NoteFolder[] = ['inbox', 'archive', 'trash']
+const FOLDERS: NoteFolder[] = ['inbox', 'quick', 'archive', 'trash']
 
 function toPosix(p: string): string {
   return p.split(path.sep).join('/')

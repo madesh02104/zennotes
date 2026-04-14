@@ -189,7 +189,11 @@ async function setVault(root: string): Promise<VaultInfo> {
   currentVault = vaultInfo(root)
   await saveConfig({ vaultRoot: root })
   watcher.start(root, (ev: VaultChangeEvent) => {
-    mainWindow?.webContents.send(IPC.VAULT_ON_CHANGE, ev)
+    // Broadcast to every open window — the main window, all floating
+    // note windows — so each can refresh its in-memory state.
+    for (const win of BrowserWindow.getAllWindows()) {
+      win.webContents.send(IPC.VAULT_ON_CHANGE, ev)
+    }
   })
   return currentVault
 }
@@ -491,6 +495,72 @@ function registerIpc(): void {
     else mainWindow.maximize()
   })
   ipcMain.on(IPC.WINDOW_CLOSE, () => mainWindow?.close())
+
+  ipcMain.handle(IPC.WINDOW_OPEN_NOTE, async (_e, relPath: string) => {
+    openFloatingNoteWindow(relPath)
+  })
+}
+
+/**
+ * Pop a note out into a standalone always-visible window. The same
+ * note is reused if a floating window is already showing it — we just
+ * focus the existing one rather than spawning duplicates.
+ */
+const floatingNoteWindows = new Map<string, BrowserWindow>()
+function openFloatingNoteWindow(relPath: string): void {
+  const existing = floatingNoteWindows.get(relPath)
+  if (existing && !existing.isDestroyed()) {
+    if (existing.isMinimized()) existing.restore()
+    existing.focus()
+    return
+  }
+  const mac = isMac()
+  const win = new BrowserWindow({
+    width: 720,
+    height: 720,
+    minWidth: 360,
+    minHeight: 320,
+    show: false,
+    autoHideMenuBar: true,
+    titleBarStyle: mac ? 'hiddenInset' : 'hidden',
+    trafficLightPosition: { x: 12, y: 12 },
+    ...(mac
+      ? {
+          backgroundColor: '#00000000',
+          vibrancy: 'under-window' as const,
+          visualEffectState: 'active' as const,
+          transparent: true
+        }
+      : {
+          backgroundColor: '#faf7f0'
+        }),
+    webPreferences: {
+      preload: path.join(__dirname, '../preload/index.js'),
+      sandbox: false,
+      contextIsolation: true,
+      nodeIntegration: false
+    }
+  })
+
+  floatingNoteWindows.set(relPath, win)
+  win.on('closed', () => {
+    floatingNoteWindows.delete(relPath)
+  })
+  win.on('ready-to-show', () => win.show())
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    shell.openExternal(url).catch(() => {})
+    return { action: 'deny' }
+  })
+
+  const params = `?floating=1&note=${encodeURIComponent(relPath)}`
+  const devServerUrl = process.env['ELECTRON_RENDERER_URL']
+  if (devServerUrl) {
+    void win.loadURL(`${devServerUrl}${params}`)
+  } else {
+    void win.loadFile(path.join(__dirname, '../renderer/index.html'), {
+      search: params.slice(1)
+    })
+  }
 }
 
 // Set the app name before the ready event so the dock / menu bar /
