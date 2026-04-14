@@ -24,7 +24,15 @@ import {
   tooltips
 } from '@codemirror/view'
 import { vim } from '@replit/codemirror-vim'
-import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands'
+import {
+  defaultKeymap,
+  history,
+  historyKeymap,
+  indentWithTab,
+  redo,
+  selectAll,
+  undo
+} from '@codemirror/commands'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { languages } from '@codemirror/language-data'
 import { syntaxHighlighting, HighlightStyle, defaultHighlightStyle } from '@codemirror/language'
@@ -192,6 +200,14 @@ export function EditorPane({ pane }: { pane: PaneLeaf }): JSX.Element {
   const [paneDropEdge, setPaneDropEdge] = useState<PaneEdge | null>(null)
   const [tabDropIndicator, setTabDropIndicator] = useState<TabDropIndicator>(null)
   const [tabMenu, setTabMenu] = useState<{ x: number; y: number; path: string } | null>(null)
+  // Right-click menu for editor text (Copy/Cut/Paste/Select All/Undo/Redo).
+  // Null when closed. Captures selection state at click time so menu items
+  // reflect what was actually selected.
+  const [editorMenu, setEditorMenu] = useState<{
+    x: number
+    y: number
+    hasSelection: boolean
+  } | null>(null)
   const [assetDropActive, setAssetDropActive] = useState(false)
   const [imageDropIndicatorTop, setImageDropIndicatorTop] = useState<number | null>(null)
 
@@ -1132,6 +1148,21 @@ export function EditorPane({ pane }: { pane: PaneLeaf }): JSX.Element {
                     : 'flex flex-1 flex-col'
                 ].join(' ')}
                 style={{ display: showEditor ? 'flex' : 'none' }}
+                onContextMenu={(e) => {
+                  // Native browser context menu in Electron is threadbare
+                  // (no Copy/Cut/Paste unless dev tools are open), so we
+                  // roll our own using CodeMirror's selection state.
+                  const view = viewRef.current
+                  if (!view) return
+                  e.preventDefault()
+                  view.focus()
+                  const sel = view.state.selection.main
+                  setEditorMenu({
+                    x: e.clientX,
+                    y: e.clientY,
+                    hasSelection: !sel.empty
+                  })
+                }}
               >
                 {imageDropIndicatorTop != null && (
                   <div
@@ -1185,8 +1216,97 @@ export function EditorPane({ pane }: { pane: PaneLeaf }): JSX.Element {
           onClose={() => setTabMenu(null)}
         />
       )}
+      {editorMenu && (
+        <ContextMenu
+          x={editorMenu.x}
+          y={editorMenu.y}
+          items={buildEditorContextItems(viewRef.current, editorMenu.hasSelection)}
+          onClose={() => setEditorMenu(null)}
+        />
+      )}
     </section>
   )
+}
+
+/**
+ * Build the right-click menu shown over the editor text. Uses the live
+ * CodeMirror view for clipboard / undo / redo / select-all commands.
+ */
+function buildEditorContextItems(
+  view: EditorView | null,
+  hasSelection: boolean
+): ContextMenuItem[] {
+  if (!view) return []
+
+  const copy = async (): Promise<void> => {
+    const sel = view.state.selection.main
+    if (sel.empty) return
+    const text = view.state.sliceDoc(sel.from, sel.to)
+    try {
+      await navigator.clipboard.writeText(text)
+    } catch {
+      /* clipboard may be blocked */
+    }
+  }
+
+  const cut = async (): Promise<void> => {
+    const sel = view.state.selection.main
+    if (sel.empty) return
+    await copy()
+    view.dispatch({
+      changes: { from: sel.from, to: sel.to, insert: '' },
+      selection: { anchor: sel.from }
+    })
+    view.focus()
+  }
+
+  const paste = async (): Promise<void> => {
+    let text = ''
+    try {
+      text = await navigator.clipboard.readText()
+    } catch {
+      return
+    }
+    if (!text) return
+    const sel = view.state.selection.main
+    view.dispatch({
+      changes: { from: sel.from, to: sel.to, insert: text },
+      selection: { anchor: sel.from + text.length }
+    })
+    view.focus()
+  }
+
+  return [
+    { label: 'Cut', hint: '⌘X', disabled: !hasSelection, onSelect: cut },
+    { label: 'Copy', hint: '⌘C', disabled: !hasSelection, onSelect: copy },
+    { label: 'Paste', hint: '⌘V', onSelect: paste },
+    { kind: 'separator' },
+    {
+      label: 'Select All',
+      hint: '⌘A',
+      onSelect: async () => {
+        selectAll(view)
+        view.focus()
+      }
+    },
+    { kind: 'separator' },
+    {
+      label: 'Undo',
+      hint: '⌘Z',
+      onSelect: async () => {
+        undo(view)
+        view.focus()
+      }
+    },
+    {
+      label: 'Redo',
+      hint: '⇧⌘Z',
+      onSelect: async () => {
+        redo(view)
+        view.focus()
+      }
+    }
+  ]
 }
 
 function PaneDropOverlay({ edge }: { edge: PaneEdge }): JSX.Element {
