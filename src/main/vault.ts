@@ -106,6 +106,38 @@ function extractTags(body: string): string[] {
   return [...seen]
 }
 
+/**
+ * Whether a note body references at least one local asset (any
+ * markdown link / image whose href looks like a relative file path
+ * with a known asset extension). Quick heuristic — used purely for
+ * the sidebar "has attachments" indicator. Skips fenced / inline code.
+ */
+function bodyHasLocalAsset(body: string): boolean {
+  const stripped = stripCodeContent(body)
+  const linkRe = /(!?)\[[^\]]*\]\((<[^>]+>|[^)\s]+)(?:\s+"[^"]*")?\)/g
+  let m: RegExpExecArray | null
+  while ((m = linkRe.exec(stripped)) !== null) {
+    let href = (m[2] ?? '').trim()
+    if (href.startsWith('<') && href.endsWith('>')) href = href.slice(1, -1)
+    if (!href || href.startsWith('#') || href.startsWith('//')) continue
+    // Skip URLs (anything with a scheme like http:, mailto:, file:, …).
+    if (/^[a-zA-Z][a-zA-Z\d+.-]*:/.test(href)) continue
+    const clean = href.split('#')[0]?.split('?')[0] ?? href
+    const lastDot = clean.lastIndexOf('.')
+    if (lastDot === -1) continue
+    const ext = clean.slice(lastDot).toLowerCase()
+    if (
+      IMAGE_EXTENSIONS.has(ext) ||
+      PDF_EXTENSIONS.has(ext) ||
+      AUDIO_EXTENSIONS.has(ext) ||
+      VIDEO_EXTENSIONS.has(ext)
+    ) {
+      return true
+    }
+  }
+  return false
+}
+
 /** Pull unique `[[wikilink]]` targets out of markdown text. Supports
  *  `[[target|label]]` by discarding the label. Ignores fenced/inline code. */
 function extractWikilinks(body: string): string[] {
@@ -156,6 +188,7 @@ async function readMeta(
     size: stat.size,
     tags: extractTags(body),
     wikilinks: extractWikilinks(body),
+    hasAttachments: bodyHasLocalAsset(body),
     excerpt: buildExcerpt(body)
   }
 }

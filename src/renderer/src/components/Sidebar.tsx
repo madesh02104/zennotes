@@ -1498,6 +1498,33 @@ function NoteLeaf({
         <path d="M14 3v6h6" />
       </svg>
       <span className="flex-1 truncate">{note.title}</span>
+      {note.hasAttachments && (
+        <span
+          aria-label="Has attachments"
+          title="Has embedded attachments"
+          className={[
+            'shrink-0',
+            active
+              ? sidebarFocused && !vimHighlight
+                ? 'text-accent/70'
+                : 'text-white/70'
+              : 'text-ink-400'
+          ].join(' ')}
+        >
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="m21.44 11.05-9.19 9.19a6 6 0 1 1-8.49-8.49l8.57-8.57A4 4 0 1 1 17.93 8.8L9.41 17.34a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+          </svg>
+        </span>
+      )}
       {sidebarFocused && vimHighlight && (
         <RowKeyHint active={active} label="menu" keyLabel="m" />
       )}

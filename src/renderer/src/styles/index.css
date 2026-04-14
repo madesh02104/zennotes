@@ -1082,14 +1082,21 @@ textarea,
   overscroll-behavior: contain;
 }
 .cm-editor .cm-content {
-  /* No hard cap — text reflows to fill whatever the editor column is. */
-  max-width: none;
+  /* Capped + centered (default) so wide windows don't make every line
+     stretch edge-to-edge. Both the cap and the alignment come from
+     Settings → Editor. */
+  max-width: var(--z-editor-max-width, 920px);
   margin: 0 auto;
   padding: 0 32px;
   caret-color: rgb(var(--z-accent));
-  /* CM's built-in theme sets its own line-height on cm-content; force
-     inherit so our --z-editor-line-height CSS var actually wins. */
   line-height: inherit;
+}
+:root[data-content-align='left'] .cm-editor .cm-content {
+  margin: 0;
+}
+:root[data-content-align='left'] .prose-zen {
+  margin-left: 0;
+  margin-right: 0;
 }
 .cm-editor .cm-line {
   padding: 0;
@@ -1629,6 +1636,140 @@ textarea,
   display: block;
   width: 100%;
   max-width: min(100%, 980px);
+}
+
+/* --- PDF embed widget (CodeMirror live preview) ---------------------- */
+.cm-editor .cm-local-pdf-embed,
+.cm-editor .local-pdf-embed {
+  display: block;
+  margin: 1rem 0;
+  overflow: hidden;
+  border-radius: 12px;
+  border: 1px solid rgb(var(--z-bg-3));
+  background: rgb(var(--z-bg-1));
+}
+.cm-editor .local-pdf-embed-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-bottom: 1px solid rgb(var(--z-bg-3));
+  background: rgb(var(--z-bg-2) / 0.4);
+  font-size: 0.85rem;
+}
+.cm-editor .local-pdf-embed-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  color: rgb(var(--z-fg));
+}
+.cm-editor .local-pdf-embed-action {
+  flex: 0 0 auto;
+  padding: 3px 9px;
+  border-radius: 6px;
+  border: 1px solid rgb(var(--z-bg-3));
+  background: rgb(var(--z-bg) / 0.6);
+  color: rgb(var(--z-fg-2));
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: background 120ms, color 120ms;
+}
+.cm-editor .local-pdf-embed-action:hover {
+  background: rgb(var(--z-accent) / 0.12);
+  color: rgb(var(--z-accent));
+  border-color: rgb(var(--z-accent) / 0.4);
+}
+.cm-editor .local-pdf-embed-frame {
+  display: block;
+  width: 100%;
+  height: 480px;
+  border: 0;
+  background: white;
+}
+
+/* --- Compact "showing in reference pane" card ----------------------- */
+:is(.prose-zen, .cm-editor) .local-asset-pinned-ref {
+  margin: 0.75rem 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  /* Cancel the clipping + border-radius that the generic
+     `.local-asset-embed` rule sets — the inner button paints its own
+     rounded dashed border, and we don't want the wrapper's 14px clip
+     slicing into the button's 10px corners. */
+  overflow: visible;
+  border-radius: 0;
+  /* Allow the figure to shrink below its content's intrinsic size when
+     the editor pane is narrow (otherwise the long filename pushes the
+     scroller past the pane's edge and triggers horizontal scroll). */
+  min-width: 0;
+  width: 100%;
+}
+:is(.prose-zen, .cm-editor) .local-asset-pinned-ref-button {
+  flex: 1 1 auto;
+  /* Same — without min-width: 0 the button refuses to shrink and the
+     truncating text never gets a chance to ellipsis. */
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px dashed rgb(var(--z-accent) / 0.45);
+  background: rgb(var(--z-accent) / 0.06);
+  color: rgb(var(--z-fg));
+  cursor: pointer;
+  text-align: left;
+  transition: background 120ms;
+}
+:is(.prose-zen, .cm-editor) .local-asset-pinned-ref-button:hover {
+  background: rgb(var(--z-accent) / 0.12);
+}
+:is(.prose-zen, .cm-editor) .local-asset-pinned-ref-icon {
+  flex: 0 0 auto;
+  font-size: 1rem;
+  color: rgb(var(--z-accent));
+}
+:is(.prose-zen, .cm-editor) .local-asset-pinned-ref-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+  font-size: 0.9rem;
+}
+:is(.prose-zen, .cm-editor) .local-asset-pinned-ref-badge {
+  flex: 0 0 auto;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: rgb(var(--z-accent));
+  opacity: 0.85;
+}
+.cm-editor .local-asset-pinned-ref-edit,
+.cm-editor .local-asset-pinned-ref-preview {
+  flex: 0 0 auto;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid rgb(var(--z-bg-3));
+  background: rgb(var(--z-bg) / 0.6);
+  color: rgb(var(--z-fg-2));
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: background 120ms, color 120ms, border-color 120ms;
+}
+.cm-editor .local-asset-pinned-ref-edit:hover,
+.cm-editor .local-asset-pinned-ref-preview:hover {
+  background: rgb(var(--z-accent) / 0.12);
+  color: rgb(var(--z-accent));
+  border-color: rgb(var(--z-accent) / 0.4);
 }
 
 .prose-zen .local-asset-embed {

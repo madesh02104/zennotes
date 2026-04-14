@@ -17,12 +17,20 @@ import {
   resolveWikilinkTarget,
   suggestCreateNotePath
 } from '../lib/wikilinks'
+import { classifyLocalAssetHref, resolveAssetVaultRelativePath } from '../lib/local-assets'
 import { promptApp } from './PromptHost'
 import { StatusBar } from './StatusBar'
 import { EditorPane } from './EditorPane'
 import { focusPaneInDirection } from '../lib/pane-nav'
 
 let vimCommandsRegistered = false
+
+function unwrapMdUrl(url: string): string {
+  // Markdown wraps URLs with spaces in angle brackets: `[x](<a b.pdf>)`.
+  const trimmed = url.trim()
+  if (trimmed.startsWith('<') && trimmed.endsWith('>')) return trimmed.slice(1, -1)
+  return trimmed
+}
 
 function extractLinkAtCursor(doc: string, pos: number): string | null {
   const lineStart = doc.lastIndexOf('\n', pos - 1) + 1
@@ -34,9 +42,14 @@ function extractLinkAtCursor(doc: string, pos: number): string | null {
   while ((m = wikiRe.exec(line)) !== null) {
     if (col >= m.index && col < m.index + m[0].length) return m[1]
   }
+  // Angle-bracketed URLs can contain `)` so match them specifically first.
+  const mdAngleRe = /\[([^\]]*)\]\(<([^>]+)>\)/g
+  while ((m = mdAngleRe.exec(line)) !== null) {
+    if (col >= m.index && col < m.index + m[0].length) return m[2]
+  }
   const mdRe = /\[([^\]]*)\]\(([^)]+)\)/g
   while ((m = mdRe.exec(line)) !== null) {
-    if (col >= m.index && col < m.index + m[0].length) return m[2]
+    if (col >= m.index && col < m.index + m[0].length) return unwrapMdUrl(m[2])
   }
   const urlRe = /https?:\/\/[^\s)>\]]+/g
   while ((m = urlRe.exec(line)) !== null) {
@@ -109,6 +122,21 @@ function registerVimCommands(): void {
     }
 
     const state = useStore.getState()
+
+    // PDF links: pin the asset in the reference pane for this note
+    // instead of prompting to create a note.
+    if (classifyLocalAssetHref(target) === 'pdf') {
+      const activePath = state.selectedPath
+      const vaultRoot = state.vault?.root
+      if (activePath && vaultRoot) {
+        const abs = resolveAssetVaultRelativePath(vaultRoot, activePath, target)
+        if (abs) {
+          state.pinAssetReferenceForNote(activePath, abs)
+          return
+        }
+      }
+    }
+
     const notes = state.notes
     const resolved = resolveWikilinkTarget(notes, target)
     if (resolved) {

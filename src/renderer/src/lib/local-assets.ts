@@ -40,10 +40,44 @@ export function resolveLocalAssetUrl(
   return window.zen.resolveLocalAssetUrl(vaultRoot, notePath, href)
 }
 
+/**
+ * Same input as `resolveLocalAssetUrl` but returns a POSIX vault-
+ * relative path instead of a `zen-asset://` URL. Useful when we need
+ * to feed the asset into our own state (e.g. `pinAssetReference`).
+ * Returns null when the asset is outside the vault.
+ */
+export function resolveAssetVaultRelativePath(
+  vaultRoot: string | null | undefined,
+  notePath: string | null | undefined,
+  href: string
+): string | null {
+  if (!vaultRoot || !notePath) return null
+  const resolvedUrl = window.zen.resolveLocalAssetUrl(vaultRoot, notePath, href)
+  if (!resolvedUrl) return null
+  try {
+    const url = new URL(resolvedUrl)
+    const abs = url.searchParams.get('path')
+    if (!abs) return null
+    const root = vaultRoot.replace(/[/\\]+$/, '')
+    if (!abs.startsWith(root)) return null
+    return abs.slice(root.length).replace(/^[/\\]+/, '').replace(/\\/g, '/')
+  } catch {
+    return null
+  }
+}
+
 function localAssetLabel(href: string, fallback: string): string {
   const clean = href.split('#')[0]?.split('?')[0] ?? href
   const parts = clean.split('/').filter(Boolean)
-  return parts[parts.length - 1] ?? fallback
+  const last = parts[parts.length - 1]
+  if (!last) return fallback
+  // Markdown encodes spaces (and other special chars) in the URL via
+  // %20 etc. — decode so the visible label reads like a real filename.
+  try {
+    return decodeURIComponent(last)
+  } catch {
+    return last
+  }
 }
 
 function imageCaptionLabel(img: HTMLImageElement, href: string): string {
@@ -131,10 +165,16 @@ function buildImageEmbed(
 function buildEmbed(
   kind: Exclude<LocalAssetKind, 'image' | 'file'>,
   url: string,
-  label: string
+  label: string,
+  href: string
 ): HTMLElement {
   const figure = document.createElement('figure')
   figure.className = 'local-asset-embed not-prose'
+  // Tag the figure so right-click handlers can identify the asset
+  // without traversing into the iframe / audio / video child.
+  figure.dataset.localAssetUrl = url
+  figure.dataset.localAssetKind = kind
+  figure.dataset.localAssetHref = href
 
   const header = document.createElement('div')
   header.className = 'local-asset-embed-header'
@@ -182,15 +222,64 @@ function buildEmbed(
   return figure
 }
 
+/**
+ * Build a compact "showing in reference pane" placeholder used when an
+ * embedded PDF in the note is the same one the user has pinned in the
+ * side reference pane — no point repeating the iframe, but we want a
+ * visual breadcrumb so the user knows it's there.
+ */
+function buildPinnedRefPlaceholder(
+  url: string,
+  href: string,
+  label: string,
+  onActivate: () => void
+): HTMLElement {
+  const figure = document.createElement('figure')
+  figure.className = 'local-asset-embed local-asset-pinned-ref not-prose'
+  figure.dataset.localAssetUrl = url
+  figure.dataset.localAssetKind = 'pdf'
+  figure.dataset.localAssetHref = href
+
+  const button = document.createElement('button')
+  button.type = 'button'
+  button.className = 'local-asset-pinned-ref-button'
+  button.title = 'Showing in the reference pane — click to focus'
+  button.addEventListener('click', (event) => {
+    event.preventDefault()
+    event.stopPropagation()
+    onActivate()
+  })
+
+  const icon = document.createElement('span')
+  icon.className = 'local-asset-pinned-ref-icon'
+  icon.textContent = '↗'
+
+  const text = document.createElement('span')
+  text.className = 'local-asset-pinned-ref-text'
+  text.textContent = label
+
+  const badge = document.createElement('span')
+  badge.className = 'local-asset-pinned-ref-badge'
+  badge.textContent = 'in reference pane'
+
+  button.append(icon, text, badge)
+  figure.append(button)
+  return figure
+}
+
 export function enhanceLocalAssetNodes(
   root: HTMLElement,
   options: {
     vaultRoot: string | null | undefined
     notePath: string | null | undefined
     onRequestEdit?: (() => void) | null
+    /** When set, PDF embeds matching this vault-relative path are
+     *  collapsed to a compact placeholder instead of a full iframe. */
+    pinnedAssetPath?: string | null
+    onActivatePinnedRef?: (() => void) | null
   }
 ): void {
-  const { vaultRoot, notePath, onRequestEdit } = options
+  const { vaultRoot, notePath, onRequestEdit, pinnedAssetPath, onActivatePinnedRef } = options
   if (!vaultRoot || !notePath) return
 
   root.querySelectorAll<HTMLImageElement>('img[src]').forEach((img) => {
@@ -224,6 +313,18 @@ export function enhanceLocalAssetNodes(
     const paragraph = isStandaloneAnchorParagraph(anchor)
     if (!paragraph || paragraph.dataset.assetEmbed === 'true') return
     paragraph.dataset.assetEmbed = 'true'
-    paragraph.replaceWith(buildEmbed(kind, resolved, localAssetLabel(raw, anchor.textContent?.trim() || 'Asset')))
+    const label = localAssetLabel(raw, anchor.textContent?.trim() || 'Asset')
+    if (kind === 'pdf' && pinnedAssetPath) {
+      const assetVaultRel = resolveAssetVaultRelativePath(vaultRoot, notePath, raw)
+      if (assetVaultRel === pinnedAssetPath) {
+        paragraph.replaceWith(
+          buildPinnedRefPlaceholder(resolved, raw, label, () => {
+            onActivatePinnedRef?.()
+          })
+        )
+        return
+      }
+    }
+    paragraph.replaceWith(buildEmbed(kind, resolved, label, raw))
   })
 }

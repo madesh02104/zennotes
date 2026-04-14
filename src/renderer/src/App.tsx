@@ -31,6 +31,8 @@ function App(): JSX.Element {
   const editorFontSize = useStore((s) => s.editorFontSize)
   const editorLineHeight = useStore((s) => s.editorLineHeight)
   const previewMaxWidth = useStore((s) => s.previewMaxWidth)
+  const editorMaxWidth = useStore((s) => s.editorMaxWidth)
+  const contentAlign = useStore((s) => s.contentAlign)
   const interfaceFont = useStore((s) => s.interfaceFont)
   const textFont = useStore((s) => s.textFont)
   const monoFont = useStore((s) => s.monoFont)
@@ -69,6 +71,8 @@ function App(): JSX.Element {
     html.style.setProperty('--z-editor-font-size', `${editorFontSize}px`)
     html.style.setProperty('--z-editor-line-height', String(editorLineHeight))
     html.style.setProperty('--z-preview-max-width', `${previewMaxWidth}px`)
+    html.style.setProperty('--z-editor-max-width', `${editorMaxWidth}px`)
+    html.dataset.contentAlign = contentAlign
 
     const setFont = (name: string, value: string | null, fallback: string): void => {
       if (value) html.style.setProperty(name, `"${value}", ${fallback}`)
@@ -89,7 +93,7 @@ function App(): JSX.Element {
       monoFont,
       '"SF Mono", "SFMono-Regular", ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace'
     )
-  }, [editorFontSize, editorLineHeight, previewMaxWidth, interfaceFont, textFont, monoFont])
+  }, [editorFontSize, editorLineHeight, previewMaxWidth, editorMaxWidth, contentAlign, interfaceFont, textFont, monoFont])
 
   // The app now always runs fully opaque.
   useEffect(() => {

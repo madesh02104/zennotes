@@ -108,14 +108,28 @@ function lineNumberExtension(mode: LineNumberMode): Extension {
 }
 
 export function PinnedReferencePane(): JSX.Element | null {
-  const pinnedRefPath = useStore((s) => s.pinnedRefPath)
+  const globalRefPath = useStore((s) => s.pinnedRefPath)
+  const globalRefKind = useStore((s) => s.pinnedRefKind)
+  const noteRefs = useStore((s) => s.noteRefs)
+  const selectedPath = useStore((s) => s.selectedPath)
+  // Per-note pin (if any) overrides the global one.
+  const noteRef = selectedPath ? noteRefs[selectedPath] : null
+  const pinnedRefPath = noteRef?.path ?? globalRefPath
+  const pinnedRefKind = noteRef?.kind ?? globalRefKind
+  const isPerNotePin = !!noteRef
   const pinnedRefVisible = useStore((s) => s.pinnedRefVisible)
   const pinnedRefWidth = useStore((s) => s.pinnedRefWidth)
   const pinnedRefMode = useStore((s) => s.pinnedRefMode)
-  const unpinReference = useStore((s) => s.unpinReference)
+  const vaultRoot = useStore((s) => s.vault?.root ?? null)
+  const unpinReferenceGlobal = useStore((s) => s.unpinReference)
+  const unpinReferenceForNote = useStore((s) => s.unpinReferenceForNote)
   const togglePinnedRefVisible = useStore((s) => s.togglePinnedRefVisible)
   const setPinnedRefWidth = useStore((s) => s.setPinnedRefWidth)
   const setPinnedRefMode = useStore((s) => s.setPinnedRefMode)
+  const unpinReference = (): void => {
+    if (isPerNotePin && selectedPath) unpinReferenceForNote(selectedPath)
+    else unpinReferenceGlobal()
+  }
   const content = useStore((s) =>
     pinnedRefPath ? s.noteContents[pinnedRefPath] ?? null : null
   )
@@ -292,10 +306,15 @@ export function PinnedReferencePane(): JSX.Element | null {
 
   if (!pinnedRefPath || !pinnedRefVisible) return null
 
-  const title =
-    content?.title ??
-    pinnedRefPath.split('/').pop()?.replace(/\.md$/i, '') ??
-    pinnedRefPath
+  const isAsset = pinnedRefKind === 'asset'
+  const title = isAsset
+    ? pinnedRefPath.split('/').pop() ?? pinnedRefPath
+    : content?.title ??
+      pinnedRefPath.split('/').pop()?.replace(/\.md$/i, '') ??
+      pinnedRefPath
+  const assetUrl = isAsset && vaultRoot
+    ? window.zen.resolveVaultAssetUrl(vaultRoot, pinnedRefPath)
+    : null
 
   const showEditor = pinnedRefMode === 'edit'
 
@@ -321,8 +340,12 @@ export function PinnedReferencePane(): JSX.Element | null {
       <header className="glass-header flex h-12 shrink-0 items-center justify-between gap-2 border-b border-paper-300/70 px-3">
         <button
           type="button"
-          title={`Reveal ${title} in the sidebar`}
+          title={isAsset ? `Reveal ${title} in attachments` : `Reveal ${title} in the sidebar`}
           onClick={() => {
+            if (isAsset) {
+              setView({ kind: 'assets' })
+              return
+            }
             const parts = pinnedRefPath.split('/')
             const top = parts[0] as 'inbox' | 'quick' | 'archive' | 'trash'
             const subpath = parts.slice(1, -1).join('/')
@@ -332,7 +355,7 @@ export function PinnedReferencePane(): JSX.Element | null {
         >
           <PinIcon width={14} height={14} className="shrink-0 text-accent" />
           <span className="truncate">{title}</span>
-          {isDirty && (
+          {!isAsset && isDirty && (
             <span
               aria-label="Unsaved changes"
               className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent/80"
@@ -340,22 +363,24 @@ export function PinnedReferencePane(): JSX.Element | null {
           )}
         </button>
         <div className="flex shrink-0 items-center gap-1">
-          <div className="flex items-center gap-1 rounded-md bg-paper-200/70 p-0.5 text-[11px]">
-            {(['edit', 'preview'] as const).map((m) => (
-              <button
-                key={m}
-                onClick={() => setPinnedRefMode(m)}
-                className={[
-                  'rounded px-1.5 py-0.5 capitalize transition-colors',
-                  pinnedRefMode === m
-                    ? 'bg-paper-50 text-ink-900 shadow-sm'
-                    : 'text-ink-500 hover:text-ink-800'
-                ].join(' ')}
-              >
-                {m}
-              </button>
-            ))}
-          </div>
+          {!isAsset && (
+            <div className="flex items-center gap-1 rounded-md bg-paper-200/70 p-0.5 text-[11px]">
+              {(['edit', 'preview'] as const).map((m) => (
+                <button
+                  key={m}
+                  onClick={() => setPinnedRefMode(m)}
+                  className={[
+                    'rounded px-1.5 py-0.5 capitalize transition-colors',
+                    pinnedRefMode === m
+                      ? 'bg-paper-50 text-ink-900 shadow-sm'
+                      : 'text-ink-500 hover:text-ink-800'
+                  ].join(' ')}
+                >
+                  {m}
+                </button>
+              ))}
+            </div>
+          )}
           <button
             type="button"
             title="Hide reference pane (pin stays)"
@@ -375,20 +400,46 @@ export function PinnedReferencePane(): JSX.Element | null {
         </div>
       </header>
 
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <div
-          className="relative min-h-0 min-w-0 flex-1"
-          style={{ display: showEditor ? 'flex' : 'none' }}
-        >
-          <div ref={setContainerRef} className="min-h-0 min-w-0 flex-1" />
-        </div>
-        {!showEditor && content && (
+      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+        {isAsset ? (
+          assetUrl ? (
+            <iframe
+              key={assetUrl}
+              src={assetUrl}
+              title={title}
+              className="min-h-0 min-w-0 flex-1 border-0 bg-paper-50"
+            />
+          ) : (
+            <div className="flex flex-1 items-center justify-center text-sm text-ink-400">
+              Couldn't resolve asset path.
+            </div>
+          )
+        ) : (
+          <>
+            <div
+              className="relative min-h-0 min-w-0 flex-1"
+              style={{ display: showEditor ? 'flex' : 'none' }}
+            >
+              <div ref={setContainerRef} className="min-h-0 min-w-0 flex-1" />
+            </div>
+            {!showEditor && content && (
+              <div
+                data-preview-scroll
+                className="min-h-0 min-w-0 flex-1 overflow-y-auto"
+              >
+                <Preview markdown={content.body} notePath={content.path} />
+              </div>
+            )}
+          </>
+        )}
+        {/* While the resize handle is being dragged, blanket the body
+            with a transparent capture layer so PDF iframes can't eat
+            the mouse events the resize logic depends on. */}
+        {resizing && (
           <div
-            data-preview-scroll
-            className="min-h-0 min-w-0 flex-1 overflow-y-auto"
-          >
-            <Preview markdown={content.body} notePath={content.path} />
-          </div>
+            aria-hidden
+            className="absolute inset-0 z-30 cursor-col-resize"
+          />
         )}
       </div>
     </section>

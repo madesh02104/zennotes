@@ -54,6 +54,10 @@ export interface NoteMeta {
   tags: string[]
   /** Outbound [[wikilink]] targets (note titles), unique. */
   wikilinks: string[]
+  /** True when the body references at least one local non-text asset
+   *  (PDF, image, audio, video, generic file). Surfaced in the sidebar
+   *  as a small paperclip hint so attachments are discoverable. */
+  hasAttachments: boolean
   /** First ~200 chars of the body stripped of markdown noise, for list previews. */
   excerpt: string
 }

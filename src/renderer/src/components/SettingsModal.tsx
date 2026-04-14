@@ -17,6 +17,12 @@ export function SettingsModal(): JSX.Element {
   const setQuickNoteDateTitle = useStore((s) => s.setQuickNoteDateTitle)
   const wordWrap = useStore((s) => s.wordWrap)
   const setWordWrap = useStore((s) => s.setWordWrap)
+  const editorMaxWidth = useStore((s) => s.editorMaxWidth)
+  const setEditorMaxWidth = useStore((s) => s.setEditorMaxWidth)
+  const pdfEmbedInEditMode = useStore((s) => s.pdfEmbedInEditMode)
+  const setPdfEmbedInEditMode = useStore((s) => s.setPdfEmbedInEditMode)
+  const contentAlign = useStore((s) => s.contentAlign)
+  const setContentAlign = useStore((s) => s.setContentAlign)
   const vault = useStore((s) => s.vault)
   const openVaultPicker = useStore((s) => s.openVaultPicker)
   const themeId = useStore((s) => s.themeId)
@@ -272,6 +278,16 @@ export function SettingsModal(): JSX.Element {
                 value={wordWrap}
                 onChange={setWordWrap}
               />
+              <SegmentedRow
+                label="PDFs in edit mode"
+                description="How embedded PDFs render while you're writing. 'Compact' keeps the editor focused — read the PDF in the reference pane. 'Full' inlines the PDF iframe under your cursor."
+                value={pdfEmbedInEditMode}
+                options={[
+                  { value: 'compact', label: 'Compact' },
+                  { value: 'full', label: 'Full' }
+                ]}
+                onChange={(next) => setPdfEmbedInEditMode(next)}
+              />
               <ToggleRow
                 label="Date-titled Quick Notes"
                 description="New Quick Notes are named YYYY-MM-DD instead of a timestamp. A second note on the same day becomes “YYYY-MM-DD (2)”, then (3), and so on."
@@ -331,6 +347,26 @@ export function SettingsModal(): JSX.Element {
                 step={20}
                 unit="px"
                 onChange={setPreviewMaxWidth}
+              />
+              <SliderRow
+                label="Editor width"
+                description="Caps and centers the editor's content column. Useful when the window is maximized so lines don't stretch edge-to-edge."
+                value={editorMaxWidth}
+                min={640}
+                max={1600}
+                step={20}
+                unit="px"
+                onChange={setEditorMaxWidth}
+              />
+              <SegmentedRow
+                label="Content alignment"
+                description="Center note content within the column (Apple Notes style) or left-align it to the pane edge."
+                value={contentAlign}
+                options={[
+                  { value: 'center', label: 'Center' },
+                  { value: 'left', label: 'Left' }
+                ]}
+                onChange={(next) => setContentAlign(next)}
               />
               <SegmentedRow
                 label="Line numbers"

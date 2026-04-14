@@ -1,11 +1,15 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { NoteMeta } from '@shared/ipc'
 import { renderMarkdown } from '../lib/markdown'
 import { useStore } from '../store'
 import { resolveWikilinkTarget } from '../lib/wikilinks'
 import { toggleTaskAtIndex } from '../lib/tasklists'
-import { enhanceLocalAssetNodes } from '../lib/local-assets'
+import {
+  enhanceLocalAssetNodes,
+  resolveAssetVaultRelativePath
+} from '../lib/local-assets'
 import { NoteHoverPreview } from './NoteHoverPreview'
+import { ContextMenu, type ContextMenuItem } from './ContextMenu'
 
 let mermaidPromise: Promise<typeof import('mermaid').default> | null = null
 function loadMermaid(): Promise<typeof import('mermaid').default> {
@@ -46,7 +50,17 @@ export function Preview({
   const setView = useStore((s) => s.setView)
   const updateActiveBody = useStore((s) => s.updateActiveBody)
   const persistActive = useStore((s) => s.persistActive)
+  const pinAssetReference = useStore((s) => s.pinAssetReference)
+  const pinAssetReferenceForNote = useStore((s) => s.pinAssetReferenceForNote)
+  const pinnedRefPath = useStore((s) => s.pinnedRefPath)
+  const pinnedRefKind = useStore((s) => s.pinnedRefKind)
+  const pinnedRefVisible = useStore((s) => s.pinnedRefVisible)
+  const togglePinnedRefVisible = useStore((s) => s.togglePinnedRefVisible)
+  const pinnedAssetPath = pinnedRefKind === 'asset' ? pinnedRefPath : null
   const [hovered, setHovered] = useState<{ note: NoteMeta; rect: DOMRect } | null>(null)
+  const [assetMenu, setAssetMenu] = useState<
+    { x: number; y: number; url: string; vaultRel: string | null; href: string } | null
+  >(null)
 
   const html = useMemo(() => renderMarkdown(markdown), [markdown])
 
@@ -71,7 +85,11 @@ export function Preview({
     enhanceLocalAssetNodes(root, {
       vaultRoot: vault?.root,
       notePath,
-      onRequestEdit
+      onRequestEdit,
+      pinnedAssetPath,
+      onActivatePinnedRef: () => {
+        if (!pinnedRefVisible) togglePinnedRefVisible()
+      }
     })
 
     root.querySelectorAll<HTMLInputElement>('li.task-list-item input[type="checkbox"]').forEach(
@@ -149,11 +167,31 @@ export function Preview({
       updateActiveBody(nextMarkdown)
       void persistActive()
     }
+    const onContextMenu = (e: MouseEvent): void => {
+      const target = e.target as HTMLElement
+      // Find the closest embedded-asset host (figure/anchor) that we
+      // tagged in `enhanceLocalAssetNodes` or the CM PDF widget.
+      const host = target.closest<HTMLElement>(
+        '[data-local-asset-kind][data-local-asset-url]'
+      )
+      if (!host) return
+      if (host.dataset.localAssetKind !== 'pdf') return
+      const url = host.dataset.localAssetUrl || ''
+      const href = host.dataset.localAssetHref || host.getAttribute('href') || ''
+      if (!url) return
+      e.preventDefault()
+      const vaultRel = vault?.root
+        ? resolveAssetVaultRelativePath(vault.root, notePath, href || url)
+        : null
+      setAssetMenu({ x: e.clientX, y: e.clientY, url, vaultRel, href })
+    }
+
     root.addEventListener('click', onClick)
     root.addEventListener('mouseover', onMouseOver)
     root.addEventListener('mousemove', onMouseMove)
     root.addEventListener('mouseout', onMouseOut)
     root.addEventListener('change', onChange)
+    root.addEventListener('contextmenu', onContextMenu)
 
     // Mermaid: render any pending `.mermaid` blocks.
     const blocks = Array.from(root.querySelectorAll<HTMLElement>('.mermaid'))
@@ -180,8 +218,52 @@ export function Preview({
       root.removeEventListener('mousemove', onMouseMove)
       root.removeEventListener('mouseout', onMouseOut)
       root.removeEventListener('change', onChange)
+      root.removeEventListener('contextmenu', onContextMenu)
     }
-  }, [html, markdown, notePath, notes, onRequestEdit, persistActive, selectNote, setView, updateActiveBody, vault?.root])
+  }, [
+    html,
+    markdown,
+    notePath,
+    notes,
+    onRequestEdit,
+    persistActive,
+    selectNote,
+    setView,
+    updateActiveBody,
+    vault?.root,
+    pinnedAssetPath,
+    pinnedRefVisible,
+    togglePinnedRefVisible
+  ])
+
+  const assetMenuItems = useMemo<ContextMenuItem[]>(() => {
+    if (!assetMenu) return []
+    return [
+      {
+        label: 'Open as Reference (This Note)',
+        disabled: !assetMenu.vaultRel,
+        onSelect: async () => {
+          if (assetMenu.vaultRel) {
+            pinAssetReferenceForNote(notePath, assetMenu.vaultRel)
+          }
+        }
+      },
+      {
+        label: 'Open as Reference (Global)',
+        disabled: !assetMenu.vaultRel,
+        onSelect: async () => {
+          if (assetMenu.vaultRel) pinAssetReference(assetMenu.vaultRel)
+        }
+      },
+      {
+        label: 'Open in New Window',
+        onSelect: async () => {
+          window.open(assetMenu.url, '_blank')
+        }
+      }
+    ]
+  }, [assetMenu, notePath, pinAssetReference, pinAssetReferenceForNote])
+  const closeAssetMenu = useCallback(() => setAssetMenu(null), [])
 
   return (
     <>
@@ -192,6 +274,14 @@ export function Preview({
         dangerouslySetInnerHTML={{ __html: html }}
       />
       {hovered && <NoteHoverPreview note={hovered.note} anchorRect={hovered.rect} />}
+      {assetMenu && (
+        <ContextMenu
+          x={assetMenu.x}
+          y={assetMenu.y}
+          items={assetMenuItems}
+          onClose={closeAssetMenu}
+        />
+      )}
     </>
   )
 }

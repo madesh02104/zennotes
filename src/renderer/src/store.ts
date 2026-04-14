@@ -110,6 +110,25 @@ interface Prefs {
   /** When true, long lines wrap inside the editor. When false they
    *  scroll horizontally — same as a coding editor's "Word Wrap". */
   wordWrap: boolean
+  /** Max width (px) for the editor's content column. */
+  editorMaxWidth: number
+  /** Inline PDF embeds in the live-preview editor render compact by
+   *  default (the same card the reference pane uses); set to 'full'
+   *  to get an inline iframe of the PDF inside the editor. */
+  pdfEmbedInEditMode: 'compact' | 'full'
+  /** What the pinned reference points at — a markdown note (loaded
+   *  into the editor) or a non-text asset like a PDF (loaded into an
+   *  iframe). Defaults to 'note'. */
+  pinnedRefKind: 'note' | 'asset'
+
+  /** Per-note reference pins. Keyed by the note's vault-relative path.
+   *  When the active note has an entry here it overrides the global
+   *  pinned reference — switching notes hides it; coming back shows
+   *  it again. */
+  noteRefs: Record<string, { path: string; kind: 'note' | 'asset' }>
+  /** Whether the editor and preview content sit centered (with the
+   *  width capped) or are left-aligned to the pane edge. */
+  contentAlign: 'center' | 'left'
 }
 const DEFAULT_PREFS: Prefs = {
   vimMode: true,
@@ -138,7 +157,12 @@ const DEFAULT_PREFS: Prefs = {
   pinnedRefWidth: 420,
   pinnedRefMode: 'edit',
   quickNoteDateTitle: false,
-  wordWrap: true
+  wordWrap: true,
+  editorMaxWidth: 920,
+  pdfEmbedInEditMode: 'compact',
+  pinnedRefKind: 'note',
+  noteRefs: {},
+  contentAlign: 'center'
 }
 /** Coerce any loaded prefs blob into a valid Prefs object, dropping
  *  anything unknown (e.g. tokyo-night left over from earlier versions). */
@@ -240,7 +264,37 @@ function normalizePrefs(p: Partial<Prefs>): Prefs {
         ? p.quickNoteDateTitle
         : DEFAULT_PREFS.quickNoteDateTitle,
     wordWrap:
-      typeof p.wordWrap === 'boolean' ? p.wordWrap : DEFAULT_PREFS.wordWrap
+      typeof p.wordWrap === 'boolean' ? p.wordWrap : DEFAULT_PREFS.wordWrap,
+    editorMaxWidth:
+      typeof p.editorMaxWidth === 'number'
+        ? Math.min(2000, Math.max(560, p.editorMaxWidth))
+        : DEFAULT_PREFS.editorMaxWidth,
+    pdfEmbedInEditMode:
+      p.pdfEmbedInEditMode === 'full' || p.pdfEmbedInEditMode === 'compact'
+        ? p.pdfEmbedInEditMode
+        : DEFAULT_PREFS.pdfEmbedInEditMode,
+    pinnedRefKind:
+      p.pinnedRefKind === 'asset' || p.pinnedRefKind === 'note'
+        ? p.pinnedRefKind
+        : DEFAULT_PREFS.pinnedRefKind,
+    noteRefs:
+      p.noteRefs && typeof p.noteRefs === 'object'
+        ? Object.fromEntries(
+            Object.entries(p.noteRefs as Record<string, unknown>).flatMap(
+              ([k, v]) => {
+                if (!v || typeof v !== 'object') return []
+                const r = v as { path?: unknown; kind?: unknown }
+                if (typeof r.path !== 'string') return []
+                const kind = r.kind === 'asset' ? 'asset' : 'note'
+                return [[k, { path: r.path, kind }]] as const
+              }
+            )
+          )
+        : {},
+    contentAlign:
+      p.contentAlign === 'left' || p.contentAlign === 'center'
+        ? p.contentAlign
+        : DEFAULT_PREFS.contentAlign
   }
 }
 function loadPrefs(): Prefs {
@@ -494,6 +548,11 @@ function collectPrefs(s: {
   pinnedRefMode: 'edit' | 'preview'
   quickNoteDateTitle: boolean
   wordWrap: boolean
+  editorMaxWidth: number
+  pdfEmbedInEditMode: 'compact' | 'full'
+  pinnedRefKind: 'note' | 'asset'
+  noteRefs: Record<string, { path: string; kind: 'note' | 'asset' }>
+  contentAlign: 'center' | 'left'
 }): Prefs {
   return {
     vimMode: s.vimMode,
@@ -522,7 +581,12 @@ function collectPrefs(s: {
     pinnedRefWidth: s.pinnedRefWidth,
     pinnedRefMode: s.pinnedRefMode,
     quickNoteDateTitle: s.quickNoteDateTitle,
-    wordWrap: s.wordWrap
+    wordWrap: s.wordWrap,
+    editorMaxWidth: s.editorMaxWidth,
+    pdfEmbedInEditMode: s.pdfEmbedInEditMode,
+    pinnedRefKind: s.pinnedRefKind,
+    noteRefs: s.noteRefs,
+    contentAlign: s.contentAlign
   }
 }
 
@@ -600,6 +664,28 @@ interface Store {
   /** Whether long lines wrap or scroll horizontally in the editor. */
   wordWrap: boolean
 
+  /** Max content width inside the editor, in px. Caps and centers the
+   *  text so wide windows don't make every line stretch edge-to-edge. */
+  editorMaxWidth: number
+
+  /** How embedded PDFs render in the editor's live preview (edit mode):
+   *  'compact' shows the same card the reference pane uses, 'full'
+   *  inlines the actual PDF iframe. Preview mode always shows the full
+   *  iframe unless the PDF is the pinned reference. */
+  pdfEmbedInEditMode: 'compact' | 'full'
+
+  /** Whether the pinned reference is a markdown note (default) or
+   *  some other asset (PDF, audio, etc.) shown via iframe. */
+  pinnedRefKind: 'note' | 'asset'
+
+  /** Per-note reference pins. Active note's entry overrides the
+   *  global pinnedRefPath while that note is open. */
+  noteRefs: Record<string, { path: string; kind: 'note' | 'asset' }>
+
+  /** Center the editor + preview content (with the width cap) or
+   *  left-align it to the pane edge. */
+  contentAlign: 'center' | 'left'
+
   /** Vim navigation: which panel is keyboard-focused. */
   focusedPanel: Panel | null
   sidebarCursorIndex: number
@@ -675,13 +761,23 @@ interface Store {
 
   /* Pinned reference pane */
   pinReference: (path: string) => Promise<void>
+  /** Pin a non-text asset (PDF, etc.) — rendered in the side pane via
+   *  iframe, with no text-content cache. */
+  pinAssetReference: (path: string) => void
   unpinReference: () => void
+  /** Per-note variant: the pin only shows while `notePath` is the
+   *  active note. Switching notes hides it; coming back shows it. */
+  pinAssetReferenceForNote: (notePath: string, assetPath: string) => void
+  unpinReferenceForNote: (notePath: string) => void
   togglePinnedRefVisible: () => void
   setPinnedRefWidth: (px: number) => void
   setPinnedRefMode: (mode: 'edit' | 'preview') => void
 
   setQuickNoteDateTitle: (on: boolean) => void
   setWordWrap: (on: boolean) => void
+  setEditorMaxWidth: (px: number) => void
+  setPdfEmbedInEditMode: (mode: 'compact' | 'full') => void
+  setContentAlign: (align: 'center' | 'left') => void
   setFocusedPanel: (panel: Panel | null) => void
   setSidebarCursorIndex: (idx: number) => void
   setNoteListCursorIndex: (idx: number) => void
@@ -1004,6 +1100,11 @@ export const useStore = create<Store>((set, get) => {
   pinnedRefMode: loadPrefs().pinnedRefMode,
   quickNoteDateTitle: loadPrefs().quickNoteDateTitle,
   wordWrap: loadPrefs().wordWrap,
+  editorMaxWidth: loadPrefs().editorMaxWidth,
+  pdfEmbedInEditMode: loadPrefs().pdfEmbedInEditMode,
+  pinnedRefKind: loadPrefs().pinnedRefKind,
+  noteRefs: loadPrefs().noteRefs,
+  contentAlign: loadPrefs().contentAlign,
   focusedPanel: null,
   sidebarCursorIndex: 0,
   noteListCursorIndex: 0,
@@ -1058,10 +1159,14 @@ export const useStore = create<Store>((set, get) => {
         )
         const ensured = ensureActivePane(nextLayout, s.activePaneId)
         // Auto-unpin the reference pane if its note has been deleted on
-        // disk.
+        // disk. Asset pins (PDFs etc.) aren't in the notes index, so
+        // we leave them alone — the iframe will just render empty if
+        // the file is gone, and the user can unpin manually.
         const pinnedStillExists =
           s.pinnedRefPath !== null &&
-          (existingPaths.has(s.pinnedRefPath) || s.pinnedRefPath === s.selectedPath)
+          (s.pinnedRefKind === 'asset' ||
+            existingPaths.has(s.pinnedRefPath) ||
+            s.pinnedRefPath === s.selectedPath)
         const pinnedRefPath = pinnedStillExists ? s.pinnedRefPath : null
         // Prune content caches for paths no longer referenced anywhere.
         const referenced = new Set<string>()
@@ -1552,7 +1657,7 @@ export const useStore = create<Store>((set, get) => {
     if (!path) return
     const s = get()
     // Already pinned to this path — just make sure it's visible.
-    if (s.pinnedRefPath === path) {
+    if (s.pinnedRefPath === path && s.pinnedRefKind === 'note') {
       if (!s.pinnedRefVisible) {
         set({ pinnedRefVisible: true })
         savePrefs(collectPrefs(get()))
@@ -1574,9 +1679,57 @@ export const useStore = create<Store>((set, get) => {
     }
     set({
       pinnedRefPath: path,
+      pinnedRefKind: 'note',
       pinnedRefVisible: true,
       noteContents: contents,
       noteDirty: dirty
+    })
+    savePrefs(collectPrefs(get()))
+  },
+
+  pinAssetReference: (path) => {
+    if (!path) return
+    const s = get()
+    // If we were previously pinning a note, evict its content unless
+    // some other pane has it open.
+    let contents = s.noteContents
+    let dirty = s.noteDirty
+    if (s.pinnedRefKind === 'note' && s.pinnedRefPath && s.pinnedRefPath !== path) {
+      const stillOpen = allLeaves(s.paneLayout).some((l) =>
+        l.tabs.includes(s.pinnedRefPath as string)
+      )
+      if (!stillOpen) {
+        contents = { ...contents }
+        dirty = { ...dirty }
+        delete contents[s.pinnedRefPath]
+        delete dirty[s.pinnedRefPath]
+      }
+    }
+    set({
+      pinnedRefPath: path,
+      pinnedRefKind: 'asset',
+      pinnedRefVisible: true,
+      noteContents: contents,
+      noteDirty: dirty
+    })
+    savePrefs(collectPrefs(get()))
+  },
+
+  pinAssetReferenceForNote: (notePath, assetPath) => {
+    if (!notePath || !assetPath) return
+    set((s) => ({
+      noteRefs: { ...s.noteRefs, [notePath]: { path: assetPath, kind: 'asset' } },
+      pinnedRefVisible: true
+    }))
+    savePrefs(collectPrefs(get()))
+  },
+
+  unpinReferenceForNote: (notePath) => {
+    set((s) => {
+      if (!(notePath in s.noteRefs)) return s
+      const { [notePath]: _drop, ...rest } = s.noteRefs
+      void _drop
+      return { noteRefs: rest }
     })
     savePrefs(collectPrefs(get()))
   },
@@ -1585,16 +1738,23 @@ export const useStore = create<Store>((set, get) => {
     const s = get()
     const path = s.pinnedRefPath
     if (!path) return
-    // Evict the cached content if no pane has this note open.
-    const stillOpen = allLeaves(s.paneLayout).some((l) => l.tabs.includes(path))
-    const contents = { ...s.noteContents }
-    const dirty = { ...s.noteDirty }
-    if (!stillOpen) {
-      delete contents[path]
-      delete dirty[path]
+    // Evict the cached note content only when this was a note-kind
+    // pin (assets aren't cached in noteContents anyway) and no pane
+    // still has the note open.
+    let contents = s.noteContents
+    let dirty = s.noteDirty
+    if (s.pinnedRefKind === 'note') {
+      const stillOpen = allLeaves(s.paneLayout).some((l) => l.tabs.includes(path))
+      if (!stillOpen) {
+        contents = { ...contents }
+        dirty = { ...dirty }
+        delete contents[path]
+        delete dirty[path]
+      }
     }
     set({
       pinnedRefPath: null,
+      pinnedRefKind: 'note',
       noteContents: contents,
       noteDirty: dirty
     })
@@ -1624,6 +1784,22 @@ export const useStore = create<Store>((set, get) => {
 
   setWordWrap: (on) => {
     set({ wordWrap: on })
+    savePrefs(collectPrefs(get()))
+  },
+
+  setEditorMaxWidth: (px) => {
+    const clamped = Math.min(2000, Math.max(560, Math.round(px)))
+    set({ editorMaxWidth: clamped })
+    savePrefs(collectPrefs(get()))
+  },
+
+  setPdfEmbedInEditMode: (mode) => {
+    set({ pdfEmbedInEditMode: mode })
+    savePrefs(collectPrefs(get()))
+  },
+
+  setContentAlign: (align) => {
+    set({ contentAlign: align })
     savePrefs(collectPrefs(get()))
   },
   setFocusedPanel: (panel) => set({ focusedPanel: panel }),
