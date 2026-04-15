@@ -273,6 +273,7 @@ function registerVimCommands(): void {
  * - `:bn[ext]`           next tab in the active pane
  * - `:bp[rev]`           previous tab in the active pane
  * - `:bd[elete]`, `:bc`  close the active tab (alias for `:q` on notes)
+ * - `:buffers`, `:ls`    open the buffer switcher
  * - `:only`              close every other tab in the active pane
  * - `:qa[ll]`            close every tab, everywhere
  * - `:h[elp]`            open the built-in Help manual
@@ -418,6 +419,13 @@ function registerVimNoteCommands(): void {
   }
   Vim.defineEx('bdelete', 'bd', closeActiveTabLikeQuit)
   Vim.defineEx('bclose', 'bc', closeActiveTabLikeQuit)
+  const openBufferSwitcher = (): void => {
+    requestAnimationFrame(() => {
+      useStore.getState().setBufferPaletteOpen(true)
+    })
+  }
+  Vim.defineEx('buffers', 'buffers', openBufferSwitcher)
+  Vim.defineEx('ls', 'ls', openBufferSwitcher)
 
   Vim.defineEx('only', 'only', () => {
     const leaf = getActiveLeaf()
@@ -489,6 +497,8 @@ const MANUAL_EX_NAMES = new Set([
   'bd',
   'bclose',
   'bc',
+  'buffers',
+  'ls',
   'only',
   'qall',
   'qa',

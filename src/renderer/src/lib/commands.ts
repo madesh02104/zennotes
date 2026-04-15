@@ -9,6 +9,7 @@
 import { isTasksViewActive, useStore } from '../store'
 import { promptApp } from '../components/PromptHost'
 import { focusPaneInDirection } from './pane-nav'
+import { findLeaf } from './pane-layout'
 import { resolveQuickNoteTitle } from './quick-note-title'
 
 export interface Command {
@@ -310,6 +311,19 @@ export function buildCommands(options?: { includeUnavailable?: boolean }): Comma
         const s = getState()
         if (s.selectedPath) s.toggleTabPin(s.activePaneId, s.selectedPath)
       }
+    },
+    {
+      id: 'tab.buffers',
+      title: 'Open Buffer Switcher…',
+      category: 'Tabs',
+      shortcut: 'Space o',
+      keywords: 'buffers hidden tabs switch list vim leader',
+      when: () => {
+        const s = getState()
+        const leaf = findLeaf(s.paneLayout, s.activePaneId)
+        return !!leaf && leaf.tabs.length > 0
+      },
+      run: () => getState().setBufferPaletteOpen(true)
     },
     {
       id: 'nav.back',

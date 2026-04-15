@@ -7,6 +7,7 @@ import { Editor } from './components/Editor'
 import { TitleBar } from './components/TitleBar'
 import { SearchPalette } from './components/SearchPalette'
 import { CommandPalette } from './components/CommandPalette'
+import { BufferPalette } from './components/BufferPalette'
 import { SettingsModal } from './components/SettingsModal'
 import { VimNav } from './components/VimNav'
 import { EmptyVault } from './components/EmptyVault'
@@ -21,6 +22,8 @@ function App(): JSX.Element {
   const setSearchOpen = useStore((s) => s.setSearchOpen)
   const commandPaletteOpen = useStore((s) => s.commandPaletteOpen)
   const setCommandPaletteOpen = useStore((s) => s.setCommandPaletteOpen)
+  const bufferPaletteOpen = useStore((s) => s.bufferPaletteOpen)
+  const setBufferPaletteOpen = useStore((s) => s.setBufferPaletteOpen)
   const sidebarOpen = useStore((s) => s.sidebarOpen)
   const noteListOpen = useStore((s) => s.noteListOpen)
   const unifiedSidebar = useStore((s) => s.unifiedSidebar)
@@ -118,6 +121,7 @@ function App(): JSX.Element {
       if (mod && e.shiftKey && key === 'p') {
         // ⇧⌘P — command palette
         e.preventDefault()
+        setBufferPaletteOpen(false)
         setCommandPaletteOpen(!state.commandPaletteOpen)
         return
       }
@@ -137,6 +141,7 @@ function App(): JSX.Element {
       if (mod && !e.shiftKey && key === 'p') {
         // ⌘P — note search
         e.preventDefault()
+        setBufferPaletteOpen(false)
         setSearchOpen(!state.searchOpen)
         return
       }
@@ -151,6 +156,10 @@ function App(): JSX.Element {
       }
       if (e.key === 'Escape' && state.commandPaletteOpen) {
         setCommandPaletteOpen(false)
+        return
+      }
+      if (e.key === 'Escape' && state.bufferPaletteOpen) {
+        setBufferPaletteOpen(false)
         return
       }
       // ⌘1 — toggle sidebar
@@ -181,7 +190,7 @@ function App(): JSX.Element {
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [setSearchOpen])
+  }, [setBufferPaletteOpen, setCommandPaletteOpen, setSearchOpen])
 
   if (!vault) {
     return (
@@ -203,6 +212,7 @@ function App(): JSX.Element {
       </div>
       {searchOpen && <SearchPalette />}
       {commandPaletteOpen && <CommandPalette />}
+      {bufferPaletteOpen && <BufferPalette />}
       {settingsOpen && <SettingsModal />}
       <PromptHost />
       <VimNav />

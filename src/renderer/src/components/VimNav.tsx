@@ -86,7 +86,12 @@ export function VimNav(): JSX.Element | null {
       const state = useStore.getState()
 
       // Skip when modals / overlays are open
-      if (state.searchOpen || state.settingsOpen || state.commandPaletteOpen) return
+      if (
+        state.searchOpen ||
+        state.settingsOpen ||
+        state.commandPaletteOpen ||
+        state.bufferPaletteOpen
+      ) return
       if (document.querySelector('[data-ctx-menu]') || document.querySelector('[data-prompt-modal]')) return
 
       // Hint mode — handled entirely by HintOverlay's own listener
@@ -317,6 +322,11 @@ export function VimNav(): JSX.Element | null {
             e.stopImmediatePropagation()
             if (leaderPending.current === 'leader' && e.key === 'l') {
               armLeader('leader-l')
+              return
+            }
+            if (leaderPending.current === 'leader' && e.key === 'o') {
+              resetLeader()
+              state.setBufferPaletteOpen(true)
               return
             }
             if (leaderPending.current === 'leader-l' && e.key === 'f') {

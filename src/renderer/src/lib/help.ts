@@ -109,6 +109,7 @@ export const HELP_SHORTCUT_SECTIONS: HelpShortcutSection[] = [
       { keys: 'Ctrl-w h / j / k / l', action: 'Move focus', detail: 'Move between sidebar, note list, editor, connections, or adjacent editor panes.' },
       { keys: 'Ctrl-w v', action: 'Split right', detail: 'Clone the current tab into a pane to the right.' },
       { keys: 'Ctrl-w s', action: 'Split down', detail: 'Clone the current tab into a pane below.' },
+      { keys: 'Space o', action: 'Open buffers', detail: 'Normal mode only: open the active pane’s buffer switcher, especially useful when the tab strip is hidden.' },
       { keys: 'Ctrl-o', action: 'Go back', detail: 'Jump to the previous note location in history.' },
       { keys: 'Ctrl-i', action: 'Go forward', detail: 'Jump forward in note history.' },
       { keys: 'f', action: 'Hint mode', detail: 'Show jump labels for clickable targets when you are not in insert mode.' }
@@ -210,6 +211,11 @@ export const HELP_VIM_COMMANDS: HelpExCommand[] = [
     detail: 'Move to the next or previous tab, or the next most-recent note when only one tab is open.'
   },
   {
+    command: ':buffers / :ls',
+    summary: 'Open the buffer switcher',
+    detail: 'List the current pane’s open buffers in a searchable overlay.'
+  },
+  {
     command: ':bd / :bc',
     summary: 'Close the active tab',
     detail: 'Buffer-delete aliases for the current note or virtual tab.'
@@ -248,6 +254,11 @@ export const HELP_VIM_COMMANDS: HelpExCommand[] = [
     command: '<Space> l f',
     summary: 'Leader-format in normal mode',
     detail: 'A quick keyboard path to format the active note from the editor.'
+  },
+  {
+    command: '<Space> o',
+    summary: 'Leader buffer switcher in normal mode',
+    detail: 'Open the searchable buffer list for the active pane, including hidden tabs.'
   }
 ]
 
