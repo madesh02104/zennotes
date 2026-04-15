@@ -137,6 +137,7 @@ const paperHighlight = HighlightStyle.define([
 /** Annotation marking programmatic doc replacements (external sync / note
  *  switch) so the update listener skips the save schedule. */
 const programmatic = Annotation.define<boolean>()
+const OUTLINE_JUMP_TOP_MARGIN = 24
 
 type Mode = 'edit' | 'preview' | 'split'
 
@@ -288,7 +289,10 @@ export function EditorPane({ pane }: { pane: PaneLeaf }): JSX.Element {
     const pos = view.state.doc.line(safeLine).from
     view.dispatch({
       selection: { anchor: pos },
-      effects: EditorView.scrollIntoView(pos, { y: 'start', yMargin: 0 })
+      effects: EditorView.scrollIntoView(pos, {
+        y: 'start',
+        yMargin: OUTLINE_JUMP_TOP_MARGIN
+      })
     })
     setFocusedPanel('editor')
     view.focus()
