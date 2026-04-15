@@ -145,9 +145,12 @@ const DEFAULT_PREFS: Prefs = {
   editorLineHeight: 1.7,
   previewMaxWidth: 920,
   lineNumberMode: 'off',
-  interfaceFont: null,
-  textFont: null,
-  monoFont: null,
+  // Ship with SF Mono everywhere — gives the app a single, consistent
+  // typographic identity out of the box. Users can still change any of
+  // the three slots from Settings → Fonts.
+  interfaceFont: 'SF Mono',
+  textFont: 'SF Mono',
+  monoFont: 'SF Mono',
   sidebarWidth: 232,
   noteListWidth: 300,
   noteSortOrder: 'none',
@@ -2041,7 +2044,13 @@ export const useStore = create<Store>((set, get) => {
   },
 
   setPinnedRefWidth: (px) => {
-    const clamped = Math.min(800, Math.max(280, Math.round(px)))
+    // Cap at `viewport - 320px` so the main editor always has room to
+    // breathe, with an absolute ceiling of 2400px for giant monitors.
+    // 800px was too stingy for PDF work at a readable zoom.
+    const viewport =
+      typeof window !== 'undefined' ? window.innerWidth : 1600
+    const upper = Math.max(400, Math.min(2400, viewport - 320))
+    const clamped = Math.min(upper, Math.max(280, Math.round(px)))
     set({ pinnedRefWidth: clamped })
     savePrefs(collectPrefs(get()))
   },

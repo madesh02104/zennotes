@@ -304,117 +304,138 @@ export function PinnedReferencePane(): JSX.Element | null {
     [pinnedRefWidth, setPinnedRefWidth]
   )
 
-  if (!pinnedRefPath || !pinnedRefVisible) return null
-
   const isAsset = pinnedRefKind === 'asset'
-  const title = isAsset
-    ? pinnedRefPath.split('/').pop() ?? pinnedRefPath
-    : content?.title ??
-      pinnedRefPath.split('/').pop()?.replace(/\.md$/i, '') ??
-      pinnedRefPath
-  const assetUrl = isAsset && vaultRoot
-    ? window.zen.resolveVaultAssetUrl(vaultRoot, pinnedRefPath)
-    : null
+  const title = pinnedRefPath
+    ? isAsset
+      ? pinnedRefPath.split('/').pop() ?? pinnedRefPath
+      : content?.title ??
+        pinnedRefPath.split('/').pop()?.replace(/\.md$/i, '') ??
+        pinnedRefPath
+    : ''
+  const assetUrl =
+    pinnedRefPath && isAsset && vaultRoot
+      ? window.zen.resolveVaultAssetUrl(vaultRoot, pinnedRefPath)
+      : null
+
+  // Track every asset URL the user has pinned this session. One iframe
+  // per unique URL stays mounted for the life of the app — show/hide
+  // via CSS rather than unmounting — so switching between references
+  // (or unpinning and re-pinning) preserves each PDF viewer's page,
+  // scroll, and zoom. 16-entry LRU cap keeps memory bounded if the
+  // user cycles through many PDFs.
+  const [seenAssetUrls, setSeenAssetUrls] = useState<string[]>([])
+  useEffect(() => {
+    if (!assetUrl) return
+    setSeenAssetUrls((prev) => {
+      if (prev[prev.length - 1] === assetUrl) return prev
+      const without = prev.filter((u) => u !== assetUrl)
+      const next = [...without, assetUrl]
+      while (next.length > 16) next.shift()
+      return next
+    })
+  }, [assetUrl])
 
   const showEditor = pinnedRefMode === 'edit'
+  const hidden = !pinnedRefPath || !pinnedRefVisible
 
   return (
     <section
       data-pane-id={PINNED_REF_PANE_ID}
       className="relative flex min-h-0 shrink-0 flex-col border-l border-paper-300/70 bg-paper-50/40"
-      style={{ width: pinnedRefWidth }}
+      style={{
+        width: pinnedRefWidth,
+        // Hide via CSS instead of unmounting so the cached asset
+        // iframes below keep their internal viewer state alive across
+        // pin / unpin / visibility toggles.
+        display: hidden ? 'none' : 'flex'
+      }}
     >
-      {/* Resize handle on the left edge. */}
-      <div
-        role="separator"
-        aria-orientation="vertical"
-        onMouseDown={startResize}
-        className={[
-          'group absolute left-0 top-0 z-20 h-full w-1 cursor-col-resize select-none',
-          resizing ? 'bg-accent/60' : 'hover:bg-accent/40'
-        ].join(' ')}
-      >
-        <div className="absolute -left-1 top-0 h-full w-[9px]" />
-      </div>
+      {pinnedRefPath && (
+        <>
+          {/* Resize handle on the left edge. */}
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            onMouseDown={startResize}
+            className={[
+              'group absolute left-0 top-0 z-20 h-full w-1 cursor-col-resize select-none',
+              resizing ? 'bg-accent/60' : 'hover:bg-accent/40'
+            ].join(' ')}
+          >
+            <div className="absolute -left-1 top-0 h-full w-[9px]" />
+          </div>
 
-      <header className="glass-header flex h-12 shrink-0 items-center justify-between gap-2 border-b border-paper-300/70 px-3">
-        <button
-          type="button"
-          title={isAsset ? `Reveal ${title} in attachments` : `Reveal ${title} in the sidebar`}
-          onClick={() => {
-            if (isAsset) {
-              setView({ kind: 'assets' })
-              return
-            }
-            const parts = pinnedRefPath.split('/')
-            const top = parts[0] as 'inbox' | 'quick' | 'archive' | 'trash'
-            const subpath = parts.slice(1, -1).join('/')
-            setView({ kind: 'folder', folder: top, subpath })
-          }}
-          className="flex min-w-0 flex-1 items-center gap-2 truncate text-left text-sm font-semibold text-ink-900 hover:text-ink-700"
-        >
-          <PinIcon width={14} height={14} className="shrink-0 text-accent" />
-          <span className="truncate">{title}</span>
-          {!isAsset && isDirty && (
-            <span
-              aria-label="Unsaved changes"
-              className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent/80"
-            />
-          )}
-        </button>
-        <div className="flex shrink-0 items-center gap-1">
-          {!isAsset && (
-            <div className="flex items-center gap-1 rounded-md bg-paper-200/70 p-0.5 text-[11px]">
-              {(['edit', 'preview'] as const).map((m) => (
-                <button
-                  key={m}
-                  onClick={() => setPinnedRefMode(m)}
-                  className={[
-                    'rounded px-1.5 py-0.5 capitalize transition-colors',
-                    pinnedRefMode === m
-                      ? 'bg-paper-50 text-ink-900 shadow-sm'
-                      : 'text-ink-500 hover:text-ink-800'
-                  ].join(' ')}
-                >
-                  {m}
-                </button>
-              ))}
+          <header className="glass-header flex h-12 shrink-0 items-center justify-between gap-2 border-b border-paper-300/70 px-3">
+            <button
+              type="button"
+              title={isAsset ? `Reveal ${title} in attachments` : `Reveal ${title} in the sidebar`}
+              onClick={() => {
+                if (isAsset) {
+                  setView({ kind: 'assets' })
+                  return
+                }
+                const parts = pinnedRefPath.split('/')
+                const top = parts[0] as 'inbox' | 'quick' | 'archive' | 'trash'
+                const subpath = parts.slice(1, -1).join('/')
+                setView({ kind: 'folder', folder: top, subpath })
+              }}
+              className="flex min-w-0 flex-1 items-center gap-2 truncate text-left text-sm font-semibold text-ink-900 hover:text-ink-700"
+            >
+              <PinIcon width={14} height={14} className="shrink-0 text-accent" />
+              <span className="truncate">{title}</span>
+              {!isAsset && isDirty && (
+                <span
+                  aria-label="Unsaved changes"
+                  className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent/80"
+                />
+              )}
+            </button>
+            <div className="flex shrink-0 items-center gap-1">
+              {!isAsset && (
+                <div className="flex items-center gap-1 rounded-md bg-paper-200/70 p-0.5 text-[11px]">
+                  {(['edit', 'preview'] as const).map((m) => (
+                    <button
+                      key={m}
+                      onClick={() => setPinnedRefMode(m)}
+                      className={[
+                        'rounded px-1.5 py-0.5 capitalize transition-colors',
+                        pinnedRefMode === m
+                          ? 'bg-paper-50 text-ink-900 shadow-sm'
+                          : 'text-ink-500 hover:text-ink-800'
+                      ].join(' ')}
+                    >
+                      {m}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <button
+                type="button"
+                title="Hide reference pane (pin stays)"
+                onClick={togglePinnedRefVisible}
+                className="flex h-7 w-7 items-center justify-center rounded-md text-ink-500 hover:bg-paper-200 hover:text-ink-900"
+              >
+                <PanelLeftIcon width={14} height={14} />
+              </button>
+              <button
+                type="button"
+                title="Unpin reference"
+                onClick={unpinReference}
+                className="flex h-7 w-7 items-center justify-center rounded-md text-ink-500 hover:bg-paper-200 hover:text-ink-900"
+              >
+                <CloseIcon width={14} height={14} />
+              </button>
             </div>
-          )}
-          <button
-            type="button"
-            title="Hide reference pane (pin stays)"
-            onClick={togglePinnedRefVisible}
-            className="flex h-7 w-7 items-center justify-center rounded-md text-ink-500 hover:bg-paper-200 hover:text-ink-900"
-          >
-            <PanelLeftIcon width={14} height={14} />
-          </button>
-          <button
-            type="button"
-            title="Unpin reference"
-            onClick={unpinReference}
-            className="flex h-7 w-7 items-center justify-center rounded-md text-ink-500 hover:bg-paper-200 hover:text-ink-900"
-          >
-            <CloseIcon width={14} height={14} />
-          </button>
-        </div>
-      </header>
+          </header>
+        </>
+      )}
 
       <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
-        {isAsset ? (
-          assetUrl ? (
-            <iframe
-              key={assetUrl}
-              src={assetUrl}
-              title={title}
-              className="min-h-0 min-w-0 flex-1 border-0 bg-paper-50"
-            />
-          ) : (
-            <div className="flex flex-1 items-center justify-center text-sm text-ink-400">
-              Couldn't resolve asset path.
-            </div>
-          )
-        ) : (
+        {/* Note editor / preview — only mounted when the pin is a note.
+            Unmount when switching to an asset so CM view isn't running
+            invisibly; this half doesn't need the "preserve state" trick
+            because note content is already persisted through the store. */}
+        {pinnedRefPath && !isAsset && (
           <>
             <div
               className="relative min-h-0 min-w-0 flex-1"
@@ -432,6 +453,39 @@ export function PinnedReferencePane(): JSX.Element | null {
             )}
           </>
         )}
+
+        {/* Asset iframe stack — ALWAYS mounted once any asset has been
+            pinned this session, regardless of whether one is currently
+            pinned or the pane is visible. This is the "preserve PDF
+            page" mechanism: hiding via CSS keeps the iframe alive so
+            Chromium's internal PDF viewer retains its state. */}
+        {seenAssetUrls.length > 0 && (
+          <div
+            className="absolute inset-0"
+            style={{
+              display: isAsset && assetUrl ? 'block' : 'none'
+            }}
+          >
+            {seenAssetUrls.map((url) => (
+              <iframe
+                key={url}
+                src={url}
+                title={url}
+                className="absolute inset-0 h-full w-full border-0 bg-paper-50"
+                style={{
+                  display: url === assetUrl ? 'block' : 'none'
+                }}
+              />
+            ))}
+          </div>
+        )}
+
+        {pinnedRefPath && isAsset && !assetUrl && (
+          <div className="flex flex-1 items-center justify-center text-sm text-ink-400">
+            Couldn't resolve asset path.
+          </div>
+        )}
+
         {/* While the resize handle is being dragged, blanket the body
             with a transparent capture layer so PDF iframes can't eat
             the mouse events the resize logic depends on. */}
