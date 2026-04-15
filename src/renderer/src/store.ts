@@ -11,6 +11,7 @@ import type {
 } from '@shared/ipc'
 import type { VaultTask } from '@shared/tasks'
 import { TASKS_TAB_PATH, isTasksTabPath } from '@shared/tasks'
+import { TAGS_TAB_PATH, isTagsTabPath } from '@shared/tags'
 import { toggleTaskAtIndex } from '@shared/tasklists'
 import { DEFAULT_THEME_ID, THEMES, type ThemeFamily, type ThemeMode } from './lib/themes'
 import { formatMarkdown } from './lib/format-markdown'
@@ -605,7 +606,6 @@ export type View =
       subpath: string
     }
   | { kind: 'assets' }
-  | { kind: 'tag'; tag: string }
 
 /** True if any pane currently has the virtual Tasks tab open. The Tasks
  *  panel lives as a tab in the pane layout, so this is how callers detect
@@ -616,6 +616,15 @@ export function isTasksViewActive(state: {
 }): boolean {
   const leaf = findLeaf(state.paneLayout, state.activePaneId)
   return leaf?.activeTab === TASKS_TAB_PATH
+}
+
+/** True when the active pane's active tab is the vault-wide Tags view. */
+export function isTagsViewActive(state: {
+  paneLayout: PaneLayout
+  activePaneId: string
+}): boolean {
+  const leaf = findLeaf(state.paneLayout, state.activePaneId)
+  return leaf?.activeTab === TAGS_TAB_PATH
 }
 
 interface Store {
@@ -708,6 +717,11 @@ interface Store {
   tasksFilter: string
   taskCursorIndex: number
 
+  /** Tags currently selected in the Tags view. The view shows every non-
+   *  trash note carrying *any* of these (union), so toggling more tags
+   *  widens the result set. Cleared when the Tags tab closes. */
+  selectedTags: string[]
+
   /** Vim navigation: which panel is keyboard-focused. */
   focusedPanel: Panel | null
   sidebarCursorIndex: number
@@ -739,6 +753,17 @@ interface Store {
   openTasksView: () => Promise<void>
   /** Close the Tasks tab in every pane that has it open. */
   closeTasksView: () => void
+  /** Toggle a tag in the Tags view selection and ensure the Tags tab is
+   *  open + focused. If `tag` is omitted, just opens the tab with the
+   *  current selection. First open with a tag starts a fresh selection. */
+  openTagView: (tag?: string) => Promise<void>
+  /** Close the Tags tab in every pane and clear the selection. */
+  closeTagView: () => void
+  /** Add or remove a tag from the Tags view selection without touching
+   *  pane layout. No-op if the selection is already in that state. */
+  toggleTagSelection: (tag: string) => void
+  /** Replace the Tags view selection wholesale (used by `:tag a b c`). */
+  setSelectedTags: (tags: string[]) => void
   /** Force a full vault rescan for tasks. */
   refreshTasks: () => Promise<void>
   /** Rescan a single note's tasks and splice the result into `vaultTasks`. */
@@ -1147,6 +1172,7 @@ export const useStore = create<Store>((set, get) => {
   tasksLoading: false,
   tasksFilter: '',
   taskCursorIndex: 0,
+  selectedTags: [],
   focusedPanel: null,
   sidebarCursorIndex: 0,
   noteListCursorIndex: 0,
@@ -1199,6 +1225,64 @@ export const useStore = create<Store>((set, get) => {
       }
     }
     set({ tasksFilter: '', taskCursorIndex: 0 })
+  },
+
+  openTagView: async (tag) => {
+    const state = get()
+    const trimmed = tag?.trim() ?? ''
+    const isOpen = allLeaves(state.paneLayout).some((l) =>
+      l.tabs.includes(TAGS_TAB_PATH)
+    )
+
+    // Clicking a tag when the tab is already open toggles its membership
+    // in the selection — narrows or widens the existing results without
+    // spawning more tabs. First open starts with just this tag selected.
+    if (trimmed) {
+      if (isOpen) {
+        get().toggleTagSelection(trimmed)
+      } else {
+        set({ selectedTags: [trimmed] })
+      }
+    }
+
+    await get().openNoteInPane(state.activePaneId, TAGS_TAB_PATH)
+    ;(document.activeElement as HTMLElement | null)?.blur?.()
+    set({ focusedPanel: 'tags' })
+  },
+
+  closeTagView: () => {
+    const state = get()
+    for (const leaf of allLeaves(state.paneLayout)) {
+      if (leaf.tabs.includes(TAGS_TAB_PATH)) {
+        void get().closeTabInPane(leaf.id, TAGS_TAB_PATH)
+      }
+    }
+    set({ selectedTags: [] })
+  },
+
+  toggleTagSelection: (tag) => {
+    const trimmed = tag.trim()
+    if (!trimmed) return
+    set((s) => {
+      const has = s.selectedTags.includes(trimmed)
+      const next = has
+        ? s.selectedTags.filter((t) => t !== trimmed)
+        : [...s.selectedTags, trimmed]
+      return { selectedTags: next }
+    })
+  },
+
+  setSelectedTags: (tags) => {
+    // De-dupe + drop empties so `:tag foo foo bar ""` ends up as ["foo","bar"].
+    const seen = new Set<string>()
+    const clean: string[] = []
+    for (const t of tags) {
+      const v = t.trim()
+      if (!v || seen.has(v)) continue
+      seen.add(v)
+      clean.push(v)
+    }
+    set({ selectedTags: clean })
   },
 
   refreshTasks: async () => {
@@ -2037,6 +2121,23 @@ export const useStore = create<Store>((set, get) => {
       return
     }
 
+    // Virtual Tags tab — no disk I/O, EditorPane renders the tag list
+    // instead of CodeMirror. A single tab accumulates selected tags in
+    // `selectedTags`; this just focuses it.
+    if (isTagsTabPath(path)) {
+      set((cur) => {
+        const nextLayout =
+          updateLeaf(cur.paneLayout, paneId, (l) => leafWithAddedTab(l, path)) ??
+          cur.paneLayout
+        return {
+          paneLayout: nextLayout,
+          activePaneId: paneId,
+          ...activeFieldsFrom(nextLayout, paneId, cur.noteContents, cur.noteDirty)
+        }
+      })
+      return
+    }
+
     const needContent = !s.noteContents[path]
     if (needContent) {
       set({ loadingNote: paneId === s.activePaneId })
@@ -2080,8 +2181,8 @@ export const useStore = create<Store>((set, get) => {
     const s = get()
     const leaf = findLeaf(s.paneLayout, paneId)
     if (!leaf) return
-    // Tasks tab is virtual — add it without touching disk.
-    if (isTasksTabPath(path)) {
+    // Tasks / Tags tabs are virtual — add them without touching disk.
+    if (isTasksTabPath(path) || isTagsTabPath(path)) {
       set((cur) => {
         const nextLayout =
           updateLeaf(cur.paneLayout, paneId, (l) => leafWithAddedTab(l, path, insertIndex)) ??
@@ -2228,11 +2329,11 @@ export const useStore = create<Store>((set, get) => {
   },
 
   splitPaneWithTab: async ({ targetPaneId, edge, path, sourcePaneId }) => {
-    // Make sure content is loaded. Tasks tab is virtual — skip disk I/O.
+    // Make sure content is loaded. Virtual tabs (Tasks, Tags) skip disk I/O.
     const s0 = get()
     let contents = s0.noteContents
     let dirty = s0.noteDirty
-    if (!isTasksTabPath(path) && !contents[path]) {
+    if (!isTasksTabPath(path) && !isTagsTabPath(path) && !contents[path]) {
       try {
         const content = await window.zen.readNote(path)
         contents = { ...contents, [path]: content }

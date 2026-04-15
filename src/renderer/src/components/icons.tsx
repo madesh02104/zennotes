@@ -201,3 +201,10 @@ export const CheckSquareIcon = (p: IconProps): JSX.Element => (
     <path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h11" />
   </I>
 )
+
+export const DocumentIcon = (p: IconProps): JSX.Element => (
+  <I {...p}>
+    <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z" />
+    <path d="M14 3v5h5" />
+  </I>
+)

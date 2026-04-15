@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { isTasksViewActive, useStore } from '../store'
+import { isTagsViewActive, isTasksViewActive, useStore } from '../store'
 import { extractTags } from '../lib/tags'
 import type { FolderEntry, NoteFolder, NoteMeta } from '@shared/ipc'
 import type { NoteSortOrder } from '../store'
@@ -50,6 +50,9 @@ export function Sidebar(): JSX.Element {
   const setView = useStore((s) => s.setView)
   const openTasksView = useStore((s) => s.openTasksView)
   const tasksViewActive = useStore(isTasksViewActive)
+  const openTagView = useStore((s) => s.openTagView)
+  const selectedTags = useStore((s) => s.selectedTags)
+  const tagsViewActive = useStore(isTagsViewActive)
   const setSearchOpen = useStore((s) => s.setSearchOpen)
   const createAndOpen = useStore((s) => s.createAndOpen)
   const quickNoteDateTitle = useStore((s) => s.quickNoteDateTitle)
@@ -615,9 +618,12 @@ export function Sidebar(): JSX.Element {
     if (!isSidebarFocused) return
 
     const findTarget = (): HTMLElement | null => {
-      if (view.kind === 'tag') {
+      if (tagsViewActive && selectedTags.length > 0) {
+        // When the Tags view is active, reveal the first currently-
+        // selected tag's chip. The user can hop between them with j/k
+        // from there once this scroll brings it into view.
         return document.querySelector(
-          `[data-sidebar-type="tag"][data-sidebar-tag="${escapeForAttr(view.tag)}"]`
+          `[data-sidebar-type="tag"][data-sidebar-tag="${escapeForAttr(selectedTags[0])}"]`
         ) as HTMLElement | null
       }
 
@@ -884,19 +890,18 @@ export function Sidebar(): JSX.Element {
             </div>
             <div className="flex flex-wrap gap-1.5 px-1">
               {tags.map(([tag, count]) => {
-                const active = view.kind === 'tag' && view.tag === tag
+                // Tag chips feed into a single vault-wide Tags tab. If the
+                // tab is already open, clicking a chip toggles that tag in
+                // the selection (narrower / wider result set). Otherwise
+                // opening one starts the selection with just this tag.
+                const active = tagsViewActive && selectedTags.includes(tag)
                 const tagIdx = idxCounter.current.value++
                 const isVimHighlight = vimCursor === tagIdx
                 return (
                   <button
                     key={tag}
                     onClick={() => {
-                      if (active) {
-                        // Deselect: bounce back to the inbox root.
-                        setView({ kind: 'folder', folder: 'inbox', subpath: '' })
-                      } else {
-                        setView({ kind: 'tag', tag })
-                      }
+                      void openTagView(tag)
                     }}
                     onContextMenu={(e) => {
                       e.preventDefault()

@@ -227,28 +227,19 @@ export function NoteList(): JSX.Element {
   /**
    * Filter notes for the current view. For folder views we match the
    * top-level folder AND, when a subpath is active, limit to notes
-   * inside that subfolder (including deeper descendants). For tag
-   * views we match against the tag index — with live re-extraction
-   * from the active note's body so newly typed hashtags work instantly.
+   * inside that subfolder (including deeper descendants). The tag view
+   * is its own full-surface tab now (see TagView), so NoteList no longer
+   * handles tag filtering.
    */
   const filtered = useMemo<NoteMeta[]>(() => {
     if (view.kind === 'assets') return []
-    if (view.kind === 'folder') {
-      const prefix = view.subpath
-        ? `${view.folder}/${view.subpath}/`
-        : `${view.folder}/`
-      return notes.filter(
-        (n) => n.folder === view.folder && n.path.startsWith(prefix)
-      )
-    }
-    return notes.filter((n) => {
-      if (n.folder === 'trash') return false
-      if (activeNote && activeNote.path === n.path) {
-        return extractTags(activeNote.body).includes(view.tag)
-      }
-      return n.tags.includes(view.tag)
-    })
-  }, [notes, view, activeNote])
+    const prefix = view.subpath
+      ? `${view.folder}/${view.subpath}/`
+      : `${view.folder}/`
+    return notes.filter(
+      (n) => n.folder === view.folder && n.path.startsWith(prefix)
+    )
+  }, [notes, view])
 
   /**
    * Stable ordering: we want the list sorted by updatedAt when the user
@@ -265,9 +256,7 @@ export function NoteList(): JSX.Element {
   const viewKey =
     view.kind === 'folder'
       ? `folder:${view.folder}:${view.subpath}`
-      : view.kind === 'assets'
-        ? 'assets'
-        : `tag:${view.tag}`
+      : 'assets'
   const sortComparator = useMemo<((a: NoteMeta, b: NoteMeta) => number) | null>(() => {
     switch (noteSortOrder) {
       case 'none':
@@ -332,11 +321,9 @@ export function NoteList(): JSX.Element {
   const heading =
     view.kind === 'assets'
       ? 'attachements'
-      : view.kind === 'folder'
-      ? view.subpath
+      : view.subpath
         ? view.subpath.split('/').slice(-1)[0]
         : view.folder[0].toUpperCase() + view.folder.slice(1)
-      : `#${view.tag}`
 
   const newTargetFolder = view.kind === 'folder' && view.folder !== 'trash' ? view.folder : 'inbox'
 

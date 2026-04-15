@@ -13,6 +13,7 @@ export type Panel =
   | 'connections'
   | 'hoverpreview'
   | 'tasks'
+  | 'tags'
 
 export function getVisiblePanels(
   sidebarOpen: boolean,

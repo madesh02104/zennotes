@@ -51,7 +51,9 @@ import { Preview } from './Preview'
 import { ConnectionsPanel } from './ConnectionsPanel'
 import { ContextMenu, type ContextMenuItem } from './ContextMenu'
 import { TasksView } from './TasksView'
+import { TagView } from './TagView'
 import { TASKS_TAB_PATH, isTasksTabPath } from '@shared/tasks'
+import { isTagsTabPath } from '@shared/tags'
 import { hasZenItem, readDragPayload, setDragPayload, type DragPayload } from '../lib/dnd'
 import {
   getImageBlockDropPlacement,
@@ -67,6 +69,7 @@ import {
   PanelLeftIcon,
   PanelRightIcon,
   PinIcon,
+  TagIcon,
   TrashIcon
 } from './icons'
 import { focusEditorNormalMode } from '../lib/editor-focus'
@@ -728,11 +731,32 @@ export function EditorPane({ pane }: { pane: PaneLeaf }): JSX.Element {
       const pinnedSet = new Set(pinnedTabs)
       return tabs.map((path) => {
         if (isTasksTabPath(path)) {
-          return { path, title: 'Tasks', pinned: pinnedSet.has(path), isTasks: true }
+          return {
+            path,
+            title: 'Tasks',
+            pinned: pinnedSet.has(path),
+            isTasks: true,
+            isTag: false
+          }
+        }
+        if (isTagsTabPath(path)) {
+          return {
+            path,
+            title: 'Tags',
+            pinned: pinnedSet.has(path),
+            isTasks: false,
+            isTag: true
+          }
         }
         const meta = path === content?.path ? content : notes.find((n) => n.path === path)
         const title = meta?.title ?? path.split('/').pop()?.replace(/\.md$/i, '') ?? path
-        return { path, title, pinned: pinnedSet.has(path), isTasks: false }
+        return {
+          path,
+          title,
+          pinned: pinnedSet.has(path),
+          isTasks: false,
+          isTag: false
+        }
       })
     },
     [tabs, pinnedTabs, content, notes]
@@ -793,6 +817,39 @@ export function EditorPane({ pane }: { pane: PaneLeaf }): JSX.Element {
       ]
     }
 
+    // Tags tab: same shape as Tasks minus Refresh (tag list is derived
+    // from already-watched notes — always fresh).
+    if (isTagsTabPath(path)) {
+      return [
+        { label: 'Close', onSelect: async () => closeTabInPane(paneId, path) },
+        {
+          label: 'Close Others',
+          disabled: closableOthers.length === 0,
+          onSelect: async () => {
+            for (const t of closableOthers) await closeTabInPane(paneId, t)
+          }
+        },
+        {
+          label: 'Close Tabs to Right',
+          disabled: closableRight.length === 0,
+          onSelect: async () => {
+            for (const t of closableRight) await closeTabInPane(paneId, t)
+          }
+        },
+        { kind: 'separator' },
+        {
+          label: 'Split Right',
+          onSelect: async () =>
+            splitPaneWithTab({ targetPaneId: paneId, edge: 'right', path })
+        },
+        {
+          label: 'Split Down',
+          onSelect: async () =>
+            splitPaneWithTab({ targetPaneId: paneId, edge: 'bottom', path })
+        }
+      ]
+    }
+
     return [
       { label: 'Close', onSelect: async () => closeTabInPane(paneId, path) },
       {
@@ -848,15 +905,22 @@ export function EditorPane({ pane }: { pane: PaneLeaf }): JSX.Element {
   }, [tabMenu, tabs, pinnedTabs, paneId, closeTabInPane, splitPaneWithTab, toggleTabPin])
 
   const renderTab = useCallback(
-    (tab: { path: string; title: string; pinned: boolean; isTasks: boolean }) => {
+    (tab: {
+      path: string
+      title: string
+      pinned: boolean
+      isTasks: boolean
+      isTag: boolean
+    }) => {
       const active = tab.path === activeTab
+      const isVirtual = tab.isTasks || tab.isTag
       return (
         <div
           key={tab.path}
           className="relative"
-          draggable={!tab.isTasks}
+          draggable={!isVirtual}
           onDragStart={(e) => {
-            if (tab.isTasks) {
+            if (isVirtual) {
               e.preventDefault()
               return
             }
@@ -947,6 +1011,9 @@ export function EditorPane({ pane }: { pane: PaneLeaf }): JSX.Element {
             >
               {tab.isTasks && (
                 <CheckSquareIcon width={13} height={13} className="shrink-0 text-accent" />
+              )}
+              {tab.isTag && (
+                <TagIcon width={13} height={13} className="shrink-0 text-accent" />
               )}
               <span className="min-w-0 flex-1 truncate">{tab.title}</span>
             </button>
@@ -1132,6 +1199,8 @@ export function EditorPane({ pane }: { pane: PaneLeaf }): JSX.Element {
           )}
           {isTasksTabPath(activeTab) ? (
             <TasksView />
+          ) : isTagsTabPath(activeTab) ? (
+            <TagView />
           ) : content ? (
             <div
               className={[

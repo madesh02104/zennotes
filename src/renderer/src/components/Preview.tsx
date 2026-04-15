@@ -309,7 +309,7 @@ export function Preview({
       if (anchor.classList.contains('hashtag')) {
         e.preventDefault()
         const tag = anchor.getAttribute('data-tag')
-        if (tag) setView({ kind: 'tag', tag })
+        if (tag) void useStore.getState().openTagView(tag)
         return
       }
       const localAssetUrl = anchor.dataset.localAssetUrl

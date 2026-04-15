@@ -27,16 +27,43 @@ export function SearchPalette(): JSX.Element {
     [notes]
   )
 
-  const results = useMemo(() => {
-    if (!query.trim()) {
-      return notes.filter((n) => n.folder !== 'trash').slice(0, 20)
+  // Strip `#tag` tokens off the query so the user can narrow by one or
+  // more tags inline: `#ops #prod migration` means "notes tagged with
+  // #ops AND #prod, fuzzy-matching 'migration'". Pure-tag queries (no
+  // free text) still work — in that case we just list matching notes.
+  const { freeText, tagTokens } = useMemo(() => {
+    const rawTokens = query.split(/\s+/)
+    const tags: string[] = []
+    const text: string[] = []
+    for (const tok of rawTokens) {
+      if (!tok) continue
+      if (tok.startsWith('#') && tok.length > 1) {
+        tags.push(tok.slice(1).toLowerCase())
+      } else {
+        text.push(tok)
+      }
     }
+    return { freeText: text.join(' ').trim(), tagTokens: tags }
+  }, [query])
+
+  const results = useMemo(() => {
+    const byTag = (n: NoteMeta): boolean => {
+      if (tagTokens.length === 0) return true
+      const tagsLower = n.tags.map((t) => t.toLowerCase())
+      // AND semantics for search — every hashtag token must match. This
+      // narrows the result set the more tags you add, matching how users
+      // expect search filters to compose.
+      return tagTokens.every((t) => tagsLower.includes(t))
+    }
+    const live = notes.filter((n) => n.folder !== 'trash' && byTag(n))
+    if (!freeText) return live.slice(0, 20)
+    const set = new Set(live.map((n) => n.path))
     return fuse
-      .search(query)
+      .search(freeText)
       .map((r) => r.item)
-      .filter((n) => n.folder !== 'trash')
+      .filter((n) => set.has(n.path))
       .slice(0, 20)
-  }, [fuse, query, notes])
+  }, [fuse, freeText, tagTokens, notes])
 
   useEffect(() => {
     inputRef.current?.focus()
@@ -66,7 +93,7 @@ export function SearchPalette(): JSX.Element {
           <input
             ref={inputRef}
             value={query}
-            placeholder="Search notes…"
+            placeholder="Search notes…  ·  use #tag to filter"
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'ArrowDown') {
@@ -83,6 +110,21 @@ export function SearchPalette(): JSX.Element {
             }}
             className="w-full bg-transparent text-base text-ink-900 outline-none placeholder:text-ink-400"
           />
+          {tagTokens.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {tagTokens.map((t) => (
+                <span
+                  key={t}
+                  className="rounded-full bg-accent/15 px-2 py-0.5 text-[11px] text-accent"
+                >
+                  #{t}
+                </span>
+              ))}
+              <span className="text-[11px] text-ink-500">
+                notes must carry {tagTokens.length === 1 ? 'this tag' : 'all of these tags'}
+              </span>
+            </div>
+          )}
         </div>
         <div className="max-h-[50vh] overflow-x-hidden overflow-y-auto py-1">
           {results.length === 0 ? (

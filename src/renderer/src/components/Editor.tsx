@@ -10,7 +10,9 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import type { EditorView } from '@codemirror/view'
 import { Vim, getCM } from '@replit/codemirror-vim'
-import { isTasksViewActive, useStore } from '../store'
+import { isTagsViewActive, isTasksViewActive, useStore } from '../store'
+import { buildCommands, type Command } from '../lib/commands'
+import { rankItems } from '../lib/fuzzy-score'
 import type { PaneLayout, PaneSplit } from '../lib/pane-layout'
 import {
   parseCreateNotePath,
@@ -83,12 +85,20 @@ function registerVimCommands(): void {
       state.closeTasksView()
       return
     }
+    if (isTagsViewActive(state)) {
+      state.closeTagView()
+      return
+    }
     void state.closeActiveNote()
   })
   Vim.defineEx('wq', 'wq', () => {
     const state = useStore.getState()
     if (isTasksViewActive(state)) {
       state.closeTasksView()
+      return
+    }
+    if (isTagsViewActive(state)) {
+      state.closeTagView()
       return
     }
     void state.closeActiveNote()
@@ -100,6 +110,28 @@ function registerVimCommands(): void {
   Vim.defineEx('tasks', 'tasks', () => {
     void useStore.getState().openTasksView()
   })
+
+  // `:tag foo` starts (or updates) the Tags view with `foo` selected.
+  // `:tag foo bar baz` replaces the selection set wholesale. `:tag`
+  // alone opens the Tags tab with whatever's currently selected (if
+  // nothing is, the view shows a hint to pick tags).
+  Vim.defineEx(
+    'tag',
+    'tag',
+    (_cm: unknown, params: { argString?: string } | undefined) => {
+      const args = (params?.argString ?? '')
+        .split(/\s+/)
+        .map((t) => t.trim().replace(/^#/, ''))
+        .filter(Boolean)
+      const state = useStore.getState()
+      if (args.length === 0) {
+        void state.openTagView()
+        return
+      }
+      state.setSelectedTags(args)
+      void state.openTagView()
+    }
+  )
 
   // Vim-style window splits. `:split` clones the current tab into a
   // new pane below; `:vsplit` clones it into a new pane to the right.
@@ -226,6 +258,369 @@ function registerVimCommands(): void {
   Vim.mapCommand('<C-w><C-j>', 'action', 'focusPaneDown', {}, { context: 'normal' })
   Vim.mapCommand('<C-w><C-k>', 'action', 'focusPaneUp', {}, { context: 'normal' })
   Vim.mapCommand('<C-w><C-l>', 'action', 'focusPaneRight', {}, { context: 'normal' })
+
+  registerVimNoteCommands()
+  registerCommandPaletteEx()
+}
+
+/**
+ * Vim-muscle-memory ex commands for buffer (tab) / file operations. These
+ * sit above the auto-registered palette commands so their short names
+ * (`:e`, `:bn`, `:bd`) are reserved and not overwritten.
+ *
+ * - `:e[dit] <path>`     open a note by vault-relative path, create if missing
+ * - `:new <path>`        create a new note at an explicit path
+ * - `:bn[ext]`           next tab in the active pane
+ * - `:bp[rev]`           previous tab in the active pane
+ * - `:bd[elete]`, `:bc`  close the active tab (alias for `:q` on notes)
+ * - `:only`              close every other tab in the active pane
+ * - `:qa[ll]`            close every tab, everywhere
+ * - `:h[elp]`            open the command palette for discovery
+ */
+function registerVimNoteCommands(): void {
+  const getActiveLeaf = (): { id: string; tabs: string[]; activeTab: string | null } | null => {
+    const s = useStore.getState()
+    const leaves = allLeavesFlat(s.paneLayout)
+    return leaves.find((l) => l.id === s.activePaneId) ?? null
+  }
+
+  const openOrCreateByPath = async (raw: string): Promise<void> => {
+    const value = raw.trim()
+    if (!value) return
+    let parsed: ReturnType<typeof parseCreateNotePath>
+    try {
+      parsed = parseCreateNotePath(value)
+    } catch (err) {
+      window.alert((err as Error).message)
+      return
+    }
+    const state = useStore.getState()
+    // If something already resolves to that target (wiki-style + case-
+    // insensitive), open it instead of creating a duplicate.
+    const existing = state.notes.find(
+      (n) =>
+        n.folder !== 'trash' &&
+        n.path.toLowerCase() === parsed.relPath.toLowerCase()
+    )
+    if (existing) {
+      await state.selectNote(existing.path)
+      state.setFocusedPanel('editor')
+      requestAnimationFrame(() => useStore.getState().editorViewRef?.focus())
+      return
+    }
+    await state.createAndOpen(parsed.folder, parsed.subpath, {
+      title: parsed.title
+    })
+    state.setFocusedPanel('editor')
+    requestAnimationFrame(() => useStore.getState().editorViewRef?.focus())
+  }
+
+  Vim.defineEx(
+    'edit',
+    'e',
+    (_cm: unknown, params: { argString?: string } | undefined) => {
+      void openOrCreateByPath(params?.argString ?? '')
+    }
+  )
+
+  // `:new` shadows vim's "horizontal split empty buffer" — for a notes
+  // app, creating a new note at a path is what the user actually wants.
+  Vim.defineEx(
+    'new',
+    'new',
+    (_cm: unknown, params: { argString?: string } | undefined) => {
+      const arg = (params?.argString ?? '').trim()
+      if (!arg) {
+        void useStore.getState().createAndOpen('inbox', '', { focusTitle: true })
+        return
+      }
+      void openOrCreateByPath(arg)
+    }
+  )
+
+  const shiftTab = (delta: 1 | -1): void => {
+    const leaf = getActiveLeaf()
+    if (!leaf || leaf.tabs.length < 2 || !leaf.activeTab) return
+    const idx = leaf.tabs.indexOf(leaf.activeTab)
+    if (idx < 0) return
+    const nextIdx = (idx + delta + leaf.tabs.length) % leaf.tabs.length
+    void useStore.getState().focusTabInPane(leaf.id, leaf.tabs[nextIdx])
+  }
+
+  Vim.defineEx('bnext', 'bn', () => shiftTab(1))
+  Vim.defineEx('bprev', 'bp', () => shiftTab(-1))
+  // Vim aliases: :bNext and :bfirst/:blast — rare, skipped.
+
+  const closeActiveTabLikeQuit = (): void => {
+    const state = useStore.getState()
+    if (isTasksViewActive(state)) {
+      state.closeTasksView()
+      return
+    }
+    if (isTagsViewActive(state)) {
+      state.closeTagView()
+      return
+    }
+    void state.closeActiveNote()
+  }
+  Vim.defineEx('bdelete', 'bd', closeActiveTabLikeQuit)
+  Vim.defineEx('bclose', 'bc', closeActiveTabLikeQuit)
+
+  Vim.defineEx('only', 'only', () => {
+    const leaf = getActiveLeaf()
+    if (!leaf || !leaf.activeTab) return
+    const state = useStore.getState()
+    // Snapshot the list — closing tabs mutates leaf.tabs concurrently.
+    const toClose = leaf.tabs.filter((p) => p !== leaf.activeTab)
+    for (const p of toClose) void state.closeTabInPane(leaf.id, p)
+  })
+
+  const closeEveryTab = (): void => {
+    const state = useStore.getState()
+    for (const leaf of allLeavesFlat(state.paneLayout)) {
+      const snapshot = [...leaf.tabs]
+      for (const p of snapshot) void state.closeTabInPane(leaf.id, p)
+    }
+  }
+  Vim.defineEx('qall', 'qa', closeEveryTab)
+  Vim.defineEx('quitall', 'quitall', closeEveryTab)
+  // :xa / :wa are just aliases for qall in this context (nothing to flush
+  // that autosave doesn't already handle).
+  Vim.defineEx('xall', 'xa', closeEveryTab)
+  Vim.defineEx('wall', 'wa', closeEveryTab)
+
+  Vim.defineEx('help', 'h', () => {
+    useStore.getState().setCommandPaletteOpen(true)
+  })
+}
+
+/** Flatten the pane tree to a list of leaves, independent of the store's
+ *  `allLeaves` helper (which lives in `lib/pane-layout`). Duplicated
+ *  locally to avoid a new import chain. */
+function allLeavesFlat(
+  node: PaneLayout
+): Array<{ id: string; tabs: string[]; activeTab: string | null }> {
+  if (node.kind === 'leaf') {
+    return [{ id: node.id, tabs: node.tabs, activeTab: node.activeTab }]
+  }
+  const out: Array<{ id: string; tabs: string[]; activeTab: string | null }> = []
+  for (const child of node.children) out.push(...allLeavesFlat(child))
+  return out
+}
+
+// Names we register manually above. Keeping a block-list avoids double-
+// registering when an auto-generated name would collide with a curated
+// vim-style shortcut (`:w`, `:q`, `:tasks`, …).
+const MANUAL_EX_NAMES = new Set([
+  'write',
+  'w',
+  'quit',
+  'q',
+  'wq',
+  'format',
+  'tasks',
+  'tag',
+  'split',
+  'sp',
+  'vsplit',
+  'vs',
+  // Added by `registerVimNoteCommands`
+  'edit',
+  'e',
+  'new',
+  'bnext',
+  'bn',
+  'bprev',
+  'bp',
+  'bdelete',
+  'bd',
+  'bclose',
+  'bc',
+  'only',
+  'qall',
+  'qa',
+  'quitall',
+  'xall',
+  'xa',
+  'wall',
+  'wa',
+  'help',
+  'h'
+])
+
+function commandIdToExName(id: string): string {
+  // `note.new.quick` → `note-new-quick`. Dashes are accepted by CM-vim's
+  // ex parser and make the names scannable when listed in `:cmd`.
+  return id.replace(/\./g, '-')
+}
+
+/** Names of every ex command we register. Captured during init so the
+ *  tab-completion handler can match against the full set without re-
+ *  crawling buildCommands() on every keystroke. */
+const registeredExNames: string[] = []
+
+/**
+ * Bridge every command from the palette registry into the `:` ex line so
+ * the keyboard-first experience is comprehensive — any action the palette
+ * exposes can be invoked directly by typing its kebab-cased id. Plus a
+ * catch-all `:cmd <query>` that fuzzy-matches against title/keywords and
+ * runs the top match (opens the full palette when the query is empty).
+ */
+function registerCommandPaletteEx(): void {
+  const runCommand = (cmd: Command): void => {
+    // Re-check `when` at invocation time so `:note-save` doesn't silently
+    // fire when nothing is selected, for example.
+    if (cmd.when && !cmd.when()) return
+    void cmd.run()
+  }
+
+  const names = new Set<string>(MANUAL_EX_NAMES)
+  for (const cmd of buildCommands()) {
+    const name = commandIdToExName(cmd.id)
+    if (names.has(name)) continue
+    names.add(name)
+    try {
+      Vim.defineEx(name, name, () => runCommand(cmd))
+    } catch {
+      /* ignore duplicate registrations across HMR cycles */
+    }
+  }
+
+  // `:cmd` — fuzzy fallback. With a query, runs the best match directly.
+  // Without, opens the command palette so the user can browse.
+  Vim.defineEx(
+    'cmd',
+    'cmd',
+    (_cm: unknown, params: { argString?: string } | undefined) => {
+      const query = (params?.argString ?? '').trim()
+      if (!query) {
+        useStore.getState().setCommandPaletteOpen(true)
+        return
+      }
+      const commands = buildCommands()
+      const ranked = rankItems(commands, query, [
+        { get: (c) => c.title, weight: 1 },
+        { get: (c) => c.keywords ?? '', weight: 0.6 },
+        { get: (c) => c.category, weight: 0.4 }
+      ])
+      const first = ranked.find((c) => !c.when || c.when())
+      if (first) runCommand(first)
+    }
+  )
+  names.add('cmd')
+
+  // `:commands` — alias that always opens the palette (no implicit run).
+  Vim.defineEx('commands', 'commands', () => {
+    useStore.getState().setCommandPaletteOpen(true)
+  })
+  names.add('commands')
+
+  registeredExNames.splice(0, registeredExNames.length, ...names)
+  registeredExNames.sort()
+  installExTabCompletion()
+}
+
+let exTabListenerInstalled = false
+
+/**
+ * Per-session tab-completion state. Keyed on the current ex-prompt input
+ * element — a fresh cycle starts every time the user mutates the value
+ * by typing (non-Tab keys reset), or whenever a different input element
+ * takes over (new pane, re-opened prompt).
+ */
+interface ExTabCycle {
+  input: HTMLInputElement
+  basePrefix: string
+  matches: string[]
+  cycleIdx: number
+}
+
+let exCycle: ExTabCycle | null = null
+
+function computeExMatches(prefix: string): string[] {
+  if (!prefix) return registeredExNames.slice()
+  return registeredExNames.filter((n) => n.startsWith(prefix))
+}
+
+/**
+ * Global capture-phase Tab interceptor for the CodeMirror-Vim ex prompt.
+ *
+ * Keystrokes on the prompt input bubble up like any DOM event, but CM-Vim
+ * also registers its own keydown listener on the same input. When two
+ * listeners share a target, they fire in registration order — meaning
+ * CM-Vim's fires first and can call `stopImmediatePropagation` to hide
+ * Shift+Tab from us. Installing at `window` with `capture: true` hoists
+ * us to the document-wide capture phase, which runs BEFORE any target-
+ * level listener. We then opt into the events whose target matches the
+ * ex-prompt input (checked via a CSS selector) and leave everything else
+ * alone.
+ *
+ * Tab advances through commands matching the current prefix; Shift+Tab
+ * walks back; any other key resets the cycle. First-Tab lands on the
+ * first match, first-Shift-Tab on the last — matches vim's wildmenu.
+ */
+function installExTabCompletion(): void {
+  if (exTabListenerInstalled) return
+  exTabListenerInstalled = true
+  if (typeof window === 'undefined') return
+
+  window.addEventListener(
+    'keydown',
+    (e) => {
+      if (e.key !== 'Tab') {
+        // Reset cycle state when the user types anything else — but only
+        // if the event target IS the ex prompt input. Keys elsewhere in
+        // the app shouldn't clobber our state (modifier keys fire even
+        // when the input is focused too, so we ignore those explicitly
+        // instead of resetting on them).
+        if (e.key === 'Shift' || e.key === 'Control' || e.key === 'Alt' || e.key === 'Meta') {
+          return
+        }
+        const target = e.target as HTMLElement | null
+        if (target && target instanceof HTMLInputElement) {
+          if (target.closest('.cm-vim-panel')) {
+            if (exCycle && exCycle.input === target) exCycle.basePrefix = ''
+          }
+        }
+        return
+      }
+
+      const target = e.target as HTMLElement | null
+      if (!target || !(target instanceof HTMLInputElement)) return
+      if (!target.closest('.cm-vim-panel')) return
+
+      // This is our prompt — take over Tab handling entirely.
+      e.preventDefault()
+      e.stopPropagation()
+      e.stopImmediatePropagation()
+
+      const step = e.shiftKey ? -1 : 1
+      const fresh = !exCycle || exCycle.input !== target || exCycle.basePrefix === ''
+
+      if (fresh) {
+        exCycle = {
+          input: target,
+          basePrefix: target.value,
+          matches: computeExMatches(target.value),
+          cycleIdx: step === 1 ? 0 : -1 // sentinel; normalized below
+        }
+      } else if (exCycle) {
+        exCycle.cycleIdx += step
+      }
+
+      const cycle = exCycle
+      if (!cycle || cycle.matches.length === 0) return
+      const n = cycle.matches.length
+      const idx = ((cycle.cycleIdx % n) + n) % n
+      cycle.cycleIdx = idx
+      const match = cycle.matches[idx]
+      // Mutate and notify CM-vim so its internal state stays in sync.
+      target.value = match
+      target.dispatchEvent(new Event('input', { bubbles: true }))
+      target.setSelectionRange(match.length, match.length)
+    },
+    true
+  )
 }
 
 export function Editor(): JSX.Element {

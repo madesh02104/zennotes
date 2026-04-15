@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { isTasksViewActive, useStore } from '../store'
+import { isTagsViewActive, isTasksViewActive, useStore } from '../store'
 import { HintOverlay } from './HintOverlay'
 import {
   getVisiblePanels,
@@ -246,13 +246,14 @@ export function VimNav(): JSX.Element | null {
         return
       }
 
-      // ------- Tasks view active → defer to its own window handler -----
-      // The Tasks panel installs a capture-phase window keydown of its own
-      // that handles j/k/gg/G/Enter/o/Space/x/Esc. We bail here so VimNav
+      // ------- Tasks / Tag view active → defer to its own window handler
+      // Both panels install capture-phase window keydowns that handle
+      // j/k/gg/G/Enter/o/Esc/etc. themselves. We bail here so VimNav
       // doesn't swallow those keys with stale sidebar routing. Exception:
-      // let `f` (hint mode) fall through — it's a global affordance that
-      // should work anywhere, and its handler sits further down.
-      if (isTasksViewActive(state) && e.key !== 'f') {
+      // let `f` (hint mode) fall through — a global affordance that
+      // should still work anywhere, and its handler sits further down.
+      const panelViewActive = isTasksViewActive(state) || isTagsViewActive(state)
+      if (panelViewActive && e.key !== 'f') {
         return
       }
 
@@ -853,7 +854,7 @@ export function VimNav(): JSX.Element | null {
       }
     } else if (itemType === 'tag') {
       const tag = el.dataset.sidebarTag
-      if (tag) state.setView({ kind: 'tag', tag })
+      if (tag) void state.openTagView(tag)
     } else if (itemType === 'tasks') {
       // Tasks is a top-level sidebar row that opens the vault-wide Tasks
       // tab in the active pane. Matches clicking the row.
