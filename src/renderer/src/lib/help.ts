@@ -112,6 +112,7 @@ export const HELP_SHORTCUT_SECTIONS: HelpShortcutSection[] = [
       { keys: 'Space o', action: 'Open buffers', detail: 'Show a searchable list of every open buffer across every pane.' },
       { keys: 'Space f', action: 'Search notes', detail: 'Open the vault-wide note search palette.' },
       { keys: 'Space e', action: 'Toggle left sidebar', detail: 'Show or hide the folder/tag sidebar without touching the mouse.' },
+      { keys: 'Space p', action: 'Note outline', detail: 'Jump to any heading in the active note via a searchable overlay.' },
       { keys: 'Ctrl-o', action: 'Go back', detail: 'Jump to the previous note location in history.' },
       { keys: 'Ctrl-i', action: 'Go forward', detail: 'Jump forward in note history.' },
       { keys: 'f', action: 'Hint mode', detail: 'Show jump labels for clickable targets when you are not in insert mode.' }
@@ -271,6 +272,16 @@ export const HELP_VIM_COMMANDS: HelpExCommand[] = [
     command: '<Space> e',
     summary: 'Leader toggle sidebar',
     detail: 'Show or hide the left sidebar from any panel.'
+  },
+  {
+    command: '<Space> p',
+    summary: 'Leader note outline',
+    detail: 'Open a searchable list of every heading in the active note; Enter jumps the editor to that line.'
+  },
+  {
+    command: ':outline',
+    summary: 'Note outline palette',
+    detail: 'Same as <Space> p — ex-line access to the note outline.'
   }
 ]
 

@@ -658,6 +658,7 @@ interface Store {
   searchOpen: boolean
   commandPaletteOpen: boolean
   bufferPaletteOpen: boolean
+  outlinePaletteOpen: boolean
   query: string
   initialized: boolean
   sidebarOpen: boolean
@@ -813,6 +814,7 @@ interface Store {
   setSearchOpen: (open: boolean) => void
   setCommandPaletteOpen: (open: boolean) => void
   setBufferPaletteOpen: (open: boolean) => void
+  setOutlinePaletteOpen: (open: boolean) => void
   setQuery: (q: string) => void
   toggleSidebar: () => void
   toggleNoteList: () => void
@@ -1149,6 +1151,7 @@ export const useStore = create<Store>((set, get) => {
   searchOpen: false,
   commandPaletteOpen: false,
   bufferPaletteOpen: false,
+  outlinePaletteOpen: false,
   query: '',
   initialized: false,
   sidebarOpen: true,
@@ -1828,6 +1831,7 @@ export const useStore = create<Store>((set, get) => {
   setSearchOpen: (open) => set({ searchOpen: open, query: open ? get().query : '' }),
   setCommandPaletteOpen: (open) => set({ commandPaletteOpen: open }),
   setBufferPaletteOpen: (open) => set({ bufferPaletteOpen: open }),
+  setOutlinePaletteOpen: (open) => set({ outlinePaletteOpen: open }),
   setQuery: (q) => set({ query: q }),
   toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
   toggleNoteList: () => set((s) => ({ noteListOpen: !s.noteListOpen })),

@@ -49,6 +49,7 @@ import { dateShortcutSource } from '../lib/cm-date-shortcuts'
 import { wikilinkSource } from '../lib/cm-wikilinks'
 import { Preview } from './Preview'
 import { ConnectionsPanel } from './ConnectionsPanel'
+import { OutlinePanel } from './OutlinePanel'
 import { ContextMenu, type ContextMenuItem } from './ContextMenu'
 import { TasksView } from './TasksView'
 import { TagView } from './TagView'
@@ -69,6 +70,7 @@ import {
   CheckSquareIcon,
   CloseIcon,
   DocumentIcon,
+  ListTreeIcon,
   PanelLeftIcon,
   PanelRightIcon,
   PinIcon,
@@ -203,6 +205,7 @@ export function EditorPane({ pane }: { pane: PaneLeaf }): JSX.Element {
 
   const [mode, setMode] = useState<Mode>('edit')
   const [connectionsOpen, setConnectionsOpen] = useState(false)
+  const [outlineOpen, setOutlineOpen] = useState(false)
   const [paneDropEdge, setPaneDropEdge] = useState<PaneEdge | null>(null)
   const [tabDropIndicator, setTabDropIndicator] = useState<TabDropIndicator>(null)
   const [tabMenu, setTabMenu] = useState<{ x: number; y: number; path: string } | null>(null)
@@ -258,6 +261,30 @@ export function EditorPane({ pane }: { pane: PaneLeaf }): JSX.Element {
     window.addEventListener('zen:toggle-connections', handler)
     return () => window.removeEventListener('zen:toggle-connections', handler)
   }, [isActive, toggleConnectionsPanel])
+
+  const toggleOutlinePanel = useCallback(() => {
+    setOutlineOpen((open) => !open)
+  }, [])
+
+  // `zen:toggle-outline` — routed only to the active pane, same pattern
+  // as the connections toggle.
+  useEffect(() => {
+    if (!isActive) return
+    const handler = (): void => {
+      toggleOutlinePanel()
+    }
+    window.addEventListener('zen:toggle-outline', handler)
+    return () => window.removeEventListener('zen:toggle-outline', handler)
+  }, [isActive, toggleOutlinePanel])
+
+  const jumpToOutlineLine = useCallback((line: number) => {
+    const view = viewRef.current
+    if (!view) return
+    const safeLine = Math.min(Math.max(1, line), view.state.doc.lines)
+    const pos = view.state.doc.line(safeLine).from
+    view.dispatch({ selection: { anchor: pos }, scrollIntoView: true })
+    view.focus()
+  }, [])
 
   // Mount / unmount the CodeMirror view via a callback ref on the host
   // div. The callback identity is stable so React only invokes it on
@@ -1084,6 +1111,13 @@ export function EditorPane({ pane }: { pane: PaneLeaf }): JSX.Element {
         >
           <PanelRightIcon />
         </IconBtn>
+        <IconBtn
+          title={outlineOpen ? 'Hide outline' : 'Show outline'}
+          active={outlineOpen}
+          onClick={toggleOutlinePanel}
+        >
+          <ListTreeIcon />
+        </IconBtn>
         {folder === 'trash' ? (
           <IconBtn title="Restore" onClick={() => void restoreActive()}>
             <ArrowUpRightIcon />
@@ -1115,6 +1149,8 @@ export function EditorPane({ pane }: { pane: PaneLeaf }): JSX.Element {
     mode,
     connectionsOpen,
     toggleConnectionsPanel,
+    outlineOpen,
+    toggleOutlinePanel,
     trashActive,
     archiveActive,
     restoreActive,
@@ -1306,6 +1342,9 @@ export function EditorPane({ pane }: { pane: PaneLeaf }): JSX.Element {
           )}
         </div>
         {content && connectionsOpen && isActive && <ConnectionsPanel note={content} />}
+        {content && outlineOpen && (
+          <OutlinePanel note={content} onJump={jumpToOutlineLine} />
+        )}
       </div>
       {tabMenu && (
         <ContextMenu

@@ -296,6 +296,13 @@ export function VimNav(): JSX.Element | null {
           state.toggleSidebar()
           return
         }
+        if (e.key === 'p') {
+          e.preventDefault()
+          e.stopImmediatePropagation()
+          resetLeader()
+          state.setOutlinePaletteOpen(true)
+          return
+        }
         if (e.key === 'l' && editorNormalMode) {
           e.preventDefault()
           e.stopImmediatePropagation()

@@ -326,6 +326,25 @@ export function buildCommands(options?: { includeUnavailable?: boolean }): Comma
       run: () => getState().setBufferPaletteOpen(true)
     },
     {
+      id: 'nav.outline',
+      title: 'Open Note Outline…',
+      category: 'Navigation',
+      shortcut: 'Space p',
+      keywords: 'outline headings toc jump toc table of contents leader',
+      when: () => !!getState().activeNote,
+      run: () => getState().setOutlinePaletteOpen(true)
+    },
+    {
+      id: 'view.outline-panel',
+      title: 'Toggle Outline Panel',
+      category: 'View',
+      keywords: 'outline panel sidebar right headings',
+      when: () => !!getState().activeNote,
+      run: () => {
+        window.dispatchEvent(new Event('zen:toggle-outline'))
+      }
+    },
+    {
       id: 'nav.back',
       title: 'Go Back',
       category: 'Tabs',

@@ -274,6 +274,7 @@ function registerVimCommands(): void {
  * - `:bp[rev]`           previous tab in the active pane
  * - `:bd[elete]`, `:bc`  close the active tab (alias for `:q` on notes)
  * - `:buffers`, `:ls`    open the buffer switcher
+ * - `:outline`            open the heading outline palette
  * - `:only`              close every other tab in the active pane
  * - `:qa[ll]`            close every tab, everywhere
  * - `:h[elp]`            open the built-in Help manual
@@ -426,6 +427,12 @@ function registerVimNoteCommands(): void {
   }
   Vim.defineEx('buffers', 'buffers', openBufferSwitcher)
   Vim.defineEx('ls', 'ls', openBufferSwitcher)
+  const openOutline = (): void => {
+    requestAnimationFrame(() => {
+      useStore.getState().setOutlinePaletteOpen(true)
+    })
+  }
+  Vim.defineEx('outline', 'outline', openOutline)
 
   Vim.defineEx('only', 'only', () => {
     const leaf = getActiveLeaf()
@@ -499,6 +506,7 @@ const MANUAL_EX_NAMES = new Set([
   'bc',
   'buffers',
   'ls',
+  'outline',
   'only',
   'qall',
   'qa',

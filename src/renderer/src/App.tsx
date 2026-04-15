@@ -8,6 +8,7 @@ import { TitleBar } from './components/TitleBar'
 import { SearchPalette } from './components/SearchPalette'
 import { CommandPalette } from './components/CommandPalette'
 import { BufferPalette } from './components/BufferPalette'
+import { OutlinePalette } from './components/OutlinePalette'
 import { SettingsModal } from './components/SettingsModal'
 import { VimNav } from './components/VimNav'
 import { EmptyVault } from './components/EmptyVault'
@@ -24,6 +25,8 @@ function App(): JSX.Element {
   const setCommandPaletteOpen = useStore((s) => s.setCommandPaletteOpen)
   const bufferPaletteOpen = useStore((s) => s.bufferPaletteOpen)
   const setBufferPaletteOpen = useStore((s) => s.setBufferPaletteOpen)
+  const outlinePaletteOpen = useStore((s) => s.outlinePaletteOpen)
+  const setOutlinePaletteOpen = useStore((s) => s.setOutlinePaletteOpen)
   const sidebarOpen = useStore((s) => s.sidebarOpen)
   const noteListOpen = useStore((s) => s.noteListOpen)
   const unifiedSidebar = useStore((s) => s.unifiedSidebar)
@@ -162,6 +165,10 @@ function App(): JSX.Element {
         setBufferPaletteOpen(false)
         return
       }
+      if (e.key === 'Escape' && state.outlinePaletteOpen) {
+        setOutlinePaletteOpen(false)
+        return
+      }
       // ⌘1 — toggle sidebar
       if (mod && (e.key === '1' || e.code === 'Digit1')) {
         e.preventDefault()
@@ -190,7 +197,7 @@ function App(): JSX.Element {
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [setBufferPaletteOpen, setCommandPaletteOpen, setSearchOpen])
+  }, [setBufferPaletteOpen, setCommandPaletteOpen, setOutlinePaletteOpen, setSearchOpen])
 
   if (!vault) {
     return (
@@ -213,6 +220,7 @@ function App(): JSX.Element {
       {searchOpen && <SearchPalette />}
       {commandPaletteOpen && <CommandPalette />}
       {bufferPaletteOpen && <BufferPalette />}
+      {outlinePaletteOpen && <OutlinePalette />}
       {settingsOpen && <SettingsModal />}
       <PromptHost />
       <VimNav />
