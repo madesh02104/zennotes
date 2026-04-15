@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { isHelpViewActive, isTagsViewActive, isTasksViewActive, useStore } from '../store'
+import { isHelpViewActive, isTagsViewActive, isTasksViewActive, isTrashViewActive, useStore } from '../store'
 import { extractTags } from '../lib/tags'
 import type { FolderEntry, NoteFolder, NoteMeta } from '@shared/ipc'
 import type { NoteSortOrder } from '../store'
+import { isTrashTabPath } from '@shared/trash'
 import {
   ArchiveIcon,
   ArrowUpRightIcon,
@@ -53,6 +54,8 @@ export function Sidebar(): JSX.Element {
   const tasksViewActive = useStore(isTasksViewActive)
   const openHelpView = useStore((s) => s.openHelpView)
   const helpViewActive = useStore(isHelpViewActive)
+  const openTrashView = useStore((s) => s.openTrashView)
+  const trashViewActive = useStore(isTrashViewActive)
   const openTagView = useStore((s) => s.openTagView)
   const selectedTags = useStore((s) => s.selectedTags)
   const tagsViewActive = useStore(isTagsViewActive)
@@ -274,6 +277,27 @@ export function Sidebar(): JSX.Element {
     const { folder, subpath } = folderMenu
     const isTop = subpath === ''
     const label = isTop ? folder : subpath.split('/').slice(-1)[0]
+    const trashCount = notes.filter((note) => note.folder === 'trash').length
+
+    if (folder === 'trash' && isTop) {
+      return [
+        {
+          label: 'Empty Trash…',
+          icon: <TrashIcon />,
+          danger: true,
+          disabled: trashCount === 0,
+          onSelect: async () => {
+            const ok = window.confirm(
+              `Delete ${trashCount} trashed note${trashCount === 1 ? '' : 's'} permanently? This cannot be undone.`
+            )
+            if (!ok) return
+            await window.zen.emptyTrash()
+            await refreshNotes()
+            if (selectedPath?.startsWith('trash/')) await selectNote(null)
+          }
+        }
+      ]
+    }
 
     const items: ContextMenuItem[] = [
       {
@@ -402,6 +426,7 @@ export function Sidebar(): JSX.Element {
     return items
   }, [
     folderMenu,
+    notes,
     vault,
     createAndOpen,
     createFolderAction,
@@ -409,6 +434,9 @@ export function Sidebar(): JSX.Element {
     deleteFolderAction,
     duplicateFolderAction,
     revealFolderAction,
+    refreshNotes,
+    selectedPath,
+    selectNote,
     prompt
   ])
 
@@ -666,7 +694,14 @@ export function Sidebar(): JSX.Element {
         ) as HTMLElement | null
       }
 
+      if (trashViewActive) {
+        return document.querySelector('[data-sidebar-type="trash"]') as HTMLElement | null
+      }
+
       if (selectedPath && unifiedSidebar) {
+        if (isTrashTabPath(selectedPath) || selectedPath.startsWith('trash/')) {
+          return document.querySelector('[data-sidebar-type="trash"]') as HTMLElement | null
+        }
         const noteEl = document.querySelector(
           `[data-sidebar-path="${escapeForAttr(selectedPath)}"]`
         ) as HTMLElement | null
@@ -707,7 +742,7 @@ export function Sidebar(): JSX.Element {
     requestAnimationFrame(() => {
       target.scrollIntoView({ block: 'nearest' })
     })
-  }, [isSidebarFocused, selectedPath, unifiedSidebar, view])
+  }, [isSidebarFocused, selectedPath, unifiedSidebar, view, tagsViewActive, selectedTags, trashViewActive])
 
   return (
     <aside
@@ -921,29 +956,16 @@ export function Sidebar(): JSX.Element {
           groupByKind={groupByKind}
         />
 
-        <FolderTreeRoot
-          label="Trash"
-          icon={<TrashIcon />}
-          folder="trash"
-          tree={trees.trash}
-          isFolderActive={isFolderActive}
-          collapsed={collapsed}
-          toggleCollapse={toggleCollapse}
-          setView={setView}
-          onContextMenu={openFolderMenu}
-          showNotes={unifiedSidebar}
-          selectedPath={selectedPath}
-          onSelectNote={(p) => void selectNote(p)}
-          onNoteContextMenu={(e, n) => {
-            e.preventDefault()
-            setNoteMenu({ x: e.clientX, y: e.clientY, path: n.path })
+        <TrashSidebarRow
+          count={countNotesInTree(trees.trash)}
+          active={trashViewActive || !!selectedPath?.startsWith('trash/')}
+          onClick={() => {
+            void openTrashView()
           }}
-          sortComparator={treeSortComparator}
-          onDropOnFolder={handleDropOnFolder}
-          idxCounter={idxCounter.current}
-          vimCursor={vimCursor}
+          onContextMenu={(e) => openFolderMenu(e, 'trash', '')}
+          sidebarIdx={idxCounter.current.value++}
+          vimHighlight={vimCursor === idxCounter.current.value - 1}
           sidebarFocused={isSidebarFocused}
-          groupByKind={groupByKind}
         />
 
         {/* Tag pills */}
@@ -1022,16 +1044,17 @@ export function Sidebar(): JSX.Element {
 
       {/* Footer — vault-level utilities. Kept deliberately small so the
        *  main tree area dominates; Help and Settings are also reachable
-       *  from the command palette and (for Settings) ⌘,. Trash moved
-       *  into the main tree above so its notes can be browsed inline. */}
+       *  from the command palette and (for Settings) ⌘,. Trash lives in
+       *  the main tree above and opens its dedicated recovery view. */}
       <div
-        className="mt-2 flex items-center gap-0.5 px-3 py-2"
+        className="mt-2 grid min-h-[52px] grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 px-3 py-3"
         style={{ borderTop: '1px solid var(--glass-stroke)' }}
       >
         {hasAssetsDir && (
-          <SidebarFooterIcon
+          <SidebarFooterAction
             icon={<FolderIcon open={false} />}
-            label={`Attachments (${assetFiles.length})`}
+            label="Assets"
+            count={assetFiles.length}
             onClick={() => void revealAssetsDir()}
             sidebarIdx={idxCounter.current.value++}
             vimHighlight={vimCursor === idxCounter.current.value - 1}
@@ -1039,8 +1062,8 @@ export function Sidebar(): JSX.Element {
             sidebarData={{ type: 'assets' }}
           />
         )}
-        <div className="flex-1" />
-        <SidebarFooterIcon
+        {!hasAssetsDir && <div />}
+        <SidebarFooterAction
           icon={<DocumentIcon />}
           label="Help"
           active={helpViewActive}
@@ -1050,9 +1073,9 @@ export function Sidebar(): JSX.Element {
           sidebarFocused={isSidebarFocused}
           sidebarData={{ type: 'help' }}
         />
-        <SidebarFooterIcon
+        <SidebarFooterAction
           icon={<SettingsIcon />}
-          label="Settings (⌘,)"
+          label="Prefs"
           onClick={() => setSettingsOpen(true)}
           sidebarIdx={idxCounter.current.value++}
           vimHighlight={vimCursor === idxCounter.current.value - 1}
@@ -1835,6 +1858,81 @@ function TaskSidebarRow({
   )
 }
 
+function TrashSidebarRow({
+  count,
+  active,
+  onClick,
+  onContextMenu,
+  sidebarIdx,
+  vimHighlight,
+  sidebarFocused = false
+}: {
+  count: number
+  active: boolean
+  onClick: () => void
+  onContextMenu?: (e: React.MouseEvent) => void
+  sidebarIdx?: number
+  vimHighlight?: boolean
+  sidebarFocused?: boolean
+}): JSX.Element {
+  const strongActive = active && (!sidebarFocused || !!vimHighlight)
+
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onClick}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onClick()
+        }
+      }}
+      onContextMenu={onContextMenu}
+      className={[
+        'group flex h-8 items-center gap-1.5 rounded-lg px-1 text-left text-sm outline-none transition-colors focus:outline-none',
+        active
+          ? vimHighlight
+            ? 'vim-cursor-on-active bg-accent text-white'
+            : sidebarFocused
+              ? 'text-accent'
+              : 'bg-accent text-white'
+          : vimHighlight
+            ? 'vim-cursor'
+            : 'text-ink-800 hover:bg-paper-200/70'
+      ].join(' ')}
+      style={{ paddingLeft: 4 }}
+      {...(sidebarIdx != null
+        ? {
+            'data-sidebar-idx': sidebarIdx,
+            'data-sidebar-type': 'trash'
+          }
+        : {
+            'data-sidebar-type': 'trash'
+          })}
+    >
+      <span className="h-5 w-5 shrink-0" />
+      <span className={strongActive ? 'text-white' : 'text-ink-500 group-hover:text-ink-800'}>
+        <TrashIcon />
+      </span>
+      <span className="flex-1 truncate">Trash</span>
+      {sidebarFocused && vimHighlight && (
+        <RowKeyHint active={active} keyLabel="m" compact={count > 0} />
+      )}
+      {count > 0 && (
+        <span
+          className={[
+            'shrink-0 pr-2 text-xs',
+            strongActive ? 'text-white/80' : 'text-ink-400'
+          ].join(' ')}
+        >
+          {count}
+        </span>
+      )}
+    </div>
+  )
+}
+
 function SidebarRow({
   icon,
   label,
@@ -1906,13 +2004,13 @@ function SidebarRow({
   )
 }
 
-/** Compact icon button used in the sidebar footer. Same vim-nav
- *  wiring as SidebarRow (sidebarIdx / sidebarData), but rendered as a
- *  square icon so three utilities (Attachments, Help, Settings) fit
- *  on one row without crowding. */
-function SidebarFooterIcon({
+/** Compact labeled action used in the sidebar footer. Same vim-nav
+ *  wiring as SidebarRow (sidebarIdx / sidebarData), but kept short so
+ *  vault utilities stay legible without stealing space from the tree. */
+function SidebarFooterAction({
   icon,
   label,
+  count,
   active,
   onClick,
   sidebarIdx,
@@ -1922,6 +2020,7 @@ function SidebarFooterIcon({
 }: {
   icon: JSX.Element
   label: string
+  count?: number
   active?: boolean
   onClick: () => void
   sidebarIdx?: number
@@ -1937,7 +2036,7 @@ function SidebarFooterIcon({
       title={label}
       aria-label={label}
       className={[
-        'flex h-7 w-7 items-center justify-center rounded-md transition-colors',
+        'inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[11px] font-medium leading-none transition-colors whitespace-nowrap',
         active
           ? vimHighlight
             ? 'vim-cursor-on-active bg-accent text-white'
@@ -1955,7 +2054,22 @@ function SidebarFooterIcon({
           }
         : {})}
     >
-      <span className={strongActive ? 'text-white' : undefined}>{icon}</span>
+      <span className={['shrink-0', strongActive ? 'text-white' : ''].join(' ')}>
+        {icon}
+      </span>
+      <span className="truncate">{label}</span>
+      {typeof count === 'number' && (
+        <span
+          className={[
+            'rounded-full px-1.5 py-0.5 text-[10px]',
+            strongActive
+              ? 'bg-white/12 text-white/80'
+              : 'bg-paper-200/80 text-ink-500'
+          ].join(' ')}
+        >
+          {count}
+        </span>
+      )}
     </button>
   )
 }

@@ -7,8 +7,8 @@
  *
  * The exported extension bundles three pieces:
  *   - `foldService`: the semantic range calculator so CodeMirror's
- *     built-in fold commands (vim `z c` / `z o`, the :fold ex command)
- *     know what to collapse.
+ *     fold commands (our vim `zc` / `zo` mappings, the `:fold`
+ *     ex command) know what to collapse.
  *   - A `ViewPlugin` that adds an inline ▾ arrow to each heading's
  *     line start and a line-decoration class marking the cursor line.
  *   - No fold gutter — the full-document gutter would show chevrons
@@ -165,7 +165,7 @@ function buildDecorations(view: EditorView): DecorationSet {
       // highlight is already provided by the built-in
       // `highlightActiveLine()` extension, which stamps `cm-activeLine`
       // on whichever row the caret is on — we combine the two in CSS.
-      const classes = ['cm-heading-line']
+      const classes = ['cm-heading-line', `cm-heading-line-h${level}`]
       if (isFolded) classes.push('cm-heading-line-folded')
       builder.push({
         from: line.from,

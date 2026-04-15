@@ -276,6 +276,7 @@ function registerVimCommands(): void {
  * - `:bd[elete]`, `:bc`  close the active tab (alias for `:q` on notes)
  * - `:buffers`, `:ls`    open the buffer switcher
  * - `:outline`            open the heading outline palette
+ * - `:trash`              open the Trash view
  * - `:only`              close every other tab in the active pane
  * - `:qa[ll]`            close every tab, everywhere
  * - `:h[elp]`            open the built-in Help manual
@@ -462,16 +463,29 @@ function registerVimNoteCommands(): void {
     void useStore.getState().openHelpView()
   })
 
+  Vim.defineEx('trash', 'trash', () => {
+    void useStore.getState().openTrashView()
+  })
+
   // Heading fold helpers — wrap CodeMirror's commands so they work on
   // whichever pane currently owns the editor. `:fold` / `:unfold` act
   // on the current heading; `:foldall` / `:unfoldall` cover the whole
-  // note. Vim's own `zc` / `zo` / `zM` / `zR` keys still work too.
+  // note. We map vim's `zc` / `zo` / `zM` / `zR` keys explicitly so the
+  // advertised fold chords work regardless of what CM-Vim ships by default.
   const runFold = (cmd: (view: { state: unknown; dispatch: unknown }) => boolean): void => {
     const view = useStore.getState().editorViewRef
     if (!view) return
     cmd(view as unknown as Parameters<typeof foldCode>[0])
     view.focus()
   }
+  Vim.defineAction('foldHeadingAtCursor', () => runFold(foldCode as never))
+  Vim.defineAction('unfoldHeadingAtCursor', () => runFold(unfoldCode as never))
+  Vim.defineAction('foldAllHeadings', () => runFold(foldAll as never))
+  Vim.defineAction('unfoldAllHeadings', () => runFold(unfoldAll as never))
+  Vim.mapCommand('zc', 'action', 'foldHeadingAtCursor', {}, { context: 'normal' })
+  Vim.mapCommand('zo', 'action', 'unfoldHeadingAtCursor', {}, { context: 'normal' })
+  Vim.mapCommand('zM', 'action', 'foldAllHeadings', {}, { context: 'normal' })
+  Vim.mapCommand('zR', 'action', 'unfoldAllHeadings', {}, { context: 'normal' })
   Vim.defineEx('fold', 'fold', () => runFold(foldCode as never))
   Vim.defineEx('unfold', 'unfold', () => runFold(unfoldCode as never))
   Vim.defineEx('foldall', 'foldall', () => runFold(foldAll as never))
@@ -523,6 +537,7 @@ const MANUAL_EX_NAMES = new Set([
   'buffers',
   'ls',
   'outline',
+  'trash',
   'fold',
   'unfold',
   'foldall',

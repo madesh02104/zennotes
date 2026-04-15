@@ -20,6 +20,7 @@ import {
 import { isHelpTabPath } from '@shared/help'
 import { isTagsTabPath } from '@shared/tags'
 import { isTasksTabPath } from '@shared/tasks'
+import { isTrashTabPath } from '@shared/trash'
 
 interface BufferEntry {
   path: string
@@ -102,6 +103,19 @@ function buildEntries(deps: BuildDeps): BufferEntry[] {
         title: 'Help',
         subtitle: 'Built-in manual and shortcuts',
         keywords: 'help manual docs shortcuts vim virtual',
+        badge,
+        current: isCurrent,
+        dirty: false,
+        virtual: true
+      })
+      return
+    }
+    if (isTrashTabPath(path)) {
+      entries.push({
+        path,
+        title: 'Trash',
+        subtitle: 'Deleted notes and recovery',
+        keywords: 'trash deleted restore bin recovery virtual',
         badge,
         current: isCurrent,
         dirty: false,

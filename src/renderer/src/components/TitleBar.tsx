@@ -3,6 +3,7 @@ import { useStore } from '../store'
 import { isTasksTabPath } from '@shared/tasks'
 import { isTagsTabPath } from '@shared/tags'
 import { isHelpTabPath } from '@shared/help'
+import { isTrashTabPath } from '@shared/trash'
 
 export function TitleBar(): JSX.Element {
   const vault = useStore((s) => s.vault)
@@ -22,6 +23,8 @@ export function TitleBar(): JSX.Element {
         ? 'Tags'
         : isHelpTabPath(selectedPath)
           ? 'Help'
+          : isTrashTabPath(selectedPath)
+            ? 'Trash'
           : vault
             ? vault.name
             : 'ZenNotes'

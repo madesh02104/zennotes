@@ -2167,18 +2167,38 @@ textarea,
  * or when the heading is folded (so the user can always unfold). */
 .cm-editor .cm-heading-line {
   position: relative;
+  --z-heading-fold-first-line: calc(var(--z-editor-font-size, 16px) * 1.25);
+}
+.cm-editor .cm-heading-line-h1 {
+  --z-heading-fold-first-line: calc(var(--z-editor-font-size, 16px) * 2.5);
+}
+.cm-editor .cm-heading-line-h2 {
+  --z-heading-fold-first-line: calc(var(--z-editor-font-size, 16px) * 2);
+}
+.cm-editor .cm-heading-line-h3 {
+  --z-heading-fold-first-line: calc(var(--z-editor-font-size, 16px) * 1.625);
+}
+.cm-editor .cm-heading-line-h4 {
+  --z-heading-fold-first-line: calc(var(--z-editor-font-size, 16px) * 1.4375);
+}
+.cm-editor .cm-heading-line-h5 {
+  --z-heading-fold-first-line: calc(var(--z-editor-font-size, 16px) * 1.25);
+}
+.cm-editor .cm-heading-line-h6 {
+  --z-heading-fold-first-line: calc(var(--z-editor-font-size, 16px) * 1.15);
 }
 .cm-heading-fold-arrow {
+  --z-heading-fold-arrow-size: 20px;
   position: absolute;
-  left: -22px;
-  top: 50%;
-  transform: translateY(-50%);
+  left: -24px;
+  top: calc((var(--z-heading-fold-first-line) - var(--z-heading-fold-arrow-size)) / 2);
+  transform: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
-  font-size: 14px;
+  width: var(--z-heading-fold-arrow-size);
+  height: var(--z-heading-fold-arrow-size);
+  font-size: 16px;
   line-height: 1;
   color: rgb(var(--z-ink-400));
   opacity: 0;
@@ -2211,16 +2231,17 @@ textarea,
   position: relative;
 }
 .prose-zen .prose-heading-fold-arrow {
+  --z-heading-fold-arrow-size: 24px;
   position: absolute;
-  left: -28px;
-  top: 50%;
-  transform: translateY(-50%);
+  left: -30px;
+  top: calc((1.25em - var(--z-heading-fold-arrow-size)) / 2);
+  transform: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
-  font-size: 14px;
+  width: var(--z-heading-fold-arrow-size);
+  height: var(--z-heading-fold-arrow-size);
+  font-size: 16px;
   line-height: 1;
   color: rgb(var(--z-ink-400));
   opacity: 0;

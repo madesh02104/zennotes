@@ -925,7 +925,7 @@ export function VimNav(): JSX.Element | null {
     } else if (itemType === 'settings') {
       state.setSettingsOpen(true)
     } else if (itemType === 'trash') {
-      state.setView({ kind: 'folder', folder: 'trash', subpath: '' })
+      void state.openTrashView()
     }
   }
 

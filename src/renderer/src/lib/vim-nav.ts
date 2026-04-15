@@ -140,6 +140,8 @@ export function flattenSidebarItems(
     }
   }
 
+  items.push({ type: 'trash' })
+
   // Tags
   for (const [tag] of tags) {
     items.push({ type: 'tag', tag })
@@ -148,7 +150,6 @@ export function flattenSidebarItems(
   // Footer
   items.push({ type: 'help' })
   items.push({ type: 'settings' })
-  items.push({ type: 'trash' })
 
   return items
 }

@@ -55,9 +55,11 @@ import { ContextMenu, type ContextMenuItem } from './ContextMenu'
 import { TasksView } from './TasksView'
 import { TagView } from './TagView'
 import { HelpView } from './HelpView'
+import { TrashView } from './TrashView'
 import { isTasksTabPath } from '@shared/tasks'
 import { isTagsTabPath } from '@shared/tags'
 import { isHelpTabPath } from '@shared/help'
+import { isTrashTabPath } from '@shared/trash'
 import { hasZenItem, readDragPayload, setDragPayload, type DragPayload } from '../lib/dnd'
 import {
   getImageBlockDropPlacement,
@@ -232,6 +234,7 @@ export function EditorPane({ pane }: { pane: PaneLeaf }): JSX.Element {
   const wordWrapCompartmentRef = useRef<Compartment | null>(null)
   const ignoreEditorScrollRef = useRef(false)
   const ignorePreviewScrollRef = useRef(false)
+  const pendingOutlineJumpLineRef = useRef<number | null>(null)
   /**
    * Path currently rendered in this pane's CodeMirror view. The CM update
    * listener writes through to `noteContents[viewPathRef.current]`; the
@@ -278,14 +281,58 @@ export function EditorPane({ pane }: { pane: PaneLeaf }): JSX.Element {
     return () => window.removeEventListener('zen:toggle-outline', handler)
   }, [isActive, toggleOutlinePanel])
 
-  const jumpToOutlineLine = useCallback((line: number) => {
+  const commitOutlineJump = useCallback((line: number) => {
     const view = viewRef.current
-    if (!view) return
+    if (!view) return false
     const safeLine = Math.min(Math.max(1, line), view.state.doc.lines)
     const pos = view.state.doc.line(safeLine).from
-    view.dispatch({ selection: { anchor: pos }, scrollIntoView: true })
+    view.dispatch({
+      selection: { anchor: pos },
+      effects: EditorView.scrollIntoView(pos, { y: 'start', yMargin: 0 })
+    })
+    setFocusedPanel('editor')
     view.focus()
-  }, [])
+    return true
+  }, [setFocusedPanel])
+
+  const jumpToOutlineLine = useCallback((line: number) => {
+    pendingOutlineJumpLineRef.current = line
+    setActivePane(paneId)
+    setFocusedPanel('editor')
+    if (mode === 'preview' || !viewRef.current) {
+      setMode('edit')
+      return
+    }
+    if (commitOutlineJump(line)) {
+      pendingOutlineJumpLineRef.current = null
+    }
+  }, [commitOutlineJump, mode, paneId, setActivePane, setFocusedPanel])
+
+  useEffect(() => {
+    const pendingLine = pendingOutlineJumpLineRef.current
+    if (pendingLine == null) return
+    if (!isActive || mode === 'preview' || !content) return
+    const raf = requestAnimationFrame(() => {
+      if (commitOutlineJump(pendingLine)) {
+        pendingOutlineJumpLineRef.current = null
+      }
+    })
+    return () => cancelAnimationFrame(raf)
+  }, [commitOutlineJump, content?.path, isActive, mode])
+
+  // `zen:outline-jump` lets global UI like the searchable outline
+  // overlay route the jump through the active pane, which can switch
+  // out of preview mode before placing the caret.
+  useEffect(() => {
+    if (!isActive) return
+    const handler = (event: Event): void => {
+      const line = (event as CustomEvent<{ line?: number }>).detail?.line
+      if (typeof line !== 'number') return
+      jumpToOutlineLine(line)
+    }
+    window.addEventListener('zen:outline-jump', handler)
+    return () => window.removeEventListener('zen:outline-jump', handler)
+  }, [isActive, jumpToOutlineLine])
 
   // Mount / unmount the CodeMirror view via a callback ref on the host
   // div. The callback identity is stable so React only invokes it on
@@ -294,7 +341,14 @@ export function EditorPane({ pane }: { pane: PaneLeaf }): JSX.Element {
   const setContainerRef = useCallback(
     (el: HTMLDivElement | null) => {
       if (!el) {
-        viewRef.current?.destroy()
+        const existingView = viewRef.current
+        if (
+          existingView &&
+          useStore.getState().editorViewRef === existingView
+        ) {
+          setEditorViewRef(null)
+        }
+        existingView?.destroy()
         viewRef.current = null
         return
       }
@@ -769,7 +823,8 @@ export function EditorPane({ pane }: { pane: PaneLeaf }): JSX.Element {
             pinned: pinnedSet.has(path),
             isTasks: true,
             isTag: false,
-            isHelp: false
+            isHelp: false,
+            isTrash: false
           }
         }
         if (isTagsTabPath(path)) {
@@ -779,7 +834,8 @@ export function EditorPane({ pane }: { pane: PaneLeaf }): JSX.Element {
             pinned: pinnedSet.has(path),
             isTasks: false,
             isTag: true,
-            isHelp: false
+            isHelp: false,
+            isTrash: false
           }
         }
         if (isHelpTabPath(path)) {
@@ -789,7 +845,19 @@ export function EditorPane({ pane }: { pane: PaneLeaf }): JSX.Element {
             pinned: pinnedSet.has(path),
             isTasks: false,
             isTag: false,
-            isHelp: true
+            isHelp: true,
+            isTrash: false
+          }
+        }
+        if (isTrashTabPath(path)) {
+          return {
+            path,
+            title: 'Trash',
+            pinned: pinnedSet.has(path),
+            isTasks: false,
+            isTag: false,
+            isHelp: false,
+            isTrash: true
           }
         }
         const meta = path === content?.path ? content : notes.find((n) => n.path === path)
@@ -800,7 +868,8 @@ export function EditorPane({ pane }: { pane: PaneLeaf }): JSX.Element {
           pinned: pinnedSet.has(path),
           isTasks: false,
           isTag: false,
-          isHelp: false
+          isHelp: false,
+          isTrash: false
         }
       })
     },
@@ -862,9 +931,9 @@ export function EditorPane({ pane }: { pane: PaneLeaf }): JSX.Element {
       ]
     }
 
-    // Tags and Help tabs share the same virtual-tab menu shape: close,
-    // close relatives, or split them into another pane.
-    if (isTagsTabPath(path) || isHelpTabPath(path)) {
+    // Tags, Help, and Trash tabs share the same virtual-tab menu shape:
+    // close, close relatives, or split them into another pane.
+    if (isTagsTabPath(path) || isHelpTabPath(path) || isTrashTabPath(path)) {
       return [
         { label: 'Close', onSelect: async () => closeTabInPane(paneId, path) },
         {
@@ -957,9 +1026,10 @@ export function EditorPane({ pane }: { pane: PaneLeaf }): JSX.Element {
       isTasks: boolean
       isTag: boolean
       isHelp: boolean
+      isTrash: boolean
     }) => {
       const active = tab.path === activeTab
-      const isVirtual = tab.isTasks || tab.isTag || tab.isHelp
+      const isVirtual = tab.isTasks || tab.isTag || tab.isHelp || tab.isTrash
       return (
         <div
           key={tab.path}
@@ -1063,6 +1133,9 @@ export function EditorPane({ pane }: { pane: PaneLeaf }): JSX.Element {
               )}
               {tab.isHelp && (
                 <DocumentIcon width={13} height={13} className="shrink-0 text-accent" />
+              )}
+              {tab.isTrash && (
+                <TrashIcon width={13} height={13} className="shrink-0 text-accent" />
               )}
               <span className="min-w-0 flex-1 truncate">{tab.title}</span>
             </button>
@@ -1261,6 +1334,8 @@ export function EditorPane({ pane }: { pane: PaneLeaf }): JSX.Element {
             <TagView />
           ) : isHelpTabPath(activeTab) ? (
             <HelpView />
+          ) : isTrashTabPath(activeTab) ? (
+            <TrashView />
           ) : content ? (
             <div
               className={[

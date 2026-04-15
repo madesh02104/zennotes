@@ -41,12 +41,17 @@ export const HELP_QUICK_START: HelpCard[] = [
   {
     title: 'Capture, organize, archive',
     body:
-      'Quick Notes are for fast capture, Inbox is active work, Archive is cold storage, and Trash is recoverable deletion. Inbox and Archive support nested folders.'
+      'Quick Notes are for fast capture, Inbox is active work, Archive is cold storage, and Trash is recoverable deletion. Inbox and Archive support nested folders, while Trash opens as a dedicated main-pane recovery view so the sidebar stays singular.'
   },
   {
     title: 'Stay keyboard-first',
     body:
       'Search notes with Cmd+P, open the command palette with Shift+Cmd+P, and use Vim mode for ex commands, pane motion, hint mode, and link-following.'
+  },
+  {
+    title: 'Use the built-in manual',
+    body:
+      'Open Help from the sidebar footer or with `:help` to browse shortcuts, commands, panel behavior, Vim flows, and settings in one place.'
   }
 ]
 
@@ -59,12 +64,12 @@ export const HELP_CORE_CONCEPTS: HelpCard[] = [
   {
     title: 'Tabs and splits are first-class',
     body:
-      'Each editor pane can hold multiple tabs. Split the current tab right or down, move between panes with Ctrl-w motions, and keep different notes visible at once.'
+      'Each editor pane can hold multiple tabs. Split the current tab right or down, move between panes with Ctrl-w motions, and, if you hide tabs, use the buffer switcher with `Space o` or `:buffers`.'
   },
   {
-    title: 'Tasks and tags are vault-wide views',
+    title: 'Tasks, tags, and trash are vault-wide views',
     body:
-      'Tasks is a virtual tab that scans every note for checkboxes. Tags is another virtual tab that lets you browse notes matching any selected tag.'
+      'Tasks scans every note for checkboxes, Tags lets you browse notes matching any selected tag, and Trash gives you a dedicated recovery surface for deleted notes without turning the left rail into a second browser.'
   },
   {
     title: 'Reference and connections support research-heavy work',
@@ -80,6 +85,11 @@ export const HELP_CORE_CONCEPTS: HelpCard[] = [
     title: 'Attachments stay local',
     body:
       'Drop files into a note to insert local assets. ZenNotes tracks the attachments folder, can reveal it from the app, and treats PDFs specially in preview and reference workflows.'
+  },
+  {
+    title: 'Footer actions expose utility views',
+    body:
+      'The sidebar footer gives you direct access to Attachments, Help, and Preferences, so utility screens stay discoverable even when you are new to the app.'
   }
 ]
 
@@ -114,8 +124,8 @@ export const HELP_SHORTCUT_SECTIONS: HelpShortcutSection[] = [
       { keys: 'Space e', action: 'Toggle left sidebar', detail: 'Show or hide the folder/tag sidebar without touching the mouse.' },
       { keys: 'Space p', action: 'Note outline', detail: 'Jump to any heading in the active note via a searchable overlay.' },
       { keys: '⌘3', action: 'Toggle outline panel', detail: 'Show or hide the persistent outline in the active pane.' },
-      { keys: 'z c / z o', action: 'Fold / unfold heading', detail: 'Collapse or expand the section below the heading at the cursor.' },
-      { keys: 'z M / z R', action: 'Fold / unfold all', detail: 'Collapse or expand every heading section in the note.' },
+      { keys: 'zc / zo', action: 'Fold / unfold heading', detail: 'Collapse or expand the section below the heading at the cursor.' },
+      { keys: 'zM / zR', action: 'Fold / unfold all', detail: 'Collapse or expand every heading section in the note.' },
       { keys: 'Ctrl-o', action: 'Go back', detail: 'Jump to the previous note location in history.' },
       { keys: 'Ctrl-i', action: 'Go forward', detail: 'Jump forward in note history.' },
       { keys: 'f', action: 'Hint mode', detail: 'Show jump labels for clickable targets when you are not in insert mode.' }
@@ -150,17 +160,19 @@ export const HELP_SHORTCUT_SECTIONS: HelpShortcutSection[] = [
     ]
   },
   {
-    id: 'tasks-and-tags',
-    title: 'Tasks and tags views',
-    description: 'Virtual tabs get their own keyboard loops.',
+    id: 'tasks-tags-trash',
+    title: 'Tasks, tags, and trash views',
+    description: 'These virtual views each run their own keyboard loop in the main pane.',
     items: [
-      { keys: 'j / k', action: 'Move row cursor', detail: 'Step through task rows or tagged notes.' },
+      { keys: 'j / k', action: 'Move row cursor', detail: 'Step through task rows, tagged notes, or trashed notes.' },
       { keys: 'g g / G', action: 'Jump to top or bottom', detail: 'Move to the first or last visible result.' },
-      { keys: 'Enter / o', action: 'Open current result', detail: 'Open the selected task source note or tagged note.' },
+      { keys: 'Enter / o', action: 'Open current result', detail: 'Open the selected task source note, tagged note, or trashed note.' },
       { keys: 'Space / x', action: 'Toggle task', detail: 'Tasks view only: check or uncheck the selected task.' },
-      { keys: '/', action: 'Filter the view', detail: 'Focus the local filter box for tasks or tag matches.' },
+      { keys: 'r', action: 'Restore trashed note', detail: 'Trash view only: restore the selected trashed note.' },
+      { keys: 'x / d', action: 'Delete forever', detail: 'Trash view only: permanently delete the selected trashed note after confirmation.' },
+      { keys: '/', action: 'Filter the view', detail: 'Focus the local filter box for tasks, tag matches, or trashed notes.' },
       { keys: ':', action: 'Open local ex prompt', detail: 'Run the view-specific command line inside Tasks or Tags.' },
-      { keys: 'Esc', action: 'Close or clear', detail: 'Clear the filter first, then close the view on a second press.' }
+      { keys: 'Esc', action: 'Close or clear', detail: 'Clear the filter first, then close the active virtual view on a second press.' }
     ]
   }
 ]
@@ -179,7 +191,7 @@ export const HELP_VIM_COMMANDS: HelpExCommand[] = [
   {
     command: ':wq',
     summary: 'Save and close',
-    detail: 'Writes the current note, then closes it. On Tasks or Tags it just closes.'
+    detail: 'Writes the current note, then closes it. On virtual views like Tasks, Tags, Help, or Trash it just closes.'
   },
   {
     command: ':format',
@@ -195,6 +207,11 @@ export const HELP_VIM_COMMANDS: HelpExCommand[] = [
     command: ':tag foo bar',
     summary: 'Open Tags with a selection',
     detail: 'Open the Tags view and replace the selected tag set with the given tags.'
+  },
+  {
+    command: ':trash',
+    summary: 'Open Trash',
+    detail: 'Open the built-in Trash recovery view in the active pane.'
   },
   {
     command: ':split / :vsplit',
@@ -289,12 +306,12 @@ export const HELP_VIM_COMMANDS: HelpExCommand[] = [
   {
     command: ':fold / :unfold',
     summary: 'Toggle the heading at the cursor',
-    detail: 'Collapse or expand the section beneath the heading at the current line. Same as vim `z c` / `z o`.'
+    detail: 'Collapse or expand the section beneath the heading at the current line. Same as vim `zc` / `zo`.'
   },
   {
     command: ':foldall / :unfoldall',
     summary: 'Fold every heading',
-    detail: 'Collapse or expand every heading section at once. Same as vim `z M` / `z R`.'
+    detail: 'Collapse or expand every heading section at once. Same as vim `zM` / `zR`.'
   }
 ]
 

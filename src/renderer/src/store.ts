@@ -13,6 +13,7 @@ import type { VaultTask } from '@shared/tasks'
 import { TASKS_TAB_PATH, isTasksTabPath } from '@shared/tasks'
 import { TAGS_TAB_PATH, isTagsTabPath } from '@shared/tags'
 import { HELP_TAB_PATH, isHelpTabPath } from '@shared/help'
+import { TRASH_TAB_PATH, isTrashTabPath } from '@shared/trash'
 import { toggleTaskAtIndex } from '@shared/tasklists'
 import { DEFAULT_THEME_ID, THEMES, type ThemeFamily, type ThemeMode } from './lib/themes'
 import { formatMarkdown } from './lib/format-markdown'
@@ -648,6 +649,15 @@ export function isHelpViewActive(state: {
   return leaf?.activeTab === HELP_TAB_PATH
 }
 
+/** True when the active pane's active tab is the built-in Trash view. */
+export function isTrashViewActive(state: {
+  paneLayout: PaneLayout
+  activePaneId: string
+}): boolean {
+  const leaf = findLeaf(state.paneLayout, state.activePaneId)
+  return leaf?.activeTab === TRASH_TAB_PATH
+}
+
 interface Store {
   vault: VaultInfo | null
   notes: NoteMeta[]
@@ -788,6 +798,8 @@ interface Store {
   closeTagView: () => void
   /** Open the built-in Help tab in the active pane. */
   openHelpView: () => Promise<void>
+  /** Open the built-in Trash tab in the active pane. */
+  openTrashView: () => Promise<void>
   /** Add or remove a tag from the Tags view selection without touching
    *  pane layout. No-op if the selection is already in that state. */
   toggleTagSelection: (tag: string) => void
@@ -1298,6 +1310,13 @@ export const useStore = create<Store>((set, get) => {
   openHelpView: async () => {
     const state = get()
     await get().openNoteInPane(state.activePaneId, HELP_TAB_PATH)
+    ;(document.activeElement as HTMLElement | null)?.blur?.()
+    set({ focusedPanel: 'editor' })
+  },
+
+  openTrashView: async () => {
+    const state = get()
+    await get().openNoteInPane(state.activePaneId, TRASH_TAB_PATH)
     ;(document.activeElement as HTMLElement | null)?.blur?.()
     set({ focusedPanel: 'editor' })
   },
@@ -2209,6 +2228,21 @@ export const useStore = create<Store>((set, get) => {
       return
     }
 
+    if (isTrashTabPath(path)) {
+      set((cur) => {
+        const nextLayout =
+          updateLeaf(cur.paneLayout, paneId, (l) => leafWithAddedTab(l, path)) ??
+          cur.paneLayout
+        return {
+          paneLayout: nextLayout,
+          activePaneId: paneId,
+          focusedPanel: 'editor',
+          ...activeFieldsFrom(nextLayout, paneId, cur.noteContents, cur.noteDirty)
+        }
+      })
+      return
+    }
+
     const needContent = !s.noteContents[path]
     if (needContent) {
       set({ loadingNote: paneId === s.activePaneId })
@@ -2252,8 +2286,8 @@ export const useStore = create<Store>((set, get) => {
     const s = get()
     const leaf = findLeaf(s.paneLayout, paneId)
     if (!leaf) return
-    // Tasks / Tags / Help tabs are virtual — add them without touching disk.
-    if (isTasksTabPath(path) || isTagsTabPath(path) || isHelpTabPath(path)) {
+    // Tasks / Tags / Help / Trash tabs are virtual — add them without touching disk.
+    if (isTasksTabPath(path) || isTagsTabPath(path) || isHelpTabPath(path) || isTrashTabPath(path)) {
       set((cur) => {
         const nextLayout =
           updateLeaf(cur.paneLayout, paneId, (l) => leafWithAddedTab(l, path, insertIndex)) ??
@@ -2354,7 +2388,7 @@ export const useStore = create<Store>((set, get) => {
     // Make sure content is available (it should be — source pane has it).
     let contents = s.noteContents
     let dirty = s.noteDirty
-    if (!contents[path]) {
+    if (!isTrashTabPath(path) && !contents[path]) {
       try {
         const content = await window.zen.readNote(path)
         contents = { ...contents, [path]: content }
@@ -2400,11 +2434,17 @@ export const useStore = create<Store>((set, get) => {
   },
 
   splitPaneWithTab: async ({ targetPaneId, edge, path, sourcePaneId }) => {
-    // Make sure content is loaded. Virtual tabs (Tasks, Tags, Help) skip disk I/O.
+    // Make sure content is loaded. Virtual tabs (Tasks, Tags, Help, Trash) skip disk I/O.
     const s0 = get()
     let contents = s0.noteContents
     let dirty = s0.noteDirty
-    if (!isTasksTabPath(path) && !isTagsTabPath(path) && !isHelpTabPath(path) && !contents[path]) {
+    if (
+      !isTasksTabPath(path) &&
+      !isTagsTabPath(path) &&
+      !isHelpTabPath(path) &&
+      !isTrashTabPath(path) &&
+      !contents[path]
+    ) {
       try {
         const content = await window.zen.readNote(path)
         contents = { ...contents, [path]: content }

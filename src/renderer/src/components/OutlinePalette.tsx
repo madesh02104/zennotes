@@ -13,15 +13,15 @@ import { parseOutline, type OutlineItem } from '../lib/outline'
 import { isHelpTabPath } from '@shared/help'
 import { isTagsTabPath } from '@shared/tags'
 import { isTasksTabPath } from '@shared/tasks'
+import { isTrashTabPath } from '@shared/trash'
 
 function isVirtualPath(path: string | null): boolean {
   if (!path) return true
-  return isTasksTabPath(path) || isTagsTabPath(path) || isHelpTabPath(path)
+  return isTasksTabPath(path) || isTagsTabPath(path) || isHelpTabPath(path) || isTrashTabPath(path)
 }
 
 export function OutlinePalette(): JSX.Element {
   const setOpen = useStore((s) => s.setOutlinePaletteOpen)
-  const setFocusedPanel = useStore((s) => s.setFocusedPanel)
   const selectedPath = useStore((s) => s.selectedPath)
   const noteContents = useStore((s) => s.noteContents)
 
@@ -53,13 +53,11 @@ export function OutlinePalette(): JSX.Element {
 
   const jump = (item: OutlineItem): void => {
     setOpen(false)
-    const view = useStore.getState().editorViewRef
-    if (!view) return
-    const safeLine = Math.min(Math.max(1, item.line), view.state.doc.lines)
-    const pos = view.state.doc.line(safeLine).from
-    view.dispatch({ selection: { anchor: pos }, scrollIntoView: true })
-    setFocusedPanel('editor')
-    requestAnimationFrame(() => view.focus())
+    window.dispatchEvent(
+      new CustomEvent('zen:outline-jump', {
+        detail: { line: item.line }
+      })
+    )
   }
 
   return (

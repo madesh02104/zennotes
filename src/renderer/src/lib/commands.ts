@@ -6,7 +6,7 @@
  * reflect the store state at that moment (toggle labels flip, context-
  * sensitive commands like "Unarchive" only show up when applicable).
  */
-import { isTagsViewActive, isTasksViewActive, useStore } from '../store'
+import { isTagsViewActive, isTasksViewActive, isTrashViewActive, useStore } from '../store'
 import { promptApp } from '../components/PromptHost'
 import { focusPaneInDirection } from './pane-nav'
 import { findLeaf } from './pane-layout'
@@ -62,9 +62,10 @@ export function buildCommands(options?: { includeUnavailable?: boolean }): Comma
       keywords: 'create add write',
       when: () => {
         const v = getState().view
-        return v.kind === 'folder' && v.folder !== 'trash'
+        return v.kind === 'folder' && v.folder !== 'trash' && !isTrashViewActive(getState())
       },
       run: () => {
+        if (isTrashViewActive(getState())) return
         const v = getState().view
         if (v.kind !== 'folder') return
         return getState().createAndOpen(v.folder, v.subpath, { focusTitle: true })
@@ -350,7 +351,7 @@ export function buildCommands(options?: { includeUnavailable?: boolean }): Comma
       id: 'fold.heading',
       title: 'Fold Heading at Cursor',
       category: 'Editor',
-      shortcut: 'z c',
+      shortcut: 'zc',
       keywords: 'collapse fold heading section',
       when: () => !!getState().editorViewRef && !!getState().activeNote,
       run: () => {
@@ -365,7 +366,7 @@ export function buildCommands(options?: { includeUnavailable?: boolean }): Comma
       id: 'fold.unfold-heading',
       title: 'Unfold Heading at Cursor',
       category: 'Editor',
-      shortcut: 'z o',
+      shortcut: 'zo',
       keywords: 'expand unfold heading section',
       when: () => !!getState().editorViewRef && !!getState().activeNote,
       run: () => {
@@ -380,7 +381,7 @@ export function buildCommands(options?: { includeUnavailable?: boolean }): Comma
       id: 'fold.all',
       title: 'Fold All Headings',
       category: 'Editor',
-      shortcut: 'z M',
+      shortcut: 'zM',
       keywords: 'collapse fold all every',
       when: () => !!getState().editorViewRef && !!getState().activeNote,
       run: () => {
@@ -395,7 +396,7 @@ export function buildCommands(options?: { includeUnavailable?: boolean }): Comma
       id: 'fold.unfold-all',
       title: 'Unfold All Headings',
       category: 'Editor',
-      shortcut: 'z R',
+      shortcut: 'zR',
       keywords: 'expand unfold all every reset',
       when: () => !!getState().editorViewRef && !!getState().activeNote,
       run: () => {
@@ -533,7 +534,8 @@ export function buildCommands(options?: { includeUnavailable?: boolean }): Comma
       id: 'nav.folder.trash',
       title: 'Go to Trash',
       category: 'Go',
-      run: () => getState().setView({ kind: 'folder', folder: 'trash', subpath: '' })
+      keywords: 'trash deleted restore bin',
+      run: () => getState().openTrashView()
     },
     {
       id: 'nav.assets',
