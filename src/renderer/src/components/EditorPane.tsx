@@ -1269,10 +1269,18 @@ export function EditorPane({ pane }: { pane: PaneLeaf }): JSX.Element {
                 </div>
               )}
             </div>
-          ) : (
+          ) : loading ? (
             <div className="flex min-h-0 flex-1 items-center justify-center text-sm text-ink-400">
-              {loading ? 'Loading…' : 'Select or create a note to start writing.'}
+              Loading…
             </div>
+          ) : (
+            <EmptyPaneState
+              sidebarOpen={sidebarOpen}
+              onShowSidebar={() => {
+                toggleSidebar()
+                setFocusedPanel('sidebar')
+              }}
+            />
           )}
         </div>
         {content && connectionsOpen && isActive && <ConnectionsPanel note={content} />}
@@ -1390,6 +1398,47 @@ function PaneDropOverlay({ edge }: { edge: PaneEdge }): JSX.Element {
   return (
     <div className="pointer-events-none absolute inset-0 z-20">
       <div className={['absolute', classByEdge[edge]].join(' ')} />
+    </div>
+  )
+}
+
+function EmptyPaneState({
+  sidebarOpen,
+  onShowSidebar
+}: {
+  sidebarOpen: boolean
+  onShowSidebar: () => void
+}): JSX.Element {
+  return (
+    <div className="flex min-h-0 flex-1 items-center justify-center px-6">
+      <div className="max-w-md rounded-3xl border border-paper-300/70 bg-paper-50/35 px-6 py-6 text-center shadow-[0_18px_48px_rgba(15,23,42,0.08)] backdrop-blur-sm">
+        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl border border-paper-300/70 bg-paper-100/80 text-ink-600">
+          <PanelLeftIcon width={20} height={20} />
+        </div>
+        <h2 className="mt-4 text-base font-medium text-ink-900">
+          {sidebarOpen ? 'No note selected' : 'Sidebar hidden'}
+        </h2>
+        <p className="mt-2 text-sm leading-6 text-ink-500">
+          {sidebarOpen
+            ? 'Select a note from the sidebar, or create a new one to start writing.'
+            : 'Bring the sidebar back to browse your notes, folders, and shortcuts.'}
+        </p>
+        {!sidebarOpen && (
+          <div className="mt-5 flex items-center justify-center">
+            <button
+              type="button"
+              onClick={onShowSidebar}
+              className="inline-flex items-center gap-2 rounded-xl border border-paper-300 bg-paper-100 px-3.5 py-2 text-sm font-medium text-ink-900 transition-colors hover:bg-paper-200"
+            >
+              <PanelLeftIcon width={16} height={16} />
+              <span>Show sidebar</span>
+              <span className="rounded-md border border-paper-300/80 bg-paper-50/80 px-1.5 py-0.5 font-mono text-[11px] text-ink-500">
+                ⌘1
+              </span>
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
