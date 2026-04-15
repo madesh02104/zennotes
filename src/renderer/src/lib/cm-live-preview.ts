@@ -476,7 +476,9 @@ function computeDecorations(view: EditorView): DecorationSet {
       // Image / PDF lines still render their preview widget even when
       // the cursor is on the line. We only suppress `imageSourceHide`
       // so the raw markdown text shows alongside the widget — matching
-      // Obsidian's live-preview behaviour.
+      // Obsidian's live-preview behaviour. The widget is an inline
+      // decoration whose CSS forces block layout, so CodeMirror treats
+      // the line as one logical row (no phantom blank line beneath).
       const lineActive = activeLines.has(lineNo)
       const line = state.doc.line(lineNo)
       const parsedImage = parseStandaloneLocalImage(line.text)
@@ -488,8 +490,7 @@ function computeDecorations(view: EditorView): DecorationSet {
           from: line.from,
           to: line.from,
           deco: Decoration.widget({
-            side: -1,
-            block: true,
+            side: 1,
             widget: new LocalImageWidget(
               notePath,
               line.from,
