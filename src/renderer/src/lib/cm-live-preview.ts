@@ -486,9 +486,14 @@ function computeDecorations(view: EditorView): DecorationSet {
         const notePath = useStore.getState().activeNote?.path
         if (!notePath) continue
         replacedLines.add(lineNo)
+        // Anchor the widget at end-of-line with side:1 so the DOM
+        // order is [source text][image figure]. When the source is
+        // hidden (inactive line) only the widget remains, and when
+        // the cursor reveals the source the markdown appears above
+        // the preview — Obsidian's live-preview layout.
         pending.push({
-          from: line.from,
-          to: line.from,
+          from: line.to,
+          to: line.to,
           deco: Decoration.widget({
             side: 1,
             widget: new LocalImageWidget(
