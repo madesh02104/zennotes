@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import type { NoteMeta } from '@shared/ipc'
 import { renderMarkdown } from '../lib/markdown'
 import { useStore } from '../store'
@@ -210,6 +211,89 @@ function buildMermaidTheme(mode: 'light' | 'dark'): MermaidThemeConfig {
   }
 }
 
+type ExpandedDiagramKind = 'mermaid' | 'tikz' | 'jsxgraph' | 'function-plot'
+
+interface ExpandedDiagram {
+  kind: ExpandedDiagramKind
+  source: string
+}
+
+const DIAGRAM_CLASS_BY_KIND: Record<ExpandedDiagramKind, string> = {
+  mermaid: 'mermaid',
+  tikz: 'zen-tikz',
+  jsxgraph: 'zen-jsxgraph',
+  'function-plot': 'zen-function-plot'
+}
+
+const DIAGRAM_SOURCE_ATTR_BY_KIND: Record<ExpandedDiagramKind, string> = {
+  mermaid: 'data-mermaid-source',
+  tikz: 'data-tikz-source',
+  jsxgraph: 'data-jsxgraph-source',
+  'function-plot': 'data-function-plot-source'
+}
+
+function prepareMermaidShell(el: HTMLElement, source: string): HTMLDivElement {
+  const expanded = el.dataset.zenDiagramExpanded === 'true'
+  el.dataset.zenDiagramKind = 'mermaid'
+  el.dataset.zenDiagramSource = source
+  el.innerHTML = ''
+
+  if (!expanded) {
+    const button = document.createElement('button')
+    button.type = 'button'
+    button.className = 'zen-diagram-expand'
+    button.setAttribute('aria-label', 'Open diagram in a larger view')
+    button.textContent = 'Expand'
+    el.appendChild(button)
+  }
+
+  const surface = document.createElement('div')
+  surface.className = expanded
+    ? 'zen-diagram-surface zen-diagram-surface-expanded'
+    : 'zen-diagram-surface'
+  el.appendChild(surface)
+  return surface
+}
+
+async function renderMermaidBlocks(
+  root: HTMLElement,
+  mode: 'light' | 'dark',
+  opts: { expanded?: boolean } = {}
+): Promise<void> {
+  const blocks = Array.from(root.querySelectorAll<HTMLElement>('.mermaid'))
+  if (blocks.length === 0) return
+  const mermaid = await loadMermaid()
+  const cfg = buildMermaidTheme(mode)
+  try {
+    mermaid.initialize({
+      startOnLoad: false,
+      securityLevel: 'loose',
+      ...cfg
+    })
+  } catch {
+    /* initialize is tolerant across versions — ignore */
+  }
+
+  for (let i = 0; i < blocks.length; i++) {
+    const el = blocks[i]
+    if (opts.expanded) el.dataset.zenDiagramExpanded = 'true'
+    else delete el.dataset.zenDiagramExpanded
+    const source = el.getAttribute('data-mermaid-source') ?? el.textContent ?? ''
+    if (!source.trim()) continue
+    el.setAttribute('data-mermaid-source', source)
+    const surface = prepareMermaidShell(el, source)
+    const id = `zen-mermaid-${Date.now()}-${i}-${opts.expanded ? 'expanded' : 'inline'}`
+    try {
+      const { svg } = await mermaid.render(id, source)
+      surface.innerHTML = svg
+    } catch (err) {
+      surface.innerHTML = `<pre class="whitespace-pre-wrap text-xs text-[color:rgb(var(--z-red))]">Mermaid error: ${
+        (err as Error).message
+      }</pre>`
+    }
+  }
+}
+
 export function Preview({
   markdown,
   notePath,
@@ -258,6 +342,7 @@ export function Preview({
   const [assetMenu, setAssetMenu] = useState<
     { x: number; y: number; url: string; vaultRel: string | null; href: string } | null
   >(null)
+  const [expandedDiagram, setExpandedDiagram] = useState<ExpandedDiagram | null>(null)
 
   const html = useMemo(() => renderMarkdown(markdown), [markdown])
 
@@ -302,6 +387,17 @@ export function Preview({
 
     const onClick = (e: MouseEvent): void => {
       const target = e.target as HTMLElement
+      const expandButton = target.closest('.zen-diagram-expand') as HTMLButtonElement | null
+      if (expandButton) {
+        e.preventDefault()
+        const host = expandButton.closest<HTMLElement>(
+          '[data-zen-diagram-kind][data-zen-diagram-source]'
+        )
+        const kind = host?.dataset.zenDiagramKind as ExpandedDiagramKind | undefined
+        const source = host?.dataset.zenDiagramSource
+        if (host && kind && source) setExpandedDiagram({ kind, source })
+        return
+      }
       const anchor = target.closest('a') as HTMLAnchorElement | null
       if (!anchor) return
       if (anchor.classList.contains('wikilink')) {
@@ -425,42 +521,9 @@ export function Preview({
   useEffect(() => {
     const root = ref.current
     if (!root) return
-    const blocks = Array.from(root.querySelectorAll<HTMLElement>('.mermaid'))
-    if (blocks.length === 0) return
     let cancelled = false
-    void loadMermaid().then(async (mermaid) => {
-      if (cancelled) return
-      const cfg = buildMermaidTheme(effectiveMode)
-      try {
-        mermaid.initialize({
-          startOnLoad: false,
-          securityLevel: 'loose',
-          ...cfg
-        })
-      } catch {
-        /* initialize is tolerant across versions — ignore */
-      }
-      for (let i = 0; i < blocks.length; i++) {
-        if (cancelled) return
-        const el = blocks[i]
-        const source =
-          el.getAttribute('data-mermaid-source') ?? el.textContent ?? ''
-        if (!source.trim()) continue
-        // Persist the source in case the attribute was lost somehow — a
-        // later theme-change render needs to read it back.
-        el.setAttribute('data-mermaid-source', source)
-        const id = `zen-mermaid-${Date.now()}-${i}`
-        try {
-          const { svg } = await mermaid.render(id, source)
-          if (cancelled) return
-          el.innerHTML = svg
-        } catch (err) {
-          if (cancelled) return
-          el.innerHTML = `<pre class="whitespace-pre-wrap text-xs text-[color:rgb(var(--z-red))]">Mermaid error: ${
-            (err as Error).message
-          }</pre>`
-        }
-      }
+    void renderMermaidBlocks(root, effectiveMode).catch(() => {
+      /* render errors are surfaced inline per block */
     })
     return () => {
       cancelled = true
@@ -476,7 +539,7 @@ export function Preview({
   useEffect(() => {
     const root = ref.current
     if (!root) return
-    void renderDiagrams(root, { themeKey: effectiveMode })
+    void renderDiagrams(root, { themeKey: effectiveMode, expanded: false })
   }, [html, effectiveMode])
 
   const assetMenuItems = useMemo<ContextMenuItem[]>(() => {
@@ -525,6 +588,85 @@ export function Preview({
           onClose={closeAssetMenu}
         />
       )}
+      {expandedDiagram && (
+        <ExpandedDiagramModal
+          diagram={expandedDiagram}
+          themeKey={effectiveMode}
+          onClose={() => setExpandedDiagram(null)}
+        />
+      )}
     </>
+  )
+}
+
+function ExpandedDiagramModal({
+  diagram,
+  themeKey,
+  onClose
+}: {
+  diagram: ExpandedDiagram
+  themeKey: 'light' | 'dark'
+  onClose: () => void
+}): JSX.Element {
+  const hostRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        onClose()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [onClose])
+
+  useEffect(() => {
+    const host = hostRef.current
+    if (!host) return
+    host.innerHTML = ''
+    const el = document.createElement('div')
+    el.className = DIAGRAM_CLASS_BY_KIND[diagram.kind]
+    el.setAttribute(DIAGRAM_SOURCE_ATTR_BY_KIND[diagram.kind], diagram.source)
+    el.dataset.zenDiagramKind = diagram.kind
+    el.dataset.zenDiagramSource = diagram.source
+    el.dataset.zenDiagramExpanded = 'true'
+    host.appendChild(el)
+
+    if (diagram.kind === 'mermaid') {
+      void renderMermaidBlocks(host, themeKey, { expanded: true })
+    } else {
+      void renderDiagrams(host, { themeKey, expanded: true })
+    }
+  }, [diagram, themeKey])
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 p-6 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="w-[min(1180px,94vw)] overflow-hidden rounded-2xl border border-paper-300/70 bg-paper-100 shadow-float"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b border-paper-300/60 px-5 py-3">
+          <div>
+            <div className="text-sm font-semibold text-ink-900">Expanded diagram</div>
+            <div className="text-xs text-ink-500">Press Esc or click outside to close.</div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md border border-paper-300 bg-paper-50 px-2.5 py-1 text-sm text-ink-700 transition hover:bg-paper-200"
+          >
+            Close
+          </button>
+        </div>
+        <div className="max-h-[84vh] overflow-auto p-5">
+          <div ref={hostRef} className="zen-diagram-modal-host" />
+        </div>
+      </div>
+    </div>,
+    document.body
   )
 }

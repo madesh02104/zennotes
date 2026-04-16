@@ -11,6 +11,63 @@
  * Every library is loaded once, lazily, and memoized.
  */
 
+function prepareDiagramShell(
+  el: HTMLElement,
+  kind: 'tikz' | 'jsxgraph' | 'function-plot',
+  source: string
+): HTMLDivElement {
+  const expanded = el.dataset.zenDiagramExpanded === 'true'
+  el.dataset.zenDiagramKind = kind
+  el.dataset.zenDiagramSource = source
+  el.innerHTML = ''
+
+  if (!expanded) {
+    const button = document.createElement('button')
+    button.type = 'button'
+    button.className = 'zen-diagram-expand'
+    button.setAttribute('aria-label', 'Open diagram in a larger view')
+    button.textContent = 'Expand'
+    el.appendChild(button)
+  }
+
+  const surface = document.createElement('div')
+  surface.className = expanded
+    ? 'zen-diagram-surface zen-diagram-surface-expanded'
+    : 'zen-diagram-surface'
+  el.appendChild(surface)
+  return surface
+}
+
+function tintTikzSvg(surface: HTMLElement): void {
+  for (const node of Array.from(
+    surface.querySelectorAll<SVGElement>('[stroke="#000"], [stroke="black"]')
+  )) {
+    node.setAttribute('stroke', 'currentColor')
+  }
+  for (const node of Array.from(
+    surface.querySelectorAll<SVGElement>('[fill="#000"], [fill="black"]')
+  )) {
+    node.setAttribute('fill', 'currentColor')
+  }
+  // Plain TikZ text often inherits the SVG default fill (black) instead of
+  // carrying an explicit `fill` attribute. Only patch labels that do not
+  // already inherit a deliberate color from an ancestor group.
+  for (const text of Array.from(surface.querySelectorAll<SVGTextElement>('text'))) {
+    if (text.hasAttribute('fill')) continue
+    let ancestor: Element | null = text.parentElement
+    let inheritsExplicitFill = false
+    while (ancestor) {
+      const fill = ancestor.getAttribute('fill')
+      if (fill && fill.toLowerCase() !== 'none') {
+        inheritsExplicitFill = true
+        break
+      }
+      ancestor = ancestor.parentElement
+    }
+    if (!inheritsExplicitFill) text.setAttribute('fill', 'currentColor')
+  }
+}
+
 // ---------------------------------------------------------------------------
 // TikZ — main-process-compiled SVG
 // ---------------------------------------------------------------------------
@@ -20,30 +77,26 @@ async function renderTikzBlock(el: HTMLElement): Promise<void> {
     el.getAttribute('data-tikz-source') ?? el.textContent?.trim() ?? ''
   if (!source) return
   el.setAttribute('data-tikz-source', source)
-  el.innerHTML =
+  const surface = prepareDiagramShell(el, 'tikz', source)
+  surface.innerHTML =
     '<div class="zen-tikz-loading text-[11px] opacity-60">Rendering TikZ…</div>'
   if (typeof window.zen?.renderTikz !== 'function') {
-    el.innerHTML = `<pre class="zen-diagram-error">TikZ renderer not loaded. Quit (⌘Q) and relaunch the app — the preload script is only attached when a window is first created, so a plain reload isn't enough.</pre>`
+    surface.innerHTML = `<pre class="zen-diagram-error">TikZ renderer not loaded. Quit (⌘Q) and relaunch the app — the preload script is only attached when a window is first created, so a plain reload isn't enough.</pre>`
     return
   }
   try {
     const result = await window.zen.renderTikz(source)
     if (result.ok && result.svg) {
-      el.innerHTML = result.svg
-      // Make the SVG theme-aware: strokes that were explicitly black get
-      // re-tinted to the current foreground color.
-      for (const node of Array.from(el.querySelectorAll<SVGElement>('[stroke="#000"], [stroke="black"]'))) {
-        node.setAttribute('stroke', 'currentColor')
-      }
-      for (const node of Array.from(el.querySelectorAll<SVGElement>('[fill="#000"], [fill="black"]'))) {
-        node.setAttribute('fill', 'currentColor')
-      }
+      surface.innerHTML = result.svg
+      // Make the SVG theme-aware: explicit black strokes/fills and default
+      // unfilled text nodes should all follow the current foreground color.
+      tintTikzSvg(surface)
     } else {
-      el.innerHTML = `<pre class="zen-diagram-error">TikZ error: ${escapeHtml(result.error ?? 'Unknown error')}</pre>`
+      surface.innerHTML = `<pre class="zen-diagram-error">TikZ error: ${escapeHtml(result.error ?? 'Unknown error')}</pre>`
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error'
-    el.innerHTML = `<pre class="zen-diagram-error">TikZ error: ${escapeHtml(message)}</pre>`
+    surface.innerHTML = `<pre class="zen-diagram-error">TikZ error: ${escapeHtml(message)}</pre>`
   }
 }
 
@@ -131,23 +184,34 @@ async function renderJsxGraphBlock(el: HTMLElement): Promise<void> {
 
   try {
     const JXG = await loadJSXGraph()
+    const surface = prepareDiagramShell(el, 'jsxgraph', source)
     // JSXGraph binds to a real DOM id, so we mint one per render.
     const id = `zen-jxg-${Math.random().toString(36).slice(2, 10)}`
     const host = document.createElement('div')
     host.id = id
     host.className = 'zen-jxg-host'
-    const width = config.width ?? 520
-    const height = config.height ?? 320
+    const expanded = el.dataset.zenDiagramExpanded === 'true'
+    const baseWidth = config.width ?? 520
+    const baseHeight = config.height ?? 320
+    const width = expanded ? Math.min(Math.round(baseWidth * 1.65), 1080) : baseWidth
+    const height = expanded ? Math.min(Math.round(baseHeight * 1.65), 760) : baseHeight
     host.style.width = `${width}px`
     host.style.height = `${height}px`
-    el.innerHTML = ''
-    el.appendChild(host)
+    surface.appendChild(host)
 
     // Pull theme colors from the same CSS vars the rest of the app uses
     // so axes / grid / labels sit naturally on light or dark backgrounds.
     const axisColor = themeColor('--z-grey-1', '#7c6f64')
     const textColor = themeColor('--z-fg-1', '#3c3836')
     const gridColor = themeColor('--z-grey-dim', '#bdae93')
+    const textCss = `color:${textColor};`
+    const labelDefaults = {
+      strokeColor: textColor,
+      fillColor: textColor,
+      highlightStrokeColor: textColor,
+      cssDefaultStyle: textCss,
+      highlightCssDefaultStyle: textCss
+    }
     const axisAttributes = {
       strokeColor: axisColor,
       strokeOpacity: 0.85,
@@ -168,7 +232,13 @@ async function renderJsxGraphBlock(el: HTMLElement): Promise<void> {
       pan: { enabled: true, needTwoFingers: false },
       zoom: { enabled: true, wheel: true },
       defaultAxes: { x: axisAttributes, y: axisAttributes },
-      grid: { majorStep: [1, 1], strokeColor: gridColor, strokeOpacity: 0.25 }
+      grid: { majorStep: [1, 1], strokeColor: gridColor, strokeOpacity: 0.25 },
+      text: {
+        strokeColor: textColor,
+        fillColor: textColor,
+        cssDefaultStyle: textCss,
+        highlightCssDefaultStyle: textCss
+      }
     })
 
     // Track objects that declared an `id` in the config so later objects
@@ -191,7 +261,13 @@ async function renderJsxGraphBlock(el: HTMLElement): Promise<void> {
         // Theme-aware defaults: any object without an explicit stroke
         // picks up the foreground color so geometry stays readable on
         // light and dark backgrounds.
-        const attrs = { ...(obj.attributes ?? {}) }
+        const attrs: Record<string, unknown> = {
+          ...(obj.attributes ?? {}),
+          label: {
+            ...labelDefaults,
+            ...((obj.attributes?.label as Record<string, unknown> | undefined) ?? {})
+          }
+        }
         if (!('strokeColor' in attrs)) attrs.strokeColor = textColor
         if (obj.type === 'text' && !('fillColor' in attrs)) attrs.fillColor = textColor
         const created = board.create(obj.type, resolvedArgs, attrs)
@@ -201,12 +277,13 @@ async function renderJsxGraphBlock(el: HTMLElement): Promise<void> {
         const note = document.createElement('pre')
         note.className = 'zen-diagram-error'
         note.textContent = `JSXGraph object "${obj.type}": ${message}`
-        el.appendChild(note)
+        surface.appendChild(note)
       }
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error'
-    el.innerHTML = `<pre class="zen-diagram-error">JSXGraph error: ${escapeHtml(message)}</pre>`
+    const surface = prepareDiagramShell(el, 'jsxgraph', source)
+    surface.innerHTML = `<pre class="zen-diagram-error">JSXGraph error: ${escapeHtml(message)}</pre>`
   }
 }
 
@@ -249,20 +326,31 @@ async function renderFunctionPlotBlock(el: HTMLElement): Promise<void> {
 
   try {
     const fn = await loadFunctionPlot()
+    const surface = prepareDiagramShell(el, 'function-plot', source)
     const host = document.createElement('div')
     host.className = 'zen-function-plot-host'
-    el.innerHTML = ''
-    el.appendChild(host)
+    const expanded = el.dataset.zenDiagramExpanded === 'true'
+    const baseWidth =
+      typeof config.width === 'number' ? config.width : 560
+    const baseHeight =
+      typeof config.height === 'number' ? config.height : 320
+    const width = expanded ? Math.min(Math.round(baseWidth * 1.65), 1080) : baseWidth
+    const height = expanded ? Math.min(Math.round(baseHeight * 1.65), 760) : baseHeight
+    host.style.width = `${width}px`
+    host.style.height = `${height}px`
+    surface.appendChild(host)
+    const { width: _width, height: _height, ...rest } = config
     fn({
       target: host,
-      width: 560,
-      height: 320,
+      width,
+      height,
       grid: true,
-      ...config
+      ...rest
     })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error'
-    el.innerHTML = `<pre class="zen-diagram-error">function-plot error: ${escapeHtml(message)}</pre>`
+    const surface = prepareDiagramShell(el, 'function-plot', source)
+    surface.innerHTML = `<pre class="zen-diagram-error">function-plot error: ${escapeHtml(message)}</pre>`
   }
 }
 
@@ -287,29 +375,35 @@ function escapeHtml(s: string): string {
  */
 export async function renderDiagrams(
   root: HTMLElement,
-  opts: { themeKey: string }
+  opts: { themeKey: string; expanded?: boolean }
 ): Promise<void> {
   const tasks: Promise<void>[] = []
 
   for (const el of Array.from(root.querySelectorAll<HTMLElement>('.zen-tikz'))) {
+    if (opts.expanded) el.dataset.zenDiagramExpanded = 'true'
+    else delete el.dataset.zenDiagramExpanded
     const source = el.getAttribute('data-tikz-source') ?? el.textContent ?? ''
-    const stamp = `tikz|${source}`
+    const stamp = `tikz|${opts.expanded ? 'expanded' : 'normal'}|${source}`
     if (el.getAttribute('data-zen-rendered-hash') === stamp) continue
     el.setAttribute('data-zen-rendered-hash', stamp)
     tasks.push(renderTikzBlock(el))
   }
 
   for (const el of Array.from(root.querySelectorAll<HTMLElement>('.zen-jsxgraph'))) {
+    if (opts.expanded) el.dataset.zenDiagramExpanded = 'true'
+    else delete el.dataset.zenDiagramExpanded
     const source = el.getAttribute('data-jsxgraph-source') ?? el.textContent ?? ''
-    const stamp = `jsx|${opts.themeKey}|${source}`
+    const stamp = `jsx|${opts.themeKey}|${opts.expanded ? 'expanded' : 'normal'}|${source}`
     if (el.getAttribute('data-zen-rendered-hash') === stamp) continue
     el.setAttribute('data-zen-rendered-hash', stamp)
     tasks.push(renderJsxGraphBlock(el))
   }
 
   for (const el of Array.from(root.querySelectorAll<HTMLElement>('.zen-function-plot'))) {
+    if (opts.expanded) el.dataset.zenDiagramExpanded = 'true'
+    else delete el.dataset.zenDiagramExpanded
     const source = el.getAttribute('data-function-plot-source') ?? el.textContent ?? ''
-    const stamp = `fp|${opts.themeKey}|${source}`
+    const stamp = `fp|${opts.themeKey}|${opts.expanded ? 'expanded' : 'normal'}|${source}`
     if (el.getAttribute('data-zen-rendered-hash') === stamp) continue
     el.setAttribute('data-zen-rendered-hash', stamp)
     tasks.push(renderFunctionPlotBlock(el))
