@@ -48,7 +48,7 @@ jobs:
             os: ubuntu-latest
             command: npm run dist:linux
     env:
-      NODE_OPTIONS: "--max-old-space-size=8192"
+      NODE_OPTIONS: "--max-old-space-size=12288"
       CSC_IDENTITY_AUTO_DISCOVERY: "false"
       CSC_LINK: ${{ secrets.MACOS_CERTIFICATE_P12 }}
       CSC_KEY_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
