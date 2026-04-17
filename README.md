@@ -246,6 +246,7 @@ Available package scripts:
 | `npm run dev` | Run the app in development mode |
 | `npm run build` | Build all Electron bundles |
 | `npm run start` | Preview the built app |
+| `npm run test:run` | Run the automated test suite |
 | `npm run typecheck` | Run node + web TypeScript checks |
 | `npm run pack` | Build and create unpacked app output |
 | `npm run dist:mac` | Build macOS distributables |
@@ -253,6 +254,26 @@ Available package scripts:
 | `npm run dist:linux` | Build Linux distributables |
 
 Icon packaging notes live in [build/README.md](build/README.md).
+
+### Signed macOS releases
+
+Public macOS releases are wired for hardened runtime signing and
+notarization. The release workflow expects these GitHub Actions secrets:
+
+- `MACOS_CERTIFICATE_P12`
+- `MACOS_CERTIFICATE_PASSWORD`
+- `APPLE_ID`
+- `APPLE_APP_SPECIFIC_PASSWORD`
+- `APPLE_TEAM_ID`
+
+Optional Windows signing can be supplied with:
+
+- `WINDOWS_CERTIFICATE_P12`
+- `WINDOWS_CERTIFICATE_PASSWORD`
+
+Tagged releases fail the macOS release job if the required Apple signing
+or notarization secrets are missing, which prevents accidentally shipping
+an unsigned public mac build.
 
 ## Repository layout
 

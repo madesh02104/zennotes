@@ -270,7 +270,7 @@ async function renderMermaidBlocks(
   try {
     mermaid.initialize({
       startOnLoad: false,
-      securityLevel: "loose",
+      securityLevel: "strict",
       ...cfg,
     });
   } catch {
@@ -458,10 +458,12 @@ export function Preview({
       }
       // External links: let Electron's window-open handler send them to the OS browser.
       const href = anchor.getAttribute("href") || "";
-      if (/^(https?:|file:)/i.test(href)) {
+      if (/^(https?:|mailto:)/i.test(href)) {
         e.preventDefault();
         window.open(href, "_blank");
+        return;
       }
+      e.preventDefault();
     };
     const onMouseOver = (e: MouseEvent): void => {
       const target = e.target as HTMLElement;

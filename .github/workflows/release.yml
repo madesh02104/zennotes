@@ -49,6 +49,14 @@ jobs:
             command: npm run dist:linux
     env:
       CSC_IDENTITY_AUTO_DISCOVERY: "false"
+      CSC_LINK: ${{ secrets.MACOS_CERTIFICATE_P12 }}
+      CSC_KEY_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      WIN_CSC_LINK: ${{ secrets.WINDOWS_CERTIFICATE_P12 }}
+      WIN_CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+      REQUIRE_MAC_SIGNING: "true"
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
@@ -61,6 +69,18 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Verify mac signing secrets
+        if: matrix.name == 'macOS'
+        shell: bash
+        run: |
+          required=(CSC_LINK CSC_KEY_PASSWORD APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID)
+          for var in "${required[@]}"; do
+            if [ -z "${!var}" ]; then
+              echo "Missing required macOS release secret: ${var}" >&2
+              exit 1
+            fi
+          done
 
       - name: Build release artifacts
         run: ${{ matrix.command }}

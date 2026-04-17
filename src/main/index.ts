@@ -99,6 +99,12 @@ function isMac(): boolean {
   return process.platform === 'darwin'
 }
 
+function openAllowedExternalUrl(url: string): void {
+  if (/^(https?:|mailto:)/i.test(url)) {
+    shell.openExternal(url).catch(() => {})
+  }
+}
+
 function decodeLocalAssetRequestPath(url: string): string | null {
   try {
     const parsed = new URL(url)
@@ -116,6 +122,33 @@ function isPathInsideVault(absPath: string): boolean {
   const resolved = path.resolve(absPath)
   const root = path.resolve(currentVault.root)
   return resolved === root || resolved.startsWith(root + path.sep)
+}
+
+function installNavigationGuards(win: BrowserWindow): void {
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith(`${LOCAL_ASSET_SCHEME}://`)) {
+      const abs = decodeLocalAssetRequestPath(url)
+      if (abs && isPathInsideVault(abs)) {
+        void shell.openPath(abs)
+      }
+      return { action: 'deny' }
+    }
+    openAllowedExternalUrl(url)
+    return { action: 'deny' }
+  })
+
+  win.webContents.on('will-navigate', (event, url) => {
+    if (url === win.webContents.getURL()) return
+    event.preventDefault()
+    if (url.startsWith(`${LOCAL_ASSET_SCHEME}://`)) {
+      const abs = decodeLocalAssetRequestPath(url)
+      if (abs && isPathInsideVault(abs)) {
+        void shell.openPath(abs)
+      }
+      return
+    }
+    openAllowedExternalUrl(url)
+  })
 }
 
 function mimeTypeForPath(absPath: string): string {
@@ -287,17 +320,7 @@ async function createWindow(): Promise<void> {
     if (mainWindow === win) mainWindow = null
   })
 
-  win.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith(`${LOCAL_ASSET_SCHEME}://`)) {
-      const abs = decodeLocalAssetRequestPath(url)
-      if (abs && isPathInsideVault(abs)) {
-        void shell.openPath(abs)
-      }
-      return { action: 'deny' }
-    }
-    shell.openExternal(url).catch(() => {})
-    return { action: 'deny' }
-  })
+  installNavigationGuards(win)
 
   const devServerUrl = process.env['ELECTRON_RENDERER_URL']
   if (devServerUrl) {
@@ -754,10 +777,7 @@ function openFloatingNoteWindow(relPath: string): void {
     floatingNoteWindows.delete(relPath)
   })
   win.on('ready-to-show', () => win.show())
-  win.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url).catch(() => {})
-    return { action: 'deny' }
-  })
+  installNavigationGuards(win)
 
   const params = `?floating=1&note=${encodeURIComponent(relPath)}`
   const devServerUrl = process.env['ELECTRON_RENDERER_URL']

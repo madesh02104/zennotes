@@ -1,4 +1,5 @@
 import { unified } from 'unified'
+import DOMPurify from 'dompurify'
 import remarkParse from 'remark-parse'
 import remarkGfm from 'remark-gfm'
 import remarkBreaks from 'remark-breaks'
@@ -19,6 +20,52 @@ import type { Root as HastRoot, Element as HastElement } from 'hast'
  */
 type AnyNode = { type: string; [k: string]: unknown }
 type AnyParent = { type: string; children: AnyNode[] }
+
+const URI_SCHEME_RE = /^[a-zA-Z][a-zA-Z\d+.-]*:/
+const ALLOWED_RENDERED_URI_SCHEME_RE = /^(?:https?|mailto|zen|zen-asset|blob|data):/i
+const ALLOWED_RENDERED_URI_RE =
+  /^(?:(?:https?|mailto|zen|zen-asset|blob|data):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i
+const ALLOWED_RENDERED_DATA_ATTRS = [
+  'data-callout',
+  'data-function-plot-source',
+  'data-jsxgraph-source',
+  'data-local-asset-href',
+  'data-local-asset-kind',
+  'data-local-asset-url',
+  'data-mermaid-source',
+  'data-resolved-path',
+  'data-tag',
+  'data-tikz-source',
+  'data-wikilink',
+  'data-zen-diagram-expanded',
+  'data-zen-diagram-kind',
+  'data-zen-diagram-source'
+]
+let sanitizerHooksInstalled = false
+
+function ensureSanitizerHooks(): void {
+  if (sanitizerHooksInstalled) return
+  DOMPurify.addHook('uponSanitizeAttribute', (_node, data) => {
+    if (data.attrName !== 'href' && data.attrName !== 'src' && data.attrName !== 'xlink:href') {
+      return
+    }
+    const value = data.attrValue?.trim()
+    if (value && URI_SCHEME_RE.test(value) && !ALLOWED_RENDERED_URI_SCHEME_RE.test(value)) {
+      data.keepAttr = false
+    }
+  })
+  sanitizerHooksInstalled = true
+}
+
+function sanitizeRenderedHtml(html: string): string {
+  ensureSanitizerHooks()
+  return DOMPurify.sanitize(html, {
+    ALLOW_DATA_ATTR: true,
+    ALLOW_ARIA_ATTR: true,
+    ALLOWED_URI_REGEXP: ALLOWED_RENDERED_URI_RE,
+    ADD_ATTR: ALLOWED_RENDERED_DATA_ATTRS
+  })
+}
 
 function remarkWikilinks() {
   return (tree: MdRoot): void => {
@@ -273,7 +320,7 @@ const processor = unified()
 
 export function renderMarkdown(src: string): string {
   try {
-    return String(processor.processSync(src))
+    return sanitizeRenderedHtml(String(processor.processSync(src)))
   } catch (err) {
     console.error('markdown render failed', err)
     return `<pre class="text-sm text-red-600">Markdown error: ${(err as Error).message}</pre>`

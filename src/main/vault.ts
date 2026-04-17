@@ -45,6 +45,10 @@ const execFileAsync = promisify(execFile)
 const SEARCHABLE_TEXT_FOLDERS: NoteFolder[] = ['inbox', 'quick', 'archive']
 const COMMAND_CHECK_TIMEOUT_MS = 1500
 const SEARCH_EXEC_MAX_BUFFER = 64 * 1024 * 1024
+const SEARCH_EXECUTABLE_NAMES = {
+  ripgrep: new Set(['rg', 'rg.exe']),
+  fzf: new Set(['fzf', 'fzf.exe'])
+} as const
 
 interface VaultTextSearchCandidate {
   path: string
@@ -336,12 +340,24 @@ function capabilityCacheKey(paths: Required<VaultTextSearchToolPaths>): string {
   return JSON.stringify(paths)
 }
 
-function searchExecutable(
+async function searchExecutable(
   kind: 'ripgrep' | 'fzf',
   paths: Required<VaultTextSearchToolPaths>
-): string {
-  if (kind === 'ripgrep') return paths.ripgrepPath || 'rg'
-  return paths.fzfPath || 'fzf'
+): Promise<string | null> {
+  const configured = kind === 'ripgrep' ? paths.ripgrepPath : paths.fzfPath
+  if (!configured) return kind === 'ripgrep' ? 'rg' : 'fzf'
+  if (!path.isAbsolute(configured)) return null
+
+  const normalized = path.resolve(configured)
+  const basename = path.basename(normalized).toLowerCase()
+  if (!SEARCH_EXECUTABLE_NAMES[kind].has(basename)) return null
+
+  try {
+    const stat = await fs.stat(normalized)
+    return stat.isFile() ? normalized : null
+  } catch {
+    return null
+  }
 }
 
 async function commandAvailable(command: string): Promise<boolean> {
@@ -374,9 +390,11 @@ export async function searchVaultTextCapabilities(
     return cachedVaultTextSearchCapabilities.value
   }
 
+  const ripgrep = await searchExecutable('ripgrep', paths)
+  const fzf = await searchExecutable('fzf', paths)
   const value = {
-    ripgrep: await commandAvailable(searchExecutable('ripgrep', paths)),
-    fzf: await commandAvailable(searchExecutable('fzf', paths))
+    ripgrep: ripgrep ? await commandAvailable(ripgrep) : false,
+    fzf: fzf ? await commandAvailable(fzf) : false
   }
   cachedVaultTextSearchCapabilities = { at: now, key, value }
   return value
@@ -458,8 +476,10 @@ async function collectRipgrepSearchCandidates(
 ): Promise<VaultTextSearchCandidate[]> {
   let stdout = ''
   try {
+    const ripgrep = await searchExecutable('ripgrep', paths)
+    if (!ripgrep) return []
     const result = await execFileAsync(
-      searchExecutable('ripgrep', paths),
+      ripgrep,
       [
         '--json',
         '--line-number',
@@ -547,9 +567,15 @@ async function runFzfSearch(
   limit: number,
   paths: Required<VaultTextSearchToolPaths>
 ): Promise<VaultTextSearchCandidate[]> {
+  const fzf = await searchExecutable('fzf', paths)
+  if (!fzf) {
+    return rankSearchCandidates(query, candidates, limit).map(
+      ({ score: _score, ...candidate }) => candidate
+    )
+  }
   return await new Promise((resolve, reject) => {
     const child = spawn(
-      searchExecutable('fzf', paths),
+      fzf,
       ['--filter', query, '--nth=2,6,1', '--tiebreak=index'],
       { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true }
     )
@@ -783,7 +809,8 @@ export async function searchVaultText(
 
 function resolveSafe(root: string, rel: string): string {
   const abs = path.resolve(root, rel)
-  if (!abs.startsWith(path.resolve(root))) {
+  const rootAbs = path.resolve(root)
+  if (abs !== rootAbs && !abs.startsWith(rootAbs + path.sep)) {
     throw new Error(`Path escapes vault: ${rel}`)
   }
   return abs

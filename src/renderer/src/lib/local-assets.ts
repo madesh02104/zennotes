@@ -59,7 +59,9 @@ export function resolveAssetVaultRelativePath(
     const abs = url.searchParams.get('path')
     if (!abs) return null
     const root = vaultRoot.replace(/[/\\]+$/, '')
-    if (!abs.startsWith(root)) return null
+    if (abs !== root && !abs.startsWith(`${root}/`) && !abs.startsWith(`${root}\\`)) {
+      return null
+    }
     return abs.slice(root.length).replace(/^[/\\]+/, '').replace(/\\/g, '/')
   } catch {
     return null
