@@ -70,10 +70,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          mapfile -d '' files < <(
+          files=()
+          while IFS= read -r file; do
+            files+=("$file")
+          done < <(
             find dist -maxdepth 1 -type f \
-              \( -name '*.dmg' -o -name '*.zip' -o -name '*.exe' -o -name '*.AppImage' -o -name '*.deb' -o -name '*.blockmap' -o -name 'latest*.yml' -o -name 'latest*.yaml' \) \
-              -print0
+              \( -name '*.dmg' -o -name '*.zip' -o -name '*.exe' -o -name '*.AppImage' -o -name '*.deb' -o -name '*.blockmap' -o -name 'latest*.yml' -o -name 'latest*.yaml' \)
           )
           if [ "${#files[@]}" -eq 0 ]; then
             echo "No release artifacts found in dist/" >&2
