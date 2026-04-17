@@ -438,7 +438,10 @@ export function FloatingNoteApp({ notePath }: { notePath: string }): JSX.Element
         {mode === 'edit' ? (
           <div ref={setContainerRef} className="min-h-0 min-w-0 flex-1" />
         ) : content ? (
-          <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
+          <div
+            data-preview-scroll
+            className="min-h-0 min-w-0 flex-1 overflow-y-auto"
+          >
             <Preview markdown={content.body} notePath={content.path} />
           </div>
         ) : (

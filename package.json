@@ -28,6 +28,7 @@
     "@codemirror/state": "^6.5.0",
     "@codemirror/view": "^6.35.3",
     "@lezer/highlight": "^1.2.1",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "@replit/codemirror-vim": "^6.3.0",
     "chokidar": "^4.0.3",
     "codemirror": "^6.0.1",

@@ -41,7 +41,13 @@ export const IPC = {
   WINDOW_CLOSE: 'window:close',
   WINDOW_OPEN_NOTE: 'window:open-note',
   APP_PLATFORM: 'app:platform',
-  TIKZ_RENDER: 'tikz:render'
+  TIKZ_RENDER: 'tikz:render',
+  MCP_STATUS: 'mcp:status',
+  MCP_INSTALL: 'mcp:install',
+  MCP_UNINSTALL: 'mcp:uninstall',
+  MCP_RUNTIME: 'mcp:runtime',
+  MCP_GET_INSTRUCTIONS: 'mcp:get-instructions',
+  MCP_SET_INSTRUCTIONS: 'mcp:set-instructions'
 } as const
 
 export interface TikzRenderResponse {

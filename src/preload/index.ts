@@ -17,6 +17,12 @@ import type {
   VaultInfo
 } from '@shared/ipc'
 import type { VaultTask } from '@shared/tasks'
+import type {
+  McpClientId,
+  McpClientStatus,
+  McpInstructionsPayload,
+  McpServerRuntime
+} from '@shared/mcp-clients'
 
 const api = {
   platform: (): Promise<NodeJS.Platform> => ipcRenderer.invoke(IPC.APP_PLATFORM),
@@ -162,6 +168,17 @@ const api = {
     ipcRenderer.invoke(IPC.WINDOW_OPEN_NOTE, relPath),
   renderTikz: (source: string): Promise<{ ok: boolean; svg?: string; error?: string }> =>
     ipcRenderer.invoke(IPC.TIKZ_RENDER, source),
+
+  mcpGetRuntime: (): Promise<McpServerRuntime> => ipcRenderer.invoke(IPC.MCP_RUNTIME),
+  mcpGetStatuses: (): Promise<McpClientStatus[]> => ipcRenderer.invoke(IPC.MCP_STATUS),
+  mcpInstall: (id: McpClientId): Promise<McpClientStatus> =>
+    ipcRenderer.invoke(IPC.MCP_INSTALL, id),
+  mcpUninstall: (id: McpClientId): Promise<McpClientStatus> =>
+    ipcRenderer.invoke(IPC.MCP_UNINSTALL, id),
+  mcpGetInstructions: (): Promise<McpInstructionsPayload> =>
+    ipcRenderer.invoke(IPC.MCP_GET_INSTRUCTIONS),
+  mcpSetInstructions: (next: string | null): Promise<McpInstructionsPayload> =>
+    ipcRenderer.invoke(IPC.MCP_SET_INSTRUCTIONS, next),
   // Native Electron clipboard — more reliable than `navigator.clipboard`
   // which can reject for focus / permission reasons in Electron contexts,
   // especially right after a React state change that unmounts a menu.

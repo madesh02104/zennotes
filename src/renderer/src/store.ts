@@ -145,6 +145,11 @@ interface Prefs {
   /** When true, long lines wrap inside the editor. When false they
    *  scroll horizontally — same as a coding editor's "Word Wrap". */
   wordWrap: boolean
+  /** Ctrl+D / Ctrl+U half-page scroll in preview mode. When true the
+   *  jumps animate; when false they snap instantly. Vim users often
+   *  prefer the instant flavor because it keeps the position
+   *  predictable. */
+  previewSmoothScroll: boolean
   /** Max width (px) for the editor's content column. */
   editorMaxWidth: number
   /** Inline PDF embeds in the live-preview editor render compact by
@@ -206,6 +211,7 @@ const DEFAULT_PREFS: Prefs = {
   pinnedRefMode: 'edit',
   quickNoteDateTitle: false,
   wordWrap: true,
+  previewSmoothScroll: true,
   editorMaxWidth: 920,
   pdfEmbedInEditMode: 'compact',
   pinnedRefKind: 'note',
@@ -340,6 +346,10 @@ function normalizePrefs(p: Partial<Prefs>): Prefs {
         : DEFAULT_PREFS.quickNoteDateTitle,
     wordWrap:
       typeof p.wordWrap === 'boolean' ? p.wordWrap : DEFAULT_PREFS.wordWrap,
+    previewSmoothScroll:
+      typeof p.previewSmoothScroll === 'boolean'
+        ? p.previewSmoothScroll
+        : DEFAULT_PREFS.previewSmoothScroll,
     editorMaxWidth:
       typeof p.editorMaxWidth === 'number'
         ? Math.min(2000, Math.max(560, p.editorMaxWidth))
@@ -634,6 +644,7 @@ function collectPrefs(s: {
   pinnedRefMode: 'edit' | 'preview'
   quickNoteDateTitle: boolean
   wordWrap: boolean
+  previewSmoothScroll: boolean
   editorMaxWidth: number
   pdfEmbedInEditMode: 'compact' | 'full'
   pinnedRefKind: 'note' | 'asset'
@@ -676,6 +687,7 @@ function collectPrefs(s: {
     pinnedRefMode: s.pinnedRefMode,
     quickNoteDateTitle: s.quickNoteDateTitle,
     wordWrap: s.wordWrap,
+    previewSmoothScroll: s.previewSmoothScroll,
     editorMaxWidth: s.editorMaxWidth,
     pdfEmbedInEditMode: s.pdfEmbedInEditMode,
     pinnedRefKind: s.pinnedRefKind,
@@ -1012,6 +1024,10 @@ interface Store {
   /** Whether long lines wrap or scroll horizontally in the editor. */
   wordWrap: boolean
 
+  /** Animate Ctrl+D / Ctrl+U half-page jumps in preview mode. Off
+   *  gives an instant snap, which Vim muscle memory prefers. */
+  previewSmoothScroll: boolean
+
   /** Max content width inside the editor, in px. Caps and centers the
    *  text so wide windows don't make every line stretch edge-to-edge. */
   editorMaxWidth: number
@@ -1191,6 +1207,7 @@ interface Store {
 
   setQuickNoteDateTitle: (on: boolean) => void
   setWordWrap: (on: boolean) => void
+  setPreviewSmoothScroll: (on: boolean) => void
   setEditorMaxWidth: (px: number) => void
   setPdfEmbedInEditMode: (mode: 'compact' | 'full') => void
   setContentAlign: (align: 'center' | 'left') => void
@@ -1594,6 +1611,7 @@ export const useStore = create<Store>((set, get) => {
   pinnedRefMode: loadPrefs().pinnedRefMode,
   quickNoteDateTitle: loadPrefs().quickNoteDateTitle,
   wordWrap: loadPrefs().wordWrap,
+  previewSmoothScroll: loadPrefs().previewSmoothScroll,
   editorMaxWidth: loadPrefs().editorMaxWidth,
   pdfEmbedInEditMode: loadPrefs().pdfEmbedInEditMode,
   pinnedRefKind: loadPrefs().pinnedRefKind,
@@ -2621,6 +2639,11 @@ export const useStore = create<Store>((set, get) => {
 
   setWordWrap: (on) => {
     set({ wordWrap: on })
+    savePrefs(collectPrefs(get()))
+  },
+
+  setPreviewSmoothScroll: (on) => {
+    set({ previewSmoothScroll: on })
     savePrefs(collectPrefs(get()))
   },
 

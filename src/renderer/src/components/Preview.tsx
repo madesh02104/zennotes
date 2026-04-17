@@ -1,81 +1,83 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
-import type { NoteMeta } from '@shared/ipc'
-import { renderMarkdown } from '../lib/markdown'
-import { useStore } from '../store'
-import { resolveAuto, THEMES } from '../lib/themes'
-import { resolveWikilinkTarget } from '../lib/wikilinks'
-import { toggleTaskAtIndex } from '../lib/tasklists'
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import type { NoteMeta } from "@shared/ipc";
+import { renderMarkdown } from "../lib/markdown";
+import { useStore } from "../store";
+import { resolveAuto, THEMES } from "../lib/themes";
+import { resolveWikilinkTarget } from "../lib/wikilinks";
+import { toggleTaskAtIndex } from "../lib/tasklists";
 import {
   enhanceLocalAssetNodes,
-  resolveAssetVaultRelativePath
-} from '../lib/local-assets'
-import { enhancePreviewHeadingFolds } from '../lib/preview-heading-fold'
-import { renderDiagrams } from '../lib/diagram-renderers'
-import { NoteHoverPreview } from './NoteHoverPreview'
-import { ContextMenu, type ContextMenuItem } from './ContextMenu'
+  resolveAssetVaultRelativePath,
+} from "../lib/local-assets";
+import { enhancePreviewHeadingFolds } from "../lib/preview-heading-fold";
+import { renderDiagrams } from "../lib/diagram-renderers";
+import { NoteHoverPreview } from "./NoteHoverPreview";
+import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
 
 // ---------------------------------------------------------------------------
 // Mermaid: lazy singleton + theme-aware render
 // ---------------------------------------------------------------------------
 
-let mermaidPromise: Promise<typeof import('mermaid').default> | null = null
-function loadMermaid(): Promise<typeof import('mermaid').default> {
+let mermaidPromise: Promise<typeof import("mermaid").default> | null = null;
+function loadMermaid(): Promise<typeof import("mermaid").default> {
   if (!mermaidPromise) {
-    mermaidPromise = import('mermaid').then((m) => m.default)
+    mermaidPromise = import("mermaid").then((m) => m.default);
   }
-  return mermaidPromise
+  return mermaidPromise;
 }
 
 /** Read a `--z-*` CSS variable (stored as `"R G B"` triplet) as a hex
  *  color string. Mermaid's themeVariables expect real color values, not
  *  raw triplets. Falls back to a neutral grey if the var is missing. */
-function readThemeColor(name: string, fallback = '#888888'): string {
+function readThemeColor(name: string, fallback = "#888888"): string {
   const raw = getComputedStyle(document.documentElement)
     .getPropertyValue(name)
-    .trim()
-  if (!raw) return fallback
-  const parts = raw.split(/[\s,]+/).map((n) => Number(n))
-  if (parts.length < 3 || parts.some((n) => Number.isNaN(n))) return fallback
+    .trim();
+  if (!raw) return fallback;
+  const parts = raw.split(/[\s,]+/).map((n) => Number(n));
+  if (parts.length < 3 || parts.some((n) => Number.isNaN(n))) return fallback;
   const hex = (n: number): string =>
-    Math.max(0, Math.min(255, Math.round(n))).toString(16).padStart(2, '0')
-  return `#${hex(parts[0])}${hex(parts[1])}${hex(parts[2])}`
+    Math.max(0, Math.min(255, Math.round(n)))
+      .toString(16)
+      .padStart(2, "0");
+  return `#${hex(parts[0])}${hex(parts[1])}${hex(parts[2])}`;
 }
 
 interface MermaidThemeConfig {
-  theme: 'base'
-  themeVariables: Record<string, string>
-  darkMode: boolean
+  theme: "base";
+  themeVariables: Record<string, string>;
+  darkMode: boolean;
 }
 
 /** Build a complete Mermaid themeVariables map from the current `--z-*`
  *  CSS custom properties on `<html>`. We use mermaid's `base` theme and
  *  drive every color from the app theme so the diagram naturally matches
  *  whichever of the 16+ app themes is active. */
-function buildMermaidTheme(mode: 'light' | 'dark'): MermaidThemeConfig {
-  const bg = readThemeColor('--z-bg')
-  const bg1 = readThemeColor('--z-bg-1')
-  const bg2 = readThemeColor('--z-bg-2')
-  const bg3 = readThemeColor('--z-bg-3')
-  const bgSofter = readThemeColor('--z-bg-softer', bg1)
-  const fg = readThemeColor('--z-fg')
-  const fg1 = readThemeColor('--z-fg-1', fg)
-  const grey = readThemeColor('--z-grey-1')
-  const accent = readThemeColor('--z-accent', '#c35e0a')
-  const red = readThemeColor('--z-red', '#c14a4a')
-  const green = readThemeColor('--z-green', '#6c782e')
-  const yellow = readThemeColor('--z-yellow', '#b47109')
-  const blue = readThemeColor('--z-blue', '#45707a')
-  const purple = readThemeColor('--z-purple', '#945e80')
-  const aqua = readThemeColor('--z-aqua', '#4c7a5d')
+function buildMermaidTheme(mode: "light" | "dark"): MermaidThemeConfig {
+  const bg = readThemeColor("--z-bg");
+  const bg1 = readThemeColor("--z-bg-1");
+  const bg2 = readThemeColor("--z-bg-2");
+  const bg3 = readThemeColor("--z-bg-3");
+  const bgSofter = readThemeColor("--z-bg-softer", bg1);
+  const fg = readThemeColor("--z-fg");
+  const fg1 = readThemeColor("--z-fg-1", fg);
+  const grey = readThemeColor("--z-grey-1");
+  const accent = readThemeColor("--z-accent", "#c35e0a");
+  const red = readThemeColor("--z-red", "#c14a4a");
+  const green = readThemeColor("--z-green", "#6c782e");
+  const yellow = readThemeColor("--z-yellow", "#b47109");
+  const blue = readThemeColor("--z-blue", "#45707a");
+  const purple = readThemeColor("--z-purple", "#945e80");
+  const aqua = readThemeColor("--z-aqua", "#4c7a5d");
 
   return {
-    theme: 'base',
-    darkMode: mode === 'dark',
+    theme: "base",
+    darkMode: mode === "dark",
     themeVariables: {
       // Typography
-      fontFamily: 'inherit',
-      fontSize: '14px',
+      fontFamily: "inherit",
+      fontSize: "14px",
 
       // Core palette — mermaid derives most diagrams from these.
       background: bg,
@@ -165,8 +167,9 @@ function buildMermaidTheme(mode: 'light' | 'dark'): MermaidThemeConfig {
         yAxisTitleColor: fg1,
         yAxisTickColor: grey,
         yAxisLineColor: grey,
-        plotColorPalette: [accent, blue, green, purple, yellow, red, aqua]
-          .join(', ')
+        plotColorPalette: [accent, blue, green, purple, yellow, red, aqua].join(
+          ", ",
+        ),
       }),
 
       // Git graph
@@ -206,90 +209,91 @@ function buildMermaidTheme(mode: 'light' | 'dark'): MermaidThemeConfig {
 
       // Signals / errors
       errorBkgColor: red,
-      errorTextColor: bg
-    }
-  }
+      errorTextColor: bg,
+    },
+  };
 }
 
-type ExpandedDiagramKind = 'mermaid' | 'tikz' | 'jsxgraph' | 'function-plot'
+type ExpandedDiagramKind = "mermaid" | "tikz" | "jsxgraph" | "function-plot";
 
 interface ExpandedDiagram {
-  kind: ExpandedDiagramKind
-  source: string
+  kind: ExpandedDiagramKind;
+  source: string;
 }
 
 const DIAGRAM_CLASS_BY_KIND: Record<ExpandedDiagramKind, string> = {
-  mermaid: 'mermaid',
-  tikz: 'zen-tikz',
-  jsxgraph: 'zen-jsxgraph',
-  'function-plot': 'zen-function-plot'
-}
+  mermaid: "mermaid",
+  tikz: "zen-tikz",
+  jsxgraph: "zen-jsxgraph",
+  "function-plot": "zen-function-plot",
+};
 
 const DIAGRAM_SOURCE_ATTR_BY_KIND: Record<ExpandedDiagramKind, string> = {
-  mermaid: 'data-mermaid-source',
-  tikz: 'data-tikz-source',
-  jsxgraph: 'data-jsxgraph-source',
-  'function-plot': 'data-function-plot-source'
-}
+  mermaid: "data-mermaid-source",
+  tikz: "data-tikz-source",
+  jsxgraph: "data-jsxgraph-source",
+  "function-plot": "data-function-plot-source",
+};
 
 function prepareMermaidShell(el: HTMLElement, source: string): HTMLDivElement {
-  const expanded = el.dataset.zenDiagramExpanded === 'true'
-  el.dataset.zenDiagramKind = 'mermaid'
-  el.dataset.zenDiagramSource = source
-  el.innerHTML = ''
+  const expanded = el.dataset.zenDiagramExpanded === "true";
+  el.dataset.zenDiagramKind = "mermaid";
+  el.dataset.zenDiagramSource = source;
+  el.innerHTML = "";
 
   if (!expanded) {
-    const button = document.createElement('button')
-    button.type = 'button'
-    button.className = 'zen-diagram-expand'
-    button.setAttribute('aria-label', 'Open diagram in a larger view')
-    button.textContent = 'Expand'
-    el.appendChild(button)
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "zen-diagram-expand";
+    button.setAttribute("aria-label", "Open diagram in a larger view");
+    button.textContent = "Expand";
+    el.appendChild(button);
   }
 
-  const surface = document.createElement('div')
+  const surface = document.createElement("div");
   surface.className = expanded
-    ? 'zen-diagram-surface zen-diagram-surface-expanded'
-    : 'zen-diagram-surface'
-  el.appendChild(surface)
-  return surface
+    ? "zen-diagram-surface zen-diagram-surface-expanded"
+    : "zen-diagram-surface";
+  el.appendChild(surface);
+  return surface;
 }
 
 async function renderMermaidBlocks(
   root: HTMLElement,
-  mode: 'light' | 'dark',
-  opts: { expanded?: boolean } = {}
+  mode: "light" | "dark",
+  opts: { expanded?: boolean } = {},
 ): Promise<void> {
-  const blocks = Array.from(root.querySelectorAll<HTMLElement>('.mermaid'))
-  if (blocks.length === 0) return
-  const mermaid = await loadMermaid()
-  const cfg = buildMermaidTheme(mode)
+  const blocks = Array.from(root.querySelectorAll<HTMLElement>(".mermaid"));
+  if (blocks.length === 0) return;
+  const mermaid = await loadMermaid();
+  const cfg = buildMermaidTheme(mode);
   try {
     mermaid.initialize({
       startOnLoad: false,
-      securityLevel: 'loose',
-      ...cfg
-    })
+      securityLevel: "loose",
+      ...cfg,
+    });
   } catch {
     /* initialize is tolerant across versions — ignore */
   }
 
   for (let i = 0; i < blocks.length; i++) {
-    const el = blocks[i]
-    if (opts.expanded) el.dataset.zenDiagramExpanded = 'true'
-    else delete el.dataset.zenDiagramExpanded
-    const source = el.getAttribute('data-mermaid-source') ?? el.textContent ?? ''
-    if (!source.trim()) continue
-    el.setAttribute('data-mermaid-source', source)
-    const surface = prepareMermaidShell(el, source)
-    const id = `zen-mermaid-${Date.now()}-${i}-${opts.expanded ? 'expanded' : 'inline'}`
+    const el = blocks[i];
+    if (opts.expanded) el.dataset.zenDiagramExpanded = "true";
+    else delete el.dataset.zenDiagramExpanded;
+    const source =
+      el.getAttribute("data-mermaid-source") ?? el.textContent ?? "";
+    if (!source.trim()) continue;
+    el.setAttribute("data-mermaid-source", source);
+    const surface = prepareMermaidShell(el, source);
+    const id = `zen-mermaid-${Date.now()}-${i}-${opts.expanded ? "expanded" : "inline"}`;
     try {
-      const { svg } = await mermaid.render(id, source)
-      surface.innerHTML = svg
+      const { svg } = await mermaid.render(id, source);
+      surface.innerHTML = svg;
     } catch (err) {
       surface.innerHTML = `<pre class="whitespace-pre-wrap text-xs text-[color:rgb(var(--z-red))]">Mermaid error: ${
         (err as Error).message
-      }</pre>`
+      }</pre>`;
     }
   }
 }
@@ -297,72 +301,100 @@ async function renderMermaidBlocks(
 export function Preview({
   markdown,
   notePath,
-  onRequestEdit
+  onRequestEdit,
 }: {
-  markdown: string
-  notePath: string
-  onRequestEdit?: (() => void) | null
+  markdown: string;
+  notePath: string;
+  onRequestEdit?: (() => void) | null;
 }): JSX.Element {
-  const ref = useRef<HTMLDivElement | null>(null)
-  const vault = useStore((s) => s.vault)
-  const notes = useStore((s) => s.notes)
-  const themeId = useStore((s) => s.themeId)
-  const themeFamily = useStore((s) => s.themeFamily)
-  const themeMode = useStore((s) => s.themeMode)
+  const ref = useRef<HTMLDivElement | null>(null);
+  const vault = useStore((s) => s.vault);
+  const notes = useStore((s) => s.notes);
+  const themeId = useStore((s) => s.themeId);
+  const themeFamily = useStore((s) => s.themeFamily);
+  const themeMode = useStore((s) => s.themeMode);
   // Track the OS-level preference so `mode: 'auto'` themes still pick
   // the right mermaid palette when the system toggles between light/dark.
   const [prefersDark, setPrefersDark] = useState(() =>
-    typeof window !== 'undefined'
-      ? window.matchMedia('(prefers-color-scheme: dark)').matches
-      : false
-  )
+    typeof window !== "undefined"
+      ? window.matchMedia("(prefers-color-scheme: dark)").matches
+      : false,
+  );
   useEffect(() => {
-    const mql = window.matchMedia('(prefers-color-scheme: dark)')
-    const handler = (e: MediaQueryListEvent): void => setPrefersDark(e.matches)
-    mql.addEventListener('change', handler)
-    return () => mql.removeEventListener('change', handler)
-  }, [])
-  const effectiveMode: 'light' | 'dark' = useMemo(() => {
+    const mql = window.matchMedia("(prefers-color-scheme: dark)");
+    const handler = (e: MediaQueryListEvent): void => setPrefersDark(e.matches);
+    mql.addEventListener("change", handler);
+    return () => mql.removeEventListener("change", handler);
+  }, []);
+  const effectiveMode: "light" | "dark" = useMemo(() => {
     const resolvedId =
-      themeMode === 'auto' ? resolveAuto(themeFamily, prefersDark) : themeId
-    return THEMES.find((t) => t.id === resolvedId)?.mode ?? 'light'
-  }, [themeId, themeFamily, themeMode, prefersDark])
-  const selectNote = useStore((s) => s.selectNote)
-  const setView = useStore((s) => s.setView)
-  const updateActiveBody = useStore((s) => s.updateActiveBody)
-  const persistActive = useStore((s) => s.persistActive)
-  const pinAssetReference = useStore((s) => s.pinAssetReference)
-  const pinAssetReferenceForNote = useStore((s) => s.pinAssetReferenceForNote)
-  const pinnedRefPath = useStore((s) => s.pinnedRefPath)
-  const pinnedRefKind = useStore((s) => s.pinnedRefKind)
-  const pinnedRefVisible = useStore((s) => s.pinnedRefVisible)
-  const togglePinnedRefVisible = useStore((s) => s.togglePinnedRefVisible)
-  const pinnedAssetPath = pinnedRefKind === 'asset' ? pinnedRefPath : null
-  const [hovered, setHovered] = useState<{ note: NoteMeta; rect: DOMRect } | null>(null)
-  const [assetMenu, setAssetMenu] = useState<
-    { x: number; y: number; url: string; vaultRel: string | null; href: string } | null
-  >(null)
-  const [expandedDiagram, setExpandedDiagram] = useState<ExpandedDiagram | null>(null)
+      themeMode === "auto" ? resolveAuto(themeFamily, prefersDark) : themeId;
+    return THEMES.find((t) => t.id === resolvedId)?.mode ?? "light";
+  }, [themeId, themeFamily, themeMode, prefersDark]);
+  const selectNote = useStore((s) => s.selectNote);
+  const setView = useStore((s) => s.setView);
+  const updateActiveBody = useStore((s) => s.updateActiveBody);
+  const persistActive = useStore((s) => s.persistActive);
+  const pinAssetReference = useStore((s) => s.pinAssetReference);
+  const pinAssetReferenceForNote = useStore((s) => s.pinAssetReferenceForNote);
+  const pinnedRefPath = useStore((s) => s.pinnedRefPath);
+  const pinnedRefKind = useStore((s) => s.pinnedRefKind);
+  const pinnedRefVisible = useStore((s) => s.pinnedRefVisible);
+  const togglePinnedRefVisible = useStore((s) => s.togglePinnedRefVisible);
+  const pinnedAssetPath = pinnedRefKind === "asset" ? pinnedRefPath : null;
+  const [hovered, setHovered] = useState<{
+    note: NoteMeta;
+    rect: DOMRect;
+  } | null>(null);
+  // Grace timer that keeps the hover preview open for ~200ms after the
+  // pointer leaves a wikilink, so the user can actually slide the
+  // cursor onto the popover itself without it disappearing mid-flight.
+  const hoverDismissRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clearHoverDismiss = (): void => {
+    if (hoverDismissRef.current) {
+      clearTimeout(hoverDismissRef.current);
+      hoverDismissRef.current = null;
+    }
+  };
+  const scheduleHoverDismiss = (): void => {
+    clearHoverDismiss();
+    hoverDismissRef.current = setTimeout(() => {
+      hoverDismissRef.current = null;
+      setHovered(null);
+    }, 220);
+  };
+  // Flush any pending timer when the preview closes or on unmount so
+  // we never call setHovered against a disposed component.
+  useEffect(() => () => clearHoverDismiss(), []);
+  const [assetMenu, setAssetMenu] = useState<{
+    x: number;
+    y: number;
+    url: string;
+    vaultRel: string | null;
+    href: string;
+  } | null>(null);
+  const [expandedDiagram, setExpandedDiagram] =
+    useState<ExpandedDiagram | null>(null);
 
-  const html = useMemo(() => renderMarkdown(markdown), [markdown])
+  const html = useMemo(() => renderMarkdown(markdown), [markdown]);
 
   // After render: mark broken wikilinks, wire clicks, render mermaid.
   useEffect(() => {
-    const root = ref.current
-    if (!root) return
+    const root = ref.current;
+    if (!root) return;
 
     // Resolve wikilinks against the current vault.
-    root.querySelectorAll<HTMLAnchorElement>('a.wikilink').forEach((a) => {
-      const target = a.getAttribute('data-wikilink') || ''
-      const resolved = resolveWikilinkTarget(notes, target)
+    root.querySelectorAll<HTMLAnchorElement>("a.wikilink").forEach((a) => {
+      const target = a.getAttribute("data-wikilink") || "";
+      const resolved = resolveWikilinkTarget(notes, target);
       if (resolved) {
-        a.classList.remove('broken')
-        a.dataset.resolvedPath = resolved.path
+        a.classList.remove("broken");
+        a.dataset.resolvedPath = resolved.path;
       } else {
-        a.classList.add('broken')
-        delete a.dataset.resolvedPath
+        a.classList.add("broken");
+        delete a.dataset.resolvedPath;
       }
-    })
+    });
 
     enhanceLocalAssetNodes(root, {
       vaultRoot: vault?.root,
@@ -370,132 +402,149 @@ export function Preview({
       onRequestEdit,
       pinnedAssetPath,
       onActivatePinnedRef: () => {
-        if (!pinnedRefVisible) togglePinnedRefVisible()
-      }
-    })
+        if (!pinnedRefVisible) togglePinnedRefVisible();
+      },
+    });
 
-    enhancePreviewHeadingFolds(root)
+    enhancePreviewHeadingFolds(root);
 
-    root.querySelectorAll<HTMLInputElement>('li.task-list-item input[type="checkbox"]').forEach(
-      (input, idx) => {
-        input.disabled = false
-        input.dataset.taskIndex = String(idx)
-        input.setAttribute('role', 'checkbox')
-        input.classList.add('cursor-pointer')
-      }
-    )
+    root
+      .querySelectorAll<HTMLInputElement>(
+        'li.task-list-item input[type="checkbox"]',
+      )
+      .forEach((input, idx) => {
+        input.disabled = false;
+        input.dataset.taskIndex = String(idx);
+        input.setAttribute("role", "checkbox");
+        input.classList.add("cursor-pointer");
+      });
 
     const onClick = (e: MouseEvent): void => {
-      const target = e.target as HTMLElement
-      const expandButton = target.closest('.zen-diagram-expand') as HTMLButtonElement | null
+      const target = e.target as HTMLElement;
+      const expandButton = target.closest(
+        ".zen-diagram-expand",
+      ) as HTMLButtonElement | null;
       if (expandButton) {
-        e.preventDefault()
+        e.preventDefault();
         const host = expandButton.closest<HTMLElement>(
-          '[data-zen-diagram-kind][data-zen-diagram-source]'
-        )
-        const kind = host?.dataset.zenDiagramKind as ExpandedDiagramKind | undefined
-        const source = host?.dataset.zenDiagramSource
-        if (host && kind && source) setExpandedDiagram({ kind, source })
-        return
+          "[data-zen-diagram-kind][data-zen-diagram-source]",
+        );
+        const kind = host?.dataset.zenDiagramKind as
+          | ExpandedDiagramKind
+          | undefined;
+        const source = host?.dataset.zenDiagramSource;
+        if (host && kind && source) setExpandedDiagram({ kind, source });
+        return;
       }
-      const anchor = target.closest('a') as HTMLAnchorElement | null
-      if (!anchor) return
-      if (anchor.classList.contains('wikilink')) {
-        e.preventDefault()
-        const path = anchor.dataset.resolvedPath
-        if (path) void selectNote(path)
-        return
+      const anchor = target.closest("a") as HTMLAnchorElement | null;
+      if (!anchor) return;
+      if (anchor.classList.contains("wikilink")) {
+        e.preventDefault();
+        const path = anchor.dataset.resolvedPath;
+        if (path) void selectNote(path);
+        return;
       }
-      if (anchor.classList.contains('hashtag')) {
-        e.preventDefault()
-        const tag = anchor.getAttribute('data-tag')
-        if (tag) void useStore.getState().openTagView(tag)
-        return
+      if (anchor.classList.contains("hashtag")) {
+        e.preventDefault();
+        const tag = anchor.getAttribute("data-tag");
+        if (tag) void useStore.getState().openTagView(tag);
+        return;
       }
-      const localAssetUrl = anchor.dataset.localAssetUrl
+      const localAssetUrl = anchor.dataset.localAssetUrl;
       if (localAssetUrl) {
-        e.preventDefault()
-        window.open(localAssetUrl, '_blank')
-        return
+        e.preventDefault();
+        window.open(localAssetUrl, "_blank");
+        return;
       }
       // External links: let Electron's window-open handler send them to the OS browser.
-      const href = anchor.getAttribute('href') || ''
+      const href = anchor.getAttribute("href") || "";
       if (/^(https?:|file:)/i.test(href)) {
-        e.preventDefault()
-        window.open(href, '_blank')
+        e.preventDefault();
+        window.open(href, "_blank");
       }
-    }
+    };
     const onMouseOver = (e: MouseEvent): void => {
-      const target = e.target as HTMLElement
-      const anchor = target.closest('a.wikilink') as HTMLAnchorElement | null
-      if (!anchor) return
-      const resolvedPath = anchor.dataset.resolvedPath
-      if (!resolvedPath) return
-      const note = notes.find((item) => item.path === resolvedPath)
-      if (!note) return
-      setHovered({ note, rect: anchor.getBoundingClientRect() })
-    }
+      const target = e.target as HTMLElement;
+      const anchor = target.closest("a.wikilink") as HTMLAnchorElement | null;
+      if (!anchor) return;
+      const resolvedPath = anchor.dataset.resolvedPath;
+      if (!resolvedPath) return;
+      const note = notes.find((item) => item.path === resolvedPath);
+      if (!note) return;
+      clearHoverDismiss();
+      setHovered({ note, rect: anchor.getBoundingClientRect() });
+    };
     const onMouseMove = (e: MouseEvent): void => {
-      const target = e.target as HTMLElement
-      const anchor = target.closest('a.wikilink') as HTMLAnchorElement | null
+      const target = e.target as HTMLElement;
+      const anchor = target.closest("a.wikilink") as HTMLAnchorElement | null;
       if (!anchor) {
-        setHovered(null)
-        return
+        // Pointer moved off the link. Don't dismiss immediately — the
+        // popover lives outside this root, and the user is probably on
+        // their way to it. The grace timer will clear the hover if
+        // they never arrive.
+        scheduleHoverDismiss();
+        return;
       }
-      const resolvedPath = anchor.dataset.resolvedPath
-      if (!resolvedPath) return
-      const note = notes.find((item) => item.path === resolvedPath)
-      if (!note) return
-      setHovered({ note, rect: anchor.getBoundingClientRect() })
-    }
+      const resolvedPath = anchor.dataset.resolvedPath;
+      if (!resolvedPath) return;
+      const note = notes.find((item) => item.path === resolvedPath);
+      if (!note) return;
+      clearHoverDismiss();
+      setHovered({ note, rect: anchor.getBoundingClientRect() });
+    };
     const onMouseOut = (e: MouseEvent): void => {
-      const target = e.target as HTMLElement
-      if (target.closest('a.wikilink')) setHovered(null)
-    }
+      const target = e.target as HTMLElement;
+      if (target.closest("a.wikilink")) scheduleHoverDismiss();
+    };
     const onChange = (e: Event): void => {
-      const input = e.target as HTMLInputElement | null
-      if (!input || input.type !== 'checkbox') return
-      const taskIndex = Number.parseInt(input.dataset.taskIndex ?? '-1', 10)
-      if (!Number.isFinite(taskIndex) || taskIndex < 0) return
-      const nextMarkdown = toggleTaskAtIndex(markdown, taskIndex, input.checked)
-      if (nextMarkdown === markdown) return
-      updateActiveBody(nextMarkdown)
-      void persistActive()
-    }
+      const input = e.target as HTMLInputElement | null;
+      if (!input || input.type !== "checkbox") return;
+      const taskIndex = Number.parseInt(input.dataset.taskIndex ?? "-1", 10);
+      if (!Number.isFinite(taskIndex) || taskIndex < 0) return;
+      const nextMarkdown = toggleTaskAtIndex(
+        markdown,
+        taskIndex,
+        input.checked,
+      );
+      if (nextMarkdown === markdown) return;
+      updateActiveBody(nextMarkdown);
+      void persistActive();
+    };
     const onContextMenu = (e: MouseEvent): void => {
-      const target = e.target as HTMLElement
+      const target = e.target as HTMLElement;
       // Find the closest embedded-asset host (figure/anchor) that we
       // tagged in `enhanceLocalAssetNodes` or the CM PDF widget.
       const host = target.closest<HTMLElement>(
-        '[data-local-asset-kind][data-local-asset-url]'
-      )
-      if (!host) return
-      if (host.dataset.localAssetKind !== 'pdf') return
-      const url = host.dataset.localAssetUrl || ''
-      const href = host.dataset.localAssetHref || host.getAttribute('href') || ''
-      if (!url) return
-      e.preventDefault()
+        "[data-local-asset-kind][data-local-asset-url]",
+      );
+      if (!host) return;
+      if (host.dataset.localAssetKind !== "pdf") return;
+      const url = host.dataset.localAssetUrl || "";
+      const href =
+        host.dataset.localAssetHref || host.getAttribute("href") || "";
+      if (!url) return;
+      e.preventDefault();
       const vaultRel = vault?.root
         ? resolveAssetVaultRelativePath(vault.root, notePath, href || url)
-        : null
-      setAssetMenu({ x: e.clientX, y: e.clientY, url, vaultRel, href })
-    }
+        : null;
+      setAssetMenu({ x: e.clientX, y: e.clientY, url, vaultRel, href });
+    };
 
-    root.addEventListener('click', onClick)
-    root.addEventListener('mouseover', onMouseOver)
-    root.addEventListener('mousemove', onMouseMove)
-    root.addEventListener('mouseout', onMouseOut)
-    root.addEventListener('change', onChange)
-    root.addEventListener('contextmenu', onContextMenu)
+    root.addEventListener("click", onClick);
+    root.addEventListener("mouseover", onMouseOver);
+    root.addEventListener("mousemove", onMouseMove);
+    root.addEventListener("mouseout", onMouseOut);
+    root.addEventListener("change", onChange);
+    root.addEventListener("contextmenu", onContextMenu);
 
     return () => {
-      root.removeEventListener('click', onClick)
-      root.removeEventListener('mouseover', onMouseOver)
-      root.removeEventListener('mousemove', onMouseMove)
-      root.removeEventListener('mouseout', onMouseOut)
-      root.removeEventListener('change', onChange)
-      root.removeEventListener('contextmenu', onContextMenu)
-    }
+      root.removeEventListener("click", onClick);
+      root.removeEventListener("mouseover", onMouseOver);
+      root.removeEventListener("mousemove", onMouseMove);
+      root.removeEventListener("mouseout", onMouseOut);
+      root.removeEventListener("change", onChange);
+      root.removeEventListener("contextmenu", onContextMenu);
+    };
   }, [
     html,
     markdown,
@@ -509,8 +558,8 @@ export function Preview({
     vault?.root,
     pinnedAssetPath,
     pinnedRefVisible,
-    togglePinnedRefVisible
-  ])
+    togglePinnedRefVisible,
+  ]);
 
   // Theme-aware mermaid rendering. Runs independently of the DOM-wiring
   // effect above so it can re-render diagrams when the user switches
@@ -519,16 +568,16 @@ export function Preview({
   // so we can re-parse it even after the first render replaced the div's
   // innerHTML with an SVG.
   useEffect(() => {
-    const root = ref.current
-    if (!root) return
-    let cancelled = false
+    const root = ref.current;
+    if (!root) return;
+    let cancelled = false;
     void renderMermaidBlocks(root, effectiveMode).catch(() => {
       /* render errors are surfaced inline per block */
-    })
+    });
     return () => {
-      cancelled = true
-    }
-  }, [html, effectiveMode])
+      cancelled = true;
+    };
+  }, [html, effectiveMode]);
 
   // TikZ / JSXGraph / function-plot rendering. Mirrors the mermaid
   // effect — placeholder divs get discovered after each render and
@@ -537,39 +586,39 @@ export function Preview({
   // function-plot; TikZ output is static SVG we post-tint to
   // `currentColor`).
   useEffect(() => {
-    const root = ref.current
-    if (!root) return
-    void renderDiagrams(root, { themeKey: effectiveMode, expanded: false })
-  }, [html, effectiveMode])
+    const root = ref.current;
+    if (!root) return;
+    void renderDiagrams(root, { themeKey: effectiveMode, expanded: false });
+  }, [html, effectiveMode]);
 
   const assetMenuItems = useMemo<ContextMenuItem[]>(() => {
-    if (!assetMenu) return []
+    if (!assetMenu) return [];
     return [
       {
-        label: 'Open as Reference (This Note)',
+        label: "Open as Reference (This Note)",
         disabled: !assetMenu.vaultRel,
         onSelect: async () => {
           if (assetMenu.vaultRel) {
-            pinAssetReferenceForNote(notePath, assetMenu.vaultRel)
+            pinAssetReferenceForNote(notePath, assetMenu.vaultRel);
           }
-        }
+        },
       },
       {
-        label: 'Open as Reference (Global)',
+        label: "Open as Reference (Global)",
         disabled: !assetMenu.vaultRel,
         onSelect: async () => {
-          if (assetMenu.vaultRel) pinAssetReference(assetMenu.vaultRel)
-        }
+          if (assetMenu.vaultRel) pinAssetReference(assetMenu.vaultRel);
+        },
       },
       {
-        label: 'Open in New Window',
+        label: "Open in New Window",
         onSelect: async () => {
-          window.open(assetMenu.url, '_blank')
-        }
-      }
-    ]
-  }, [assetMenu, notePath, pinAssetReference, pinAssetReferenceForNote])
-  const closeAssetMenu = useCallback(() => setAssetMenu(null), [])
+          window.open(assetMenu.url, "_blank");
+        },
+      },
+    ];
+  }, [assetMenu, notePath, pinAssetReference, pinAssetReferenceForNote]);
+  const closeAssetMenu = useCallback(() => setAssetMenu(null), []);
 
   return (
     <>
@@ -579,7 +628,15 @@ export function Preview({
         className="prose-zen py-8"
         dangerouslySetInnerHTML={{ __html: html }}
       />
-      {hovered && <NoteHoverPreview note={hovered.note} anchorRect={hovered.rect} />}
+      {hovered && (
+        <NoteHoverPreview
+          note={hovered.note}
+          anchorRect={hovered.rect}
+          interactive
+          onPointerEnter={clearHoverDismiss}
+          onPointerLeave={scheduleHoverDismiss}
+        />
+      )}
       {assetMenu && (
         <ContextMenu
           x={assetMenu.x}
@@ -596,63 +653,67 @@ export function Preview({
         />
       )}
     </>
-  )
+  );
 }
 
 function ExpandedDiagramModal({
   diagram,
   themeKey,
-  onClose
+  onClose,
 }: {
-  diagram: ExpandedDiagram
-  themeKey: 'light' | 'dark'
-  onClose: () => void
+  diagram: ExpandedDiagram;
+  themeKey: "light" | "dark";
+  onClose: () => void;
 }): JSX.Element {
-  const hostRef = useRef<HTMLDivElement | null>(null)
+  const hostRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') {
-        e.preventDefault()
-        onClose()
+      if (e.key === "Escape") {
+        e.preventDefault();
+        onClose();
       }
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [onClose])
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
 
   useEffect(() => {
-    const host = hostRef.current
-    if (!host) return
-    host.innerHTML = ''
-    const el = document.createElement('div')
-    el.className = DIAGRAM_CLASS_BY_KIND[diagram.kind]
-    el.setAttribute(DIAGRAM_SOURCE_ATTR_BY_KIND[diagram.kind], diagram.source)
-    el.dataset.zenDiagramKind = diagram.kind
-    el.dataset.zenDiagramSource = diagram.source
-    el.dataset.zenDiagramExpanded = 'true'
-    host.appendChild(el)
+    const host = hostRef.current;
+    if (!host) return;
+    host.innerHTML = "";
+    const el = document.createElement("div");
+    el.className = DIAGRAM_CLASS_BY_KIND[diagram.kind];
+    el.setAttribute(DIAGRAM_SOURCE_ATTR_BY_KIND[diagram.kind], diagram.source);
+    el.dataset.zenDiagramKind = diagram.kind;
+    el.dataset.zenDiagramSource = diagram.source;
+    el.dataset.zenDiagramExpanded = "true";
+    host.appendChild(el);
 
-    if (diagram.kind === 'mermaid') {
-      void renderMermaidBlocks(host, themeKey, { expanded: true })
+    if (diagram.kind === "mermaid") {
+      void renderMermaidBlocks(host, themeKey, { expanded: true });
     } else {
-      void renderDiagrams(host, { themeKey, expanded: true })
+      void renderDiagrams(host, { themeKey, expanded: true });
     }
-  }, [diagram, themeKey])
+  }, [diagram, themeKey]);
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 p-6 backdrop-blur-sm"
+      className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm md:p-6"
       onClick={onClose}
     >
       <div
-        className="w-[min(1180px,94vw)] overflow-hidden rounded-2xl border border-paper-300/70 bg-paper-100 shadow-float"
+        className="w-[min(1360px,96vw)] overflow-hidden rounded-2xl border border-paper-300/70 bg-paper-100 shadow-float"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-paper-300/60 px-5 py-3">
           <div>
-            <div className="text-sm font-semibold text-ink-900">Expanded diagram</div>
-            <div className="text-xs text-ink-500">Press Esc or click outside to close.</div>
+            <div className="text-sm font-semibold text-ink-900">
+              Expanded diagram
+            </div>
+            <div className="text-xs text-ink-500">
+              Press Esc or click outside to close.
+            </div>
           </div>
           <button
             type="button"
@@ -662,11 +723,11 @@ function ExpandedDiagramModal({
             Close
           </button>
         </div>
-        <div className="max-h-[84vh] overflow-auto p-5">
+        <div className="max-h-[90vh] overflow-auto p-4 md:p-5">
           <div ref={hostRef} className="zen-diagram-modal-host" />
         </div>
       </div>
     </div>,
-    document.body
-  )
+    document.body,
+  );
 }

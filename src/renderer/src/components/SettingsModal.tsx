@@ -1,10 +1,17 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type {
   VaultTextSearchBackendPreference,
   VaultTextSearchCapabilities,
   VaultTextSearchToolPaths
 } from '@shared/ipc'
+import {
+  MCP_CLIENTS,
+  type McpClientId,
+  type McpClientStatus,
+  type McpInstructionsPayload,
+  type McpServerRuntime
+} from '@shared/mcp-clients'
 import { useStore } from '../store'
 import type { LineNumberMode, WhichKeyHintMode } from '../store'
 import type { KeymapDefinition, KeymapId, KeymapOverrides } from '../lib/keymaps'
@@ -28,6 +35,7 @@ type SettingsCategoryId =
   | 'keymaps'
   | 'typography'
   | 'vault'
+  | 'mcp'
   | 'about'
 
 type ResolvedVaultTextSearchBackend = 'builtin' | 'ripgrep' | 'fzf'
@@ -89,6 +97,8 @@ export function SettingsModal(): JSX.Element {
   const setQuickNoteDateTitle = useStore((s) => s.setQuickNoteDateTitle)
   const wordWrap = useStore((s) => s.wordWrap)
   const setWordWrap = useStore((s) => s.setWordWrap)
+  const previewSmoothScroll = useStore((s) => s.previewSmoothScroll)
+  const setPreviewSmoothScroll = useStore((s) => s.setPreviewSmoothScroll)
   const editorMaxWidth = useStore((s) => s.editorMaxWidth)
   const setEditorMaxWidth = useStore((s) => s.setEditorMaxWidth)
   const pdfEmbedInEditMode = useStore((s) => s.pdfEmbedInEditMode)
@@ -530,6 +540,12 @@ export function SettingsModal(): JSX.Element {
               value={wordWrap}
               onChange={setWordWrap}
             />
+            <ToggleRow
+              label="Smooth preview scroll"
+              description="Animate Ctrl+D / Ctrl+U half-page jumps in preview mode. Turn off for an instant snap that keeps position predictable."
+              value={previewSmoothScroll}
+              onChange={setPreviewSmoothScroll}
+            />
             <SegmentedRow
               label="PDFs in edit mode"
               description="Compact keeps the editor focused. Full inlines the PDF viewer under your cursor."
@@ -695,6 +711,25 @@ export function SettingsModal(): JSX.Element {
           </div>
         </Section>
       )
+    },
+    {
+      id: 'mcp',
+      title: 'MCP',
+      description:
+        'Expose your vault to Claude Code, Claude Desktop, and Codex via the Model Context Protocol.',
+      keywords: [
+        'mcp',
+        'claude',
+        'claude code',
+        'claude desktop',
+        'codex',
+        'anthropic',
+        'openai',
+        'integration',
+        'agent',
+        'model context protocol'
+      ],
+      content: <McpSettings />
     },
     {
       id: 'about',
@@ -1642,6 +1677,426 @@ function SegmentedRow<T extends string>({
             {option.label}
           </button>
         ))}
+      </div>
+    </div>
+  )
+}
+
+function McpSettings(): JSX.Element {
+  const [statuses, setStatuses] = useState<McpClientStatus[] | null>(null)
+  const [runtime, setRuntime] = useState<McpServerRuntime | null>(null)
+  const [busyId, setBusyId] = useState<McpClientId | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [showCommand, setShowCommand] = useState(false)
+
+  const refresh = useCallback(async (): Promise<void> => {
+    try {
+      const [s, r] = await Promise.all([
+        window.zen.mcpGetStatuses(),
+        window.zen.mcpGetRuntime()
+      ])
+      setStatuses(s)
+      setRuntime(r)
+      setError(null)
+    } catch (err) {
+      setError((err as Error).message)
+    }
+  }, [])
+
+  useEffect(() => {
+    void refresh()
+  }, [refresh])
+
+  const onInstall = async (id: McpClientId): Promise<void> => {
+    setBusyId(id)
+    try {
+      await window.zen.mcpInstall(id)
+      await refresh()
+    } catch (err) {
+      setError((err as Error).message)
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  const onUninstall = async (id: McpClientId): Promise<void> => {
+    setBusyId(id)
+    try {
+      await window.zen.mcpUninstall(id)
+      await refresh()
+    } catch (err) {
+      setError((err as Error).message)
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  const copy = (text: string): void => {
+    window.zen.clipboardWriteText(text)
+  }
+
+  const commandPreview = runtime
+    ? `${runtime.command} ${runtime.args.map((a) => (a.includes(' ') ? `"${a}"` : a)).join(' ')}`
+    : '—'
+  const entryMissing = runtime !== null && runtime.entryPath == null
+
+  const serverStatusLabel = runtime == null
+    ? 'Checking\u2026'
+    : entryMissing
+      ? 'Not built'
+      : 'Ready'
+  const serverStatusTone = runtime == null
+    ? 'off'
+    : entryMissing
+      ? 'warn'
+      : 'ok'
+  const serverStatusClass = statusChipClass(serverStatusTone)
+
+  return (
+    <div className="space-y-6">
+      <Section
+        title="Server"
+        description="ZenNotes bundles a local MCP server that every client below connects to. It uses the packaged Electron binary in plain-Node mode, so no separate Node install is required."
+      >
+        <div className="px-5 py-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <span
+                className={[
+                  'rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.14em]',
+                  serverStatusClass
+                ].join(' ')}
+              >
+                {serverStatusLabel}
+              </span>
+              <span className="text-xs text-ink-500">
+                {runtime == null
+                  ? 'Querying runtime\u2026'
+                  : entryMissing
+                    ? 'Run npm run build so installers have an entry script to register.'
+                    : 'Entry script compiled. Install a client below to connect it.'}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowCommand((open) => !open)}
+              className="rounded-lg border border-paper-300/70 bg-paper-100/80 px-3 py-1.5 text-xs font-medium text-ink-800 transition-colors hover:bg-paper-200"
+            >
+              {showCommand ? 'Hide command' : 'Show command'}
+            </button>
+          </div>
+          {showCommand && (
+            <div className="mt-3 flex items-start gap-2">
+              <code className="min-w-0 flex-1 break-all rounded-lg border border-paper-300/70 bg-paper-50/80 px-3 py-2 font-mono text-[11px] leading-5 text-ink-900">
+                {commandPreview}
+              </code>
+              <button
+                type="button"
+                onClick={() => copy(commandPreview)}
+                className="shrink-0 rounded-lg border border-paper-300/70 bg-paper-100/80 px-3 py-2 text-xs font-medium text-ink-800 transition-colors hover:bg-paper-200"
+              >
+                Copy
+              </button>
+            </div>
+          )}
+        </div>
+      </Section>
+
+      <Section
+        title="Integrations"
+        description="Pick the clients you want connected to this vault. Install writes a managed ZenNotes entry into that client\u2019s config; Uninstall removes just that entry."
+      >
+        {statuses == null ? (
+          <InlineNote>Checking integration status\u2026</InlineNote>
+        ) : (
+          <div className="divide-y divide-paper-300/45">
+            {MCP_CLIENTS.map((descriptor) => {
+              const status = statuses.find((s) => s.id === descriptor.id)
+              if (!status) return null
+              return (
+                <McpClientRow
+                  key={descriptor.id}
+                  title={descriptor.label}
+                  description={descriptor.description}
+                  status={status}
+                  busy={busyId === descriptor.id}
+                  entryMissing={entryMissing}
+                  onInstall={() => void onInstall(descriptor.id)}
+                  onUninstall={() => void onUninstall(descriptor.id)}
+                  onCopyConfigPath={() => copy(status.configPath)}
+                />
+              )
+            })}
+          </div>
+        )}
+        {error && (
+          <InlineNote>
+            <span className="text-ink-900">Something went wrong:</span> {error}
+          </InlineNote>
+        )}
+      </Section>
+
+      <McpInstructionsEditor />
+    </div>
+  )
+}
+
+function McpInstructionsEditor(): JSX.Element {
+  const [payload, setPayload] = useState<McpInstructionsPayload | null>(null)
+  const [draft, setDraft] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const load = useCallback(async (): Promise<void> => {
+    try {
+      const next = await window.zen.mcpGetInstructions()
+      setPayload(next)
+      setDraft(next.current)
+      setError(null)
+    } catch (err) {
+      setError((err as Error).message)
+    }
+  }, [])
+
+  useEffect(() => {
+    void load()
+  }, [load])
+
+  const dirty = payload != null && draft !== payload.current
+  const matchesDefault = payload != null && draft === payload.defaultValue
+
+  const save = async (): Promise<void> => {
+    if (payload == null) return
+    setSaving(true)
+    try {
+      // Writing the default string clears the override (null) — users
+      // who hit "Reset" and then Save get the cleanest possible state.
+      const next = matchesDefault ? null : draft
+      const res = await window.zen.mcpSetInstructions(next)
+      setPayload(res)
+      setDraft(res.current)
+      setError(null)
+    } catch (err) {
+      setError((err as Error).message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const resetToDefault = (): void => {
+    if (!payload) return
+    setDraft(payload.defaultValue)
+  }
+
+  const revert = (): void => {
+    if (!payload) return
+    setDraft(payload.current)
+  }
+
+  return (
+    <Section
+      title="Instructions"
+      description="The system prompt ZenNotes ships to any connected MCP client. Edit it to change how the AI writes, structures, and styles your notes. Changes take effect on the next MCP session."
+    >
+      <div className="space-y-3 px-5 py-5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-ink-500">
+            <span>Prompt</span>
+            {payload?.isCustom ? (
+              <span className="rounded-full border border-accent/25 bg-accent/10 px-2 py-0.5 text-[10px] font-medium tracking-[0.14em] text-accent">
+                Custom
+              </span>
+            ) : (
+              <span className="rounded-full border border-paper-300/70 bg-paper-100/85 px-2 py-0.5 text-[10px] font-medium tracking-[0.14em] text-ink-500">
+                Default
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={resetToDefault}
+              disabled={payload == null || draft === payload.defaultValue}
+              className={[
+                'rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors',
+                payload != null && draft !== payload.defaultValue
+                  ? 'border-paper-300/70 bg-paper-100/80 text-ink-800 hover:bg-paper-200'
+                  : 'cursor-not-allowed border-paper-300/60 bg-paper-100/45 text-ink-400'
+              ].join(' ')}
+            >
+              Reset to default
+            </button>
+            <button
+              type="button"
+              onClick={revert}
+              disabled={!dirty}
+              className={[
+                'rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors',
+                dirty
+                  ? 'border-paper-300/70 bg-paper-100/80 text-ink-800 hover:bg-paper-200'
+                  : 'cursor-not-allowed border-paper-300/60 bg-paper-100/45 text-ink-400'
+              ].join(' ')}
+            >
+              Revert
+            </button>
+            <button
+              type="button"
+              onClick={() => void save()}
+              disabled={!dirty || saving}
+              className={[
+                'rounded-lg px-3.5 py-1.5 text-xs font-medium transition-colors',
+                dirty && !saving
+                  ? 'bg-ink-900 text-paper-50 hover:bg-ink-800'
+                  : 'cursor-not-allowed bg-paper-300 text-ink-500'
+              ].join(' ')}
+            >
+              {saving ? 'Saving…' : 'Save'}
+            </button>
+          </div>
+        </div>
+        <textarea
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          spellCheck={false}
+          className="h-[360px] w-full resize-y rounded-xl border border-paper-300/70 bg-paper-50/80 px-3.5 py-3 font-mono text-[12px] leading-5 text-ink-900 outline-none placeholder:text-ink-400 focus:border-accent/45"
+          placeholder="Loading…"
+        />
+        <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-ink-500">
+          <span>
+            Saved at:{' '}
+            <code className="font-mono text-[11px] text-ink-600">
+              {payload?.filePath ?? '—'}
+            </code>
+          </span>
+          <span>
+            {draft.length.toLocaleString()} chars · {draft.split(/\r?\n/).length} lines
+          </span>
+        </div>
+        {error && (
+          <InlineNote>
+            <span className="text-ink-900">Something went wrong:</span> {error}
+          </InlineNote>
+        )}
+      </div>
+    </Section>
+  )
+}
+
+function statusChipClass(tone: 'ok' | 'warn' | 'off'): string {
+  if (tone === 'ok') return 'border-accent/25 bg-accent/10 text-accent'
+  if (tone === 'warn') return 'border-amber-500/30 bg-amber-500/10 text-amber-500'
+  return 'border-paper-300/70 bg-paper-100/85 text-ink-500'
+}
+
+function McpClientRow({
+  title,
+  description,
+  status,
+  busy,
+  entryMissing,
+  onInstall,
+  onUninstall,
+  onCopyConfigPath
+}: {
+  title: string
+  description: string
+  status: McpClientStatus
+  busy: boolean
+  entryMissing: boolean
+  onInstall: () => void
+  onUninstall: () => void
+  onCopyConfigPath: () => void
+}): JSX.Element {
+  const chip = status.installed
+    ? status.upToDate
+      ? { label: 'Installed', tone: 'ok' as const }
+      : { label: 'Needs update', tone: 'warn' as const }
+    : { label: 'Not installed', tone: 'off' as const }
+
+  return (
+    <div className="flex flex-col gap-3 px-5 py-4">
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span className="text-sm font-medium text-ink-900">{title}</span>
+            <span
+              className={[
+                'rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.14em]',
+                statusChipClass(chip.tone)
+              ].join(' ')}
+            >
+              {chip.label}
+            </span>
+          </div>
+          <div className="mt-1 text-xs leading-5 text-ink-500">{description}</div>
+          {status.note && <div className="mt-1.5 text-xs leading-5 text-ink-500">{status.note}</div>}
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          {status.installed ? (
+            <>
+              {!status.upToDate && (
+                <button
+                  type="button"
+                  onClick={onInstall}
+                  disabled={busy || entryMissing}
+                  className={[
+                    'rounded-xl border px-3 py-1.5 text-xs font-medium transition-colors',
+                    busy || entryMissing
+                      ? 'cursor-not-allowed border-paper-300/60 bg-paper-100/45 text-ink-400'
+                      : 'border-accent/30 bg-accent/15 text-accent hover:bg-accent/25'
+                  ].join(' ')}
+                >
+                  Update
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={onUninstall}
+                disabled={busy}
+                className={[
+                  'rounded-xl border px-3 py-1.5 text-xs font-medium transition-colors',
+                  busy
+                    ? 'cursor-not-allowed border-paper-300/60 bg-paper-100/45 text-ink-400'
+                    : 'border-paper-300/70 bg-paper-100/80 text-ink-700 hover:bg-paper-200'
+                ].join(' ')}
+              >
+                Uninstall
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={onInstall}
+              disabled={busy || entryMissing}
+              className={[
+                'rounded-xl px-3.5 py-1.5 text-xs font-medium transition-colors',
+                busy || entryMissing
+                  ? 'cursor-not-allowed bg-paper-300 text-ink-500'
+                  : 'bg-ink-900 text-paper-50 hover:bg-ink-800'
+              ].join(' ')}
+            >
+              {busy ? 'Installing…' : 'Install'}
+            </button>
+          )}
+        </div>
+      </div>
+      <div className="flex items-center gap-2 border-t border-paper-300/45 pt-2 text-[11px] text-ink-500">
+        <span className="text-[10px] font-medium uppercase tracking-[0.14em] text-ink-400">
+          Config
+        </span>
+        <code
+          className="min-w-0 flex-1 truncate font-mono text-[11px] text-ink-600"
+          title={status.configPath}
+        >
+          {status.configPath}
+        </code>
+        <button
+          type="button"
+          onClick={onCopyConfigPath}
+          className="shrink-0 rounded-md border border-paper-300/70 bg-paper-100/80 px-2 py-0.5 text-[10px] font-medium text-ink-700 transition-colors hover:bg-paper-200"
+        >
+          Copy
+        </button>
       </div>
     </div>
   )

@@ -484,6 +484,31 @@ export function VimNav(): JSX.Element | null {
         }
       }
 
+      // ------- Half-page scroll (universal) -----------------------------
+      // Ctrl+D / Ctrl+U scroll the visible preview regardless of which
+      // panel currently owns focus. Without this, clicking into the
+      // sidebar or note list would silently disable these Vim motions
+      // because the panel-specific handlers below don\u2019t know about
+      // them. Exceptions: don\u2019t hijack when the user is typing in
+      // an input/textarea, when the editor is in insert mode, or when
+      // a leader sequence is pending.
+      {
+        const wantsHalf =
+          matchesSequenceToken(e, overrides, 'nav.halfPageDown') ||
+          matchesSequenceToken(e, overrides, 'nav.halfPageUp')
+        if (wantsHalf && previewEl && !leaderPending.current && !editorInsertMode) {
+          const tag = (e.target as HTMLElement | null)?.tagName
+          if (tag !== 'INPUT' && tag !== 'TEXTAREA') {
+            e.preventDefault()
+            e.stopImmediatePropagation()
+            const step = getPreviewPageStep(previewEl)
+            const down = matchesSequenceToken(e, overrides, 'nav.halfPageDown')
+            scrollPreviewBy(previewEl, down ? step : -step)
+            return
+          }
+        }
+      }
+
       // ------- Sidebar navigation (explicit) -----------------------------
       // When focusedPanel is 'sidebar', always handle here — even if the
       // editor still holds stale DOM focus from a previous interaction.
@@ -1014,11 +1039,22 @@ export function VimNav(): JSX.Element | null {
   }
 
   function scrollPreviewBy(previewEl: HTMLElement, delta: number): void {
-    previewEl.scrollBy({ top: delta, behavior: 'auto' })
+    // Clamp explicitly instead of relying on the browser. scrollBy
+    // with `behavior: 'smooth'` can occasionally overshoot-then-snap
+    // on Chromium when two scroll requests collide (e.g. with the
+    // split-mode scroll sync), which reads as "jumped to the top"
+    // to the user at the end of the document.
+    const maxTop = Math.max(0, previewEl.scrollHeight - previewEl.clientHeight)
+    const nextTop = Math.max(0, Math.min(maxTop, previewEl.scrollTop + delta))
+    if (nextTop === previewEl.scrollTop) return
+    const smooth = useStore.getState().previewSmoothScroll
+    previewEl.scrollTo({ top: nextTop, behavior: smooth ? 'smooth' : 'auto' })
   }
 
   function scrollPreviewTo(previewEl: HTMLElement, top: number): void {
-    previewEl.scrollTo({ top, behavior: 'auto' })
+    const maxTop = Math.max(0, previewEl.scrollHeight - previewEl.clientHeight)
+    const clamped = Math.max(0, Math.min(maxTop, top))
+    previewEl.scrollTo({ top: clamped, behavior: 'auto' })
   }
 
   function getIndexedElements(

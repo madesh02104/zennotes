@@ -49,6 +49,19 @@ import {
 import { scanAllTasks, scanTasksForPath } from './tasks'
 import { VaultWatcher } from './watcher'
 import { renderTikz } from './tikz'
+import {
+  getMcpClientStatuses,
+  getMcpServerRuntime,
+  installMcpForClient,
+  uninstallMcpForClient
+} from './mcp-integrations'
+import type { McpClientId, McpInstructionsPayload } from '@shared/mcp-clients'
+import {
+  instructionsFilePath,
+  readCustomInstructions,
+  writeCustomInstructions,
+  MCP_SERVER_INSTRUCTIONS
+} from '../mcp/instructions-store'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const LOCAL_ASSET_SCHEME = 'zen-asset'
@@ -653,6 +666,33 @@ function registerIpc(): void {
     if (result.ok) return { ok: true, svg: result.svg }
     return { ok: false, error: result.error }
   })
+
+  ipcMain.handle(IPC.MCP_RUNTIME, async () => await getMcpServerRuntime())
+  ipcMain.handle(IPC.MCP_STATUS, async () => await getMcpClientStatuses())
+  ipcMain.handle(IPC.MCP_INSTALL, async (_e, id: McpClientId) => await installMcpForClient(id))
+  ipcMain.handle(IPC.MCP_UNINSTALL, async (_e, id: McpClientId) => await uninstallMcpForClient(id))
+  ipcMain.handle(IPC.MCP_GET_INSTRUCTIONS, async (): Promise<McpInstructionsPayload> => {
+    const custom = await readCustomInstructions()
+    return {
+      defaultValue: MCP_SERVER_INSTRUCTIONS,
+      current: custom ?? MCP_SERVER_INSTRUCTIONS,
+      isCustom: custom != null,
+      filePath: instructionsFilePath()
+    }
+  })
+  ipcMain.handle(
+    IPC.MCP_SET_INSTRUCTIONS,
+    async (_e, next: string | null): Promise<McpInstructionsPayload> => {
+      await writeCustomInstructions(next)
+      const custom = await readCustomInstructions()
+      return {
+        defaultValue: MCP_SERVER_INSTRUCTIONS,
+        current: custom ?? MCP_SERVER_INSTRUCTIONS,
+        isCustom: custom != null,
+        filePath: instructionsFilePath()
+      }
+    }
+  )
 }
 
 /**

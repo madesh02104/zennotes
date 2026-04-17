@@ -1,767 +1,783 @@
-export type KeymapKind = 'shortcut' | 'sequence'
+export type KeymapKind = "shortcut" | "sequence";
 export type KeymapScope =
-  | 'app'
-  | 'leader'
-  | 'pane'
-  | 'vim-editor'
-  | 'lists'
-  | 'views'
-export type KeymapGroup = 'global' | 'vim' | 'navigation' | 'view-actions'
+  | "app"
+  | "leader"
+  | "pane"
+  | "vim-editor"
+  | "lists"
+  | "views";
+export type KeymapGroup = "global" | "vim" | "navigation" | "view-actions";
 
 export type KeymapId =
-  | 'global.searchNotes'
-  | 'global.searchNotesNonVim'
-  | 'global.commandPalette'
-  | 'global.newQuickNote'
-  | 'global.openSettings'
-  | 'global.toggleSidebar'
-  | 'global.toggleConnections'
-  | 'global.toggleOutlinePanel'
-  | 'global.toggleZenMode'
-  | 'global.closeActiveTab'
-  | 'global.toggleWordWrap'
-  | 'vim.leaderPrefix'
-  | 'vim.leaderOpenBuffers'
-  | 'vim.leaderSearchNotes'
-  | 'vim.leaderSearchVaultText'
-  | 'vim.leaderToggleSidebar'
-  | 'vim.leaderNoteOutline'
-  | 'vim.leaderNoteActions'
-  | 'vim.leaderFormatNote'
-  | 'vim.panePrefix'
-  | 'vim.paneFocusLeft'
-  | 'vim.paneFocusDown'
-  | 'vim.paneFocusUp'
-  | 'vim.paneFocusRight'
-  | 'vim.paneSplitRight'
-  | 'vim.paneSplitDown'
-  | 'vim.historyBack'
-  | 'vim.historyForward'
-  | 'vim.hintMode'
-  | 'vim.goToDefinition'
-  | 'vim.foldCurrent'
-  | 'vim.unfoldCurrent'
-  | 'vim.foldAll'
-  | 'vim.unfoldAll'
-  | 'nav.moveDown'
-  | 'nav.moveUp'
-  | 'nav.jumpTop'
-  | 'nav.jumpBottom'
-  | 'nav.halfPageDown'
-  | 'nav.halfPageUp'
-  | 'nav.openSideItem'
-  | 'nav.openResult'
-  | 'nav.back'
-  | 'nav.toggleFolder'
-  | 'nav.filter'
-  | 'nav.contextMenu'
-  | 'nav.peekPreview'
-  | 'nav.restore'
-  | 'nav.delete'
-  | 'nav.toggleTask'
-  | 'nav.localEx'
-  | 'nav.newQuickNote'
-  | 'nav.unarchive'
+  | "global.searchNotes"
+  | "global.searchNotesNonVim"
+  | "global.commandPalette"
+  | "global.newQuickNote"
+  | "global.openSettings"
+  | "global.toggleSidebar"
+  | "global.toggleConnections"
+  | "global.toggleOutlinePanel"
+  | "global.toggleZenMode"
+  | "global.closeActiveTab"
+  | "global.toggleWordWrap"
+  | "vim.leaderPrefix"
+  | "vim.leaderOpenBuffers"
+  | "vim.leaderSearchNotes"
+  | "vim.leaderSearchVaultText"
+  | "vim.leaderToggleSidebar"
+  | "vim.leaderNoteOutline"
+  | "vim.leaderNoteActions"
+  | "vim.leaderFormatNote"
+  | "vim.panePrefix"
+  | "vim.paneFocusLeft"
+  | "vim.paneFocusDown"
+  | "vim.paneFocusUp"
+  | "vim.paneFocusRight"
+  | "vim.paneSplitRight"
+  | "vim.paneSplitDown"
+  | "vim.historyBack"
+  | "vim.historyForward"
+  | "vim.hintMode"
+  | "vim.goToDefinition"
+  | "vim.foldCurrent"
+  | "vim.unfoldCurrent"
+  | "vim.foldAll"
+  | "vim.unfoldAll"
+  | "nav.moveDown"
+  | "nav.moveUp"
+  | "nav.jumpTop"
+  | "nav.jumpBottom"
+  | "nav.halfPageDown"
+  | "nav.halfPageUp"
+  | "nav.openSideItem"
+  | "nav.openResult"
+  | "nav.back"
+  | "nav.toggleFolder"
+  | "nav.filter"
+  | "nav.contextMenu"
+  | "nav.peekPreview"
+  | "nav.restore"
+  | "nav.delete"
+  | "nav.toggleTask"
+  | "nav.localEx"
+  | "nav.newQuickNote"
+  | "nav.unarchive";
 
-export type KeymapOverrides = Partial<Record<KeymapId, string>>
+export type KeymapOverrides = Partial<Record<KeymapId, string>>;
 
 export interface KeymapDefinition {
-  id: KeymapId
-  kind: KeymapKind
-  scope: KeymapScope
-  group: KeymapGroup
-  title: string
-  description: string
-  defaultBinding: string
-  vimOnly?: boolean
-  nonVimOnly?: boolean
-  maxTokens?: number
+  id: KeymapId;
+  kind: KeymapKind;
+  scope: KeymapScope;
+  group: KeymapGroup;
+  title: string;
+  description: string;
+  defaultBinding: string;
+  vimOnly?: boolean;
+  nonVimOnly?: boolean;
+  maxTokens?: number;
 }
 
 const KEYMAP_DEFINITIONS: KeymapDefinition[] = [
   {
-    id: 'global.searchNotes',
-    kind: 'shortcut',
-    scope: 'app',
-    group: 'global',
-    title: 'Search notes',
-    description: 'Open the vault-wide note search palette.',
-    defaultBinding: 'Mod+P'
+    id: "global.searchNotes",
+    kind: "shortcut",
+    scope: "app",
+    group: "global",
+    title: "Search notes",
+    description: "Open the vault-wide note search palette.",
+    defaultBinding: "Mod+P",
   },
   {
-    id: 'global.searchNotesNonVim',
-    kind: 'shortcut',
-    scope: 'app',
-    group: 'global',
-    title: 'Search notes in non-Vim mode',
-    description: 'Extra direct search shortcut when Vim mode is off.',
-    defaultBinding: 'Mod+F',
-    nonVimOnly: true
+    id: "global.searchNotesNonVim",
+    kind: "shortcut",
+    scope: "app",
+    group: "global",
+    title: "Search notes in non-Vim mode",
+    description: "Extra direct search shortcut when Vim mode is off.",
+    defaultBinding: "Mod+F",
+    nonVimOnly: true,
   },
   {
-    id: 'global.commandPalette',
-    kind: 'shortcut',
-    scope: 'app',
-    group: 'global',
-    title: 'Open command palette',
-    description: 'Open the command palette.',
-    defaultBinding: 'Shift+Mod+P'
+    id: "global.commandPalette",
+    kind: "shortcut",
+    scope: "app",
+    group: "global",
+    title: "Open command palette",
+    description: "Open the command palette.",
+    defaultBinding: "Shift+Mod+P",
   },
   {
-    id: 'global.newQuickNote',
-    kind: 'shortcut',
-    scope: 'app',
-    group: 'global',
-    title: 'New quick note',
-    description: 'Create a quick capture note and focus its title.',
-    defaultBinding: 'Shift+Mod+N'
+    id: "global.newQuickNote",
+    kind: "shortcut",
+    scope: "app",
+    group: "global",
+    title: "New quick note",
+    description: "Create a quick capture note and focus its title.",
+    defaultBinding: "Shift+Mod+N",
   },
   {
-    id: 'global.openSettings',
-    kind: 'shortcut',
-    scope: 'app',
-    group: 'global',
-    title: 'Open settings',
-    description: 'Open the Settings modal.',
-    defaultBinding: 'Mod+,'
+    id: "global.openSettings",
+    kind: "shortcut",
+    scope: "app",
+    group: "global",
+    title: "Open settings",
+    description: "Open the Settings modal.",
+    defaultBinding: "Mod+,",
   },
   {
-    id: 'global.toggleSidebar',
-    kind: 'shortcut',
-    scope: 'app',
-    group: 'global',
-    title: 'Toggle sidebar',
-    description: 'Hide or show the left sidebar.',
-    defaultBinding: 'Mod+1'
+    id: "global.toggleSidebar",
+    kind: "shortcut",
+    scope: "app",
+    group: "global",
+    title: "Toggle sidebar",
+    description: "Hide or show the left sidebar.",
+    defaultBinding: "Mod+1",
   },
   {
-    id: 'global.toggleConnections',
-    kind: 'shortcut',
-    scope: 'app',
-    group: 'global',
-    title: 'Toggle connections panel',
-    description: 'Toggle the connections panel in the active pane.',
-    defaultBinding: 'Mod+2'
+    id: "global.toggleConnections",
+    kind: "shortcut",
+    scope: "app",
+    group: "global",
+    title: "Toggle connections panel",
+    description: "Toggle the connections panel in the active pane.",
+    defaultBinding: "Mod+2",
   },
   {
-    id: 'global.toggleOutlinePanel',
-    kind: 'shortcut',
-    scope: 'app',
-    group: 'global',
-    title: 'Toggle outline panel',
-    description: 'Toggle the outline panel in the active pane.',
-    defaultBinding: 'Mod+3'
+    id: "global.toggleOutlinePanel",
+    kind: "shortcut",
+    scope: "app",
+    group: "global",
+    title: "Toggle outline panel",
+    description: "Toggle the outline panel in the active pane.",
+    defaultBinding: "Mod+3",
   },
   {
-    id: 'global.toggleZenMode',
-    kind: 'shortcut',
-    scope: 'app',
-    group: 'global',
-    title: 'Toggle Zen mode',
-    description: 'Hide or restore the app chrome.',
-    defaultBinding: 'Mod+.'
+    id: "global.toggleZenMode",
+    kind: "shortcut",
+    scope: "app",
+    group: "global",
+    title: "Toggle Zen mode",
+    description: "Hide or restore the app chrome.",
+    defaultBinding: "Mod+.",
   },
   {
-    id: 'global.closeActiveTab',
-    kind: 'shortcut',
-    scope: 'app',
-    group: 'global',
-    title: 'Close active tab',
-    description: 'Close the current note or virtual tab.',
-    defaultBinding: 'Mod+W'
+    id: "global.closeActiveTab",
+    kind: "shortcut",
+    scope: "app",
+    group: "global",
+    title: "Close active tab",
+    description: "Close the current note or virtual tab.",
+    defaultBinding: "Mod+W",
   },
   {
-    id: 'global.toggleWordWrap',
-    kind: 'shortcut',
-    scope: 'app',
-    group: 'global',
-    title: 'Toggle word wrap',
-    description: 'Switch between wrapped lines and horizontal scrolling.',
-    defaultBinding: 'Alt+Z'
+    id: "global.toggleWordWrap",
+    kind: "shortcut",
+    scope: "app",
+    group: "global",
+    title: "Toggle word wrap",
+    description: "Switch between wrapped lines and horizontal scrolling.",
+    defaultBinding: "Alt+Z",
   },
   {
-    id: 'vim.leaderPrefix',
-    kind: 'sequence',
-    scope: 'leader',
-    group: 'vim',
-    title: 'Leader key',
-    description: 'Start leader mode and leader hints.',
-    defaultBinding: 'Space',
+    id: "vim.leaderPrefix",
+    kind: "sequence",
+    scope: "leader",
+    group: "vim",
+    title: "Leader key",
+    description: "Start leader mode and leader hints.",
+    defaultBinding: "Space",
     vimOnly: true,
-    maxTokens: 1
+    maxTokens: 1,
   },
   {
-    id: 'vim.leaderOpenBuffers',
-    kind: 'sequence',
-    scope: 'leader',
-    group: 'vim',
-    title: 'Leader: open buffers',
-    description: 'Open the buffer switcher.',
-    defaultBinding: 'o',
+    id: "vim.leaderOpenBuffers",
+    kind: "sequence",
+    scope: "leader",
+    group: "vim",
+    title: "Leader: open buffers",
+    description: "Open the buffer switcher.",
+    defaultBinding: "o",
     vimOnly: true,
-    maxTokens: 1
+    maxTokens: 1,
   },
   {
-    id: 'vim.leaderSearchNotes',
-    kind: 'sequence',
-    scope: 'leader',
-    group: 'vim',
-    title: 'Leader: search notes',
-    description: 'Open note search from any panel.',
-    defaultBinding: 'f',
+    id: "vim.leaderSearchNotes",
+    kind: "sequence",
+    scope: "leader",
+    group: "vim",
+    title: "Leader: search notes",
+    description: "Open note search from any panel.",
+    defaultBinding: "f",
     vimOnly: true,
-    maxTokens: 1
+    maxTokens: 1,
   },
   {
-    id: 'vim.leaderSearchVaultText',
-    kind: 'sequence',
-    scope: 'leader',
-    group: 'vim',
-    title: 'Leader: search vault text',
-    description: 'Open fuzzy vault text search across note contents.',
-    defaultBinding: 's t',
+    id: "vim.leaderSearchVaultText",
+    kind: "sequence",
+    scope: "leader",
+    group: "vim",
+    title: "Leader: search vault text",
+    description: "Open fuzzy vault text search across note contents.",
+    defaultBinding: "s t",
     vimOnly: true,
-    maxTokens: 2
+    maxTokens: 2,
   },
   {
-    id: 'vim.leaderToggleSidebar',
-    kind: 'sequence',
-    scope: 'leader',
-    group: 'vim',
-    title: 'Leader: toggle sidebar',
-    description: 'Show or hide the left sidebar.',
-    defaultBinding: 'e',
+    id: "vim.leaderToggleSidebar",
+    kind: "sequence",
+    scope: "leader",
+    group: "vim",
+    title: "Leader: toggle sidebar",
+    description: "Show or hide the left sidebar.",
+    defaultBinding: "e",
     vimOnly: true,
-    maxTokens: 1
+    maxTokens: 1,
   },
   {
-    id: 'vim.leaderNoteOutline',
-    kind: 'sequence',
-    scope: 'leader',
-    group: 'vim',
-    title: 'Leader: note outline',
-    description: 'Open the note outline palette.',
-    defaultBinding: 'p',
+    id: "vim.leaderNoteOutline",
+    kind: "sequence",
+    scope: "leader",
+    group: "vim",
+    title: "Leader: note outline",
+    description: "Open the note outline palette.",
+    defaultBinding: "p",
     vimOnly: true,
-    maxTokens: 1
+    maxTokens: 1,
   },
   {
-    id: 'vim.leaderNoteActions',
-    kind: 'sequence',
-    scope: 'leader',
-    group: 'vim',
-    title: 'Leader: note actions',
-    description: 'Open the note-local leader group.',
-    defaultBinding: 'l',
+    id: "vim.leaderNoteActions",
+    kind: "sequence",
+    scope: "leader",
+    group: "vim",
+    title: "Leader: note actions",
+    description: "Open the note-local leader group.",
+    defaultBinding: "l",
     vimOnly: true,
-    maxTokens: 1
+    maxTokens: 1,
   },
   {
-    id: 'vim.leaderFormatNote',
-    kind: 'sequence',
-    scope: 'leader',
-    group: 'vim',
-    title: 'Leader note action: format note',
-    description: 'Format the active note from the editor.',
-    defaultBinding: 'f',
+    id: "vim.leaderFormatNote",
+    kind: "sequence",
+    scope: "leader",
+    group: "vim",
+    title: "Leader note action: format note",
+    description: "Format the active note from the editor.",
+    defaultBinding: "f",
     vimOnly: true,
-    maxTokens: 1
+    maxTokens: 1,
   },
   {
-    id: 'vim.panePrefix',
-    kind: 'sequence',
-    scope: 'pane',
-    group: 'vim',
-    title: 'Pane command prefix',
-    description: 'Start pane focus and split commands.',
-    defaultBinding: 'Ctrl+W',
+    id: "vim.panePrefix",
+    kind: "sequence",
+    scope: "pane",
+    group: "vim",
+    title: "Pane command prefix",
+    description: "Start pane focus and split commands.",
+    defaultBinding: "Ctrl+W",
     vimOnly: true,
-    maxTokens: 1
+    maxTokens: 1,
   },
   {
-    id: 'vim.paneFocusLeft',
-    kind: 'sequence',
-    scope: 'pane',
-    group: 'vim',
-    title: 'Pane: focus left',
-    description: 'Move focus to the panel or pane on the left.',
-    defaultBinding: 'h',
+    id: "vim.paneFocusLeft",
+    kind: "sequence",
+    scope: "pane",
+    group: "vim",
+    title: "Pane: focus left",
+    description: "Move focus to the panel or pane on the left.",
+    defaultBinding: "h",
     vimOnly: true,
-    maxTokens: 1
+    maxTokens: 1,
   },
   {
-    id: 'vim.paneFocusDown',
-    kind: 'sequence',
-    scope: 'pane',
-    group: 'vim',
-    title: 'Pane: focus down',
-    description: 'Move focus to the panel or pane below.',
-    defaultBinding: 'j',
+    id: "vim.paneFocusDown",
+    kind: "sequence",
+    scope: "pane",
+    group: "vim",
+    title: "Pane: focus down",
+    description: "Move focus to the panel or pane below.",
+    defaultBinding: "j",
     vimOnly: true,
-    maxTokens: 1
+    maxTokens: 1,
   },
   {
-    id: 'vim.paneFocusUp',
-    kind: 'sequence',
-    scope: 'pane',
-    group: 'vim',
-    title: 'Pane: focus up',
-    description: 'Move focus to the panel or pane above.',
-    defaultBinding: 'k',
+    id: "vim.paneFocusUp",
+    kind: "sequence",
+    scope: "pane",
+    group: "vim",
+    title: "Pane: focus up",
+    description: "Move focus to the panel or pane above.",
+    defaultBinding: "k",
     vimOnly: true,
-    maxTokens: 1
+    maxTokens: 1,
   },
   {
-    id: 'vim.paneFocusRight',
-    kind: 'sequence',
-    scope: 'pane',
-    group: 'vim',
-    title: 'Pane: focus right',
-    description: 'Move focus to the panel or pane on the right.',
-    defaultBinding: 'l',
+    id: "vim.paneFocusRight",
+    kind: "sequence",
+    scope: "pane",
+    group: "vim",
+    title: "Pane: focus right",
+    description: "Move focus to the panel or pane on the right.",
+    defaultBinding: "l",
     vimOnly: true,
-    maxTokens: 1
+    maxTokens: 1,
   },
   {
-    id: 'vim.paneSplitRight',
-    kind: 'sequence',
-    scope: 'pane',
-    group: 'vim',
-    title: 'Pane: split right',
-    description: 'Clone the current tab into a pane on the right.',
-    defaultBinding: 'v',
+    id: "vim.paneSplitRight",
+    kind: "sequence",
+    scope: "pane",
+    group: "vim",
+    title: "Pane: split right",
+    description: "Clone the current tab into a pane on the right.",
+    defaultBinding: "v",
     vimOnly: true,
-    maxTokens: 1
+    maxTokens: 1,
   },
   {
-    id: 'vim.paneSplitDown',
-    kind: 'sequence',
-    scope: 'pane',
-    group: 'vim',
-    title: 'Pane: split down',
-    description: 'Clone the current tab into a pane below.',
-    defaultBinding: 's',
+    id: "vim.paneSplitDown",
+    kind: "sequence",
+    scope: "pane",
+    group: "vim",
+    title: "Pane: split down",
+    description: "Clone the current tab into a pane below.",
+    defaultBinding: "s",
     vimOnly: true,
-    maxTokens: 1
+    maxTokens: 1,
   },
   {
-    id: 'vim.historyBack',
-    kind: 'sequence',
-    scope: 'vim-editor',
-    group: 'vim',
-    title: 'Go back in note history',
-    description: 'Jump to the previous note location in history.',
-    defaultBinding: 'Ctrl+O',
+    id: "vim.historyBack",
+    kind: "sequence",
+    scope: "vim-editor",
+    group: "vim",
+    title: "Go back in note history",
+    description: "Jump to the previous note location in history.",
+    defaultBinding: "Ctrl+O",
     vimOnly: true,
-    maxTokens: 1
+    maxTokens: 1,
   },
   {
-    id: 'vim.historyForward',
-    kind: 'sequence',
-    scope: 'vim-editor',
-    group: 'vim',
-    title: 'Go forward in note history',
-    description: 'Jump forward in note history.',
-    defaultBinding: 'Ctrl+I',
+    id: "vim.historyForward",
+    kind: "sequence",
+    scope: "vim-editor",
+    group: "vim",
+    title: "Go forward in note history",
+    description: "Jump forward in note history.",
+    defaultBinding: "Ctrl+I",
     vimOnly: true,
-    maxTokens: 1
+    maxTokens: 1,
   },
   {
-    id: 'vim.hintMode',
-    kind: 'sequence',
-    scope: 'vim-editor',
-    group: 'vim',
-    title: 'Hint mode',
-    description: 'Show jump labels for clickable targets.',
-    defaultBinding: 'f',
+    id: "vim.hintMode",
+    kind: "sequence",
+    scope: "vim-editor",
+    group: "vim",
+    title: "Hint mode",
+    description: "Show jump labels for clickable targets.",
+    defaultBinding: "f",
     vimOnly: true,
-    maxTokens: 1
+    maxTokens: 1,
   },
   {
-    id: 'vim.goToDefinition',
-    kind: 'sequence',
-    scope: 'vim-editor',
-    group: 'vim',
-    title: 'Follow link at cursor',
-    description: 'Open the note, URL, or asset under the cursor.',
-    defaultBinding: 'g d',
+    id: "vim.goToDefinition",
+    kind: "sequence",
+    scope: "vim-editor",
+    group: "vim",
+    title: "Follow link at cursor",
+    description: "Open the note, URL, or asset under the cursor.",
+    defaultBinding: "g d",
     vimOnly: true,
-    maxTokens: 2
+    maxTokens: 2,
   },
   {
-    id: 'vim.foldCurrent',
-    kind: 'sequence',
-    scope: 'vim-editor',
-    group: 'vim',
-    title: 'Fold heading at cursor',
-    description: 'Collapse the heading section at the cursor.',
-    defaultBinding: 'z c',
+    id: "vim.foldCurrent",
+    kind: "sequence",
+    scope: "vim-editor",
+    group: "vim",
+    title: "Fold heading at cursor",
+    description: "Collapse the heading section at the cursor.",
+    defaultBinding: "z c",
     vimOnly: true,
-    maxTokens: 2
+    maxTokens: 2,
   },
   {
-    id: 'vim.unfoldCurrent',
-    kind: 'sequence',
-    scope: 'vim-editor',
-    group: 'vim',
-    title: 'Unfold heading at cursor',
-    description: 'Expand the heading section at the cursor.',
-    defaultBinding: 'z o',
+    id: "vim.unfoldCurrent",
+    kind: "sequence",
+    scope: "vim-editor",
+    group: "vim",
+    title: "Unfold heading at cursor",
+    description: "Expand the heading section at the cursor.",
+    defaultBinding: "z o",
     vimOnly: true,
-    maxTokens: 2
+    maxTokens: 2,
   },
   {
-    id: 'vim.foldAll',
-    kind: 'sequence',
-    scope: 'vim-editor',
-    group: 'vim',
-    title: 'Fold all headings',
-    description: 'Collapse every heading section in the note.',
-    defaultBinding: 'z M',
+    id: "vim.foldAll",
+    kind: "sequence",
+    scope: "vim-editor",
+    group: "vim",
+    title: "Fold all headings",
+    description: "Collapse every heading section in the note.",
+    defaultBinding: "z M",
     vimOnly: true,
-    maxTokens: 2
+    maxTokens: 2,
   },
   {
-    id: 'vim.unfoldAll',
-    kind: 'sequence',
-    scope: 'vim-editor',
-    group: 'vim',
-    title: 'Unfold all headings',
-    description: 'Expand every heading section in the note.',
-    defaultBinding: 'z R',
+    id: "vim.unfoldAll",
+    kind: "sequence",
+    scope: "vim-editor",
+    group: "vim",
+    title: "Unfold all headings",
+    description: "Expand every heading section in the note.",
+    defaultBinding: "z R",
     vimOnly: true,
-    maxTokens: 2
+    maxTokens: 2,
   },
   {
-    id: 'nav.moveDown',
-    kind: 'sequence',
-    scope: 'lists',
-    group: 'navigation',
-    title: 'Move selection down',
-    description: 'Move the current row cursor or panel selection down.',
-    defaultBinding: 'j',
-    maxTokens: 1
+    id: "nav.moveDown",
+    kind: "sequence",
+    scope: "lists",
+    group: "navigation",
+    title: "Move selection down",
+    description: "Move the current row cursor or panel selection down.",
+    defaultBinding: "j",
+    maxTokens: 1,
   },
   {
-    id: 'nav.moveUp',
-    kind: 'sequence',
-    scope: 'lists',
-    group: 'navigation',
-    title: 'Move selection up',
-    description: 'Move the current row cursor or panel selection up.',
-    defaultBinding: 'k',
-    maxTokens: 1
+    id: "nav.moveUp",
+    kind: "sequence",
+    scope: "lists",
+    group: "navigation",
+    title: "Move selection up",
+    description: "Move the current row cursor or panel selection up.",
+    defaultBinding: "k",
+    maxTokens: 1,
   },
   {
-    id: 'nav.jumpTop',
-    kind: 'sequence',
-    scope: 'lists',
-    group: 'navigation',
-    title: 'Jump to top',
-    description: 'Jump to the first visible row or to the top of preview content.',
-    defaultBinding: 'g g',
-    maxTokens: 2
+    id: "nav.jumpTop",
+    kind: "sequence",
+    scope: "lists",
+    group: "navigation",
+    title: "Jump to top",
+    description:
+      "Jump to the first visible row or to the top of preview content.",
+    defaultBinding: "g g",
+    maxTokens: 2,
   },
   {
-    id: 'nav.jumpBottom',
-    kind: 'sequence',
-    scope: 'lists',
-    group: 'navigation',
-    title: 'Jump to bottom',
-    description: 'Jump to the last visible row or to the bottom of preview content.',
-    defaultBinding: 'G',
-    maxTokens: 1
+    id: "nav.jumpBottom",
+    kind: "sequence",
+    scope: "lists",
+    group: "navigation",
+    title: "Jump to bottom",
+    description:
+      "Jump to the last visible row or to the bottom of preview content.",
+    defaultBinding: "G",
+    maxTokens: 1,
   },
   {
-    id: 'nav.halfPageDown',
-    kind: 'sequence',
-    scope: 'views',
-    group: 'view-actions',
-    title: 'Half-page down',
-    description: 'Scroll preview content down by half a viewport.',
-    defaultBinding: 'Ctrl+d',
-    maxTokens: 1
+    id: "nav.halfPageDown",
+    kind: "sequence",
+    scope: "views",
+    group: "view-actions",
+    title: "Half-page down",
+    description: "Scroll preview content down by half a viewport.",
+    defaultBinding: "Ctrl+d",
+    maxTokens: 1,
   },
   {
-    id: 'nav.halfPageUp',
-    kind: 'sequence',
-    scope: 'views',
-    group: 'view-actions',
-    title: 'Half-page up',
-    description: 'Scroll preview content up by half a viewport.',
-    defaultBinding: 'Ctrl+u',
-    maxTokens: 1
+    id: "nav.halfPageUp",
+    kind: "sequence",
+    scope: "views",
+    group: "view-actions",
+    title: "Half-page up",
+    description: "Scroll preview content up by half a viewport.",
+    defaultBinding: "Ctrl+u",
+    maxTokens: 1,
   },
   {
-    id: 'nav.openSideItem',
-    kind: 'sequence',
-    scope: 'lists',
-    group: 'navigation',
-    title: 'Open sidebar or note-list item',
-    description: 'Open the current sidebar or note-list selection.',
-    defaultBinding: 'l',
-    maxTokens: 1
+    id: "nav.openSideItem",
+    kind: "sequence",
+    scope: "lists",
+    group: "navigation",
+    title: "Open sidebar or note-list item",
+    description: "Open the current sidebar or note-list selection.",
+    defaultBinding: "l",
+    maxTokens: 1,
   },
   {
-    id: 'nav.openResult',
-    kind: 'sequence',
-    scope: 'lists',
-    group: 'navigation',
-    title: 'Open result',
-    description: 'Open the selected note or result in a view.',
-    defaultBinding: 'o',
-    maxTokens: 1
+    id: "nav.openResult",
+    kind: "sequence",
+    scope: "lists",
+    group: "navigation",
+    title: "Open result",
+    description: "Open the selected note or result in a view.",
+    defaultBinding: "o",
+    maxTokens: 1,
   },
   {
-    id: 'nav.back',
-    kind: 'sequence',
-    scope: 'lists',
-    group: 'navigation',
-    title: 'Back out',
-    description: 'Collapse, move left, or return focus toward the editor.',
-    defaultBinding: 'h',
-    maxTokens: 1
+    id: "nav.back",
+    kind: "sequence",
+    scope: "lists",
+    group: "navigation",
+    title: "Back out",
+    description: "Collapse, move left, or return focus toward the editor.",
+    defaultBinding: "h",
+    maxTokens: 1,
   },
   {
-    id: 'nav.toggleFolder',
-    kind: 'sequence',
-    scope: 'lists',
-    group: 'navigation',
-    title: 'Toggle folder',
-    description: 'Expand or collapse the current sidebar folder.',
-    defaultBinding: 'o',
-    maxTokens: 1
+    id: "nav.toggleFolder",
+    kind: "sequence",
+    scope: "lists",
+    group: "navigation",
+    title: "Toggle folder",
+    description: "Expand or collapse the current sidebar folder.",
+    defaultBinding: "o",
+    maxTokens: 1,
   },
   {
-    id: 'nav.filter',
-    kind: 'sequence',
-    scope: 'lists',
-    group: 'navigation',
-    title: 'Focus filter or search',
-    description: 'Focus the local filter or open note search from panel navigation.',
-    defaultBinding: '/',
-    maxTokens: 1
+    id: "nav.filter",
+    kind: "sequence",
+    scope: "lists",
+    group: "navigation",
+    title: "Focus filter or search",
+    description:
+      "Focus the local filter or open note search from panel navigation.",
+    defaultBinding: "/",
+    maxTokens: 1,
   },
   {
-    id: 'nav.contextMenu',
-    kind: 'sequence',
-    scope: 'views',
-    group: 'view-actions',
-    title: 'Open context menu',
-    description: 'Open the contextual actions menu for the current row.',
-    defaultBinding: 'm',
-    maxTokens: 1
+    id: "nav.contextMenu",
+    kind: "sequence",
+    scope: "views",
+    group: "view-actions",
+    title: "Open context menu",
+    description: "Open the contextual actions menu for the current row.",
+    defaultBinding: "m",
+    maxTokens: 1,
   },
   {
-    id: 'nav.peekPreview',
-    kind: 'sequence',
-    scope: 'views',
-    group: 'view-actions',
-    title: 'Peek preview',
-    description: 'Open the hover preview for the selected connection.',
-    defaultBinding: 'p',
-    maxTokens: 1
+    id: "nav.peekPreview",
+    kind: "sequence",
+    scope: "views",
+    group: "view-actions",
+    title: "Peek preview",
+    description: "Open the hover preview for the selected connection.",
+    defaultBinding: "p",
+    maxTokens: 1,
   },
   {
-    id: 'nav.restore',
-    kind: 'sequence',
-    scope: 'views',
-    group: 'view-actions',
-    title: 'Restore trashed note',
-    description: 'Restore the selected trashed note.',
-    defaultBinding: 'r',
-    maxTokens: 1
+    id: "nav.restore",
+    kind: "sequence",
+    scope: "views",
+    group: "view-actions",
+    title: "Restore trashed note",
+    description: "Restore the selected trashed note.",
+    defaultBinding: "r",
+    maxTokens: 1,
   },
   {
-    id: 'nav.delete',
-    kind: 'sequence',
-    scope: 'views',
-    group: 'view-actions',
-    title: 'Delete selected result',
-    description: 'Permanently delete or move the selected item to trash, depending on the view.',
-    defaultBinding: 'x',
-    maxTokens: 1
+    id: "nav.delete",
+    kind: "sequence",
+    scope: "views",
+    group: "view-actions",
+    title: "Delete selected result",
+    description:
+      "Permanently delete or move the selected item to trash, depending on the view.",
+    defaultBinding: "x",
+    maxTokens: 1,
   },
   {
-    id: 'nav.toggleTask',
-    kind: 'sequence',
-    scope: 'views',
-    group: 'view-actions',
-    title: 'Toggle task',
-    description: 'Check or uncheck the selected task.',
-    defaultBinding: 'x',
-    maxTokens: 1
+    id: "nav.toggleTask",
+    kind: "sequence",
+    scope: "views",
+    group: "view-actions",
+    title: "Toggle task",
+    description: "Check or uncheck the selected task.",
+    defaultBinding: "x",
+    maxTokens: 1,
   },
   {
-    id: 'nav.localEx',
-    kind: 'sequence',
-    scope: 'views',
-    group: 'view-actions',
-    title: 'Open local ex prompt',
-    description: 'Open the view-specific ex prompt in Tasks or Tags.',
-    defaultBinding: ':',
-    maxTokens: 1
+    id: "nav.localEx",
+    kind: "sequence",
+    scope: "views",
+    group: "view-actions",
+    title: "Open local ex prompt",
+    description: "Open the view-specific ex prompt in Tasks or Tags.",
+    defaultBinding: ":",
+    maxTokens: 1,
   },
   {
-    id: 'nav.newQuickNote',
-    kind: 'sequence',
-    scope: 'views',
-    group: 'view-actions',
-    title: 'New quick note from Quick Notes view',
-    description: 'Create a new quick note from the Quick Notes list tab.',
-    defaultBinding: 'n',
-    maxTokens: 1
+    id: "nav.newQuickNote",
+    kind: "sequence",
+    scope: "views",
+    group: "view-actions",
+    title: "New quick note from Quick Notes view",
+    description: "Create a new quick note from the Quick Notes list tab.",
+    defaultBinding: "n",
+    maxTokens: 1,
   },
   {
-    id: 'nav.unarchive',
-    kind: 'sequence',
-    scope: 'views',
-    group: 'view-actions',
-    title: 'Unarchive selected note',
-    description: 'Move the selected archived note back to Inbox.',
-    defaultBinding: 'u',
-    maxTokens: 1
-  }
-]
+    id: "nav.unarchive",
+    kind: "sequence",
+    scope: "views",
+    group: "view-actions",
+    title: "Unarchive selected note",
+    description: "Move the selected archived note back to Inbox.",
+    defaultBinding: "u",
+    maxTokens: 1,
+  },
+];
 
-const KEYMAP_INDEX = new Map<KeymapId, KeymapDefinition>(
-  KEYMAP_DEFINITIONS.map((definition) => [definition.id, definition] as const)
-)
-
-const KEYMAP_GROUP_LABELS: Record<KeymapGroup, string> = {
-  global: 'Global shortcuts',
-  vim: 'Vim-specific shortcuts',
-  navigation: 'Navigation',
-  'view-actions': 'View-specific actions'
+for (const definition of KEYMAP_DEFINITIONS) {
+  const normalized =
+    definition.kind === "shortcut"
+      ? normalizeShortcutBinding(definition.defaultBinding)
+      : normalizeSequenceBinding(definition.defaultBinding);
+  if (normalized) definition.defaultBinding = normalized;
 }
 
+const KEYMAP_INDEX = new Map<KeymapId, KeymapDefinition>(
+  KEYMAP_DEFINITIONS.map((definition) => [definition.id, definition] as const),
+);
+
+const KEYMAP_GROUP_LABELS: Record<KeymapGroup, string> = {
+  global: "Global shortcuts",
+  vim: "Vim-specific shortcuts",
+  navigation: "Navigation",
+  "view-actions": "View-specific actions",
+};
+
 export function getKeymapDefinitions(): KeymapDefinition[] {
-  return KEYMAP_DEFINITIONS.slice()
+  return KEYMAP_DEFINITIONS.slice();
 }
 
 export function getKeymapDefinition(id: KeymapId): KeymapDefinition {
-  const definition = KEYMAP_INDEX.get(id)
-  if (!definition) throw new Error(`Unknown keymap id: ${id}`)
-  return definition
+  const definition = KEYMAP_INDEX.get(id);
+  if (!definition) throw new Error(`Unknown keymap id: ${id}`);
+  return definition;
 }
 
 export function getKeymapGroupLabel(group: KeymapGroup): string {
-  return KEYMAP_GROUP_LABELS[group]
+  return KEYMAP_GROUP_LABELS[group];
 }
 
 export function getDefaultKeymapBinding(id: KeymapId): string {
-  return getKeymapDefinition(id).defaultBinding
+  return getKeymapDefinition(id).defaultBinding;
 }
 
 export function getKeymapBinding(
   overrides: KeymapOverrides | null | undefined,
-  id: KeymapId
+  id: KeymapId,
 ): string {
-  const override = overrides?.[id]
-  return override || getDefaultKeymapBinding(id)
+  const override = overrides?.[id];
+  return override || getDefaultKeymapBinding(id);
 }
 
 export function getSequenceTokens(
   overrides: KeymapOverrides | null | undefined,
-  id: KeymapId
+  id: KeymapId,
 ): string[] {
   return getKeymapBinding(overrides, id)
     .split(/\s+/)
     .map((token) => token.trim())
-    .filter(Boolean)
+    .filter(Boolean);
 }
 
 export function isMacPlatform(): boolean {
-  if (typeof navigator === 'undefined') return true
-  return /Mac|iPhone|iPad|iPod/i.test(navigator.platform)
+  if (typeof navigator === "undefined") return true;
+  return /Mac|iPhone|iPad|iPod/i.test(navigator.platform);
 }
 
 function isModifierKey(key: string): boolean {
-  return key === 'Shift' || key === 'Control' || key === 'Alt' || key === 'Meta'
+  return (
+    key === "Shift" || key === "Control" || key === "Alt" || key === "Meta"
+  );
 }
 
 function normalizeKeyName(key: string): string | null {
-  if (!key) return null
-  if (isModifierKey(key)) return null
-  if (key === ' ') return 'Space'
-  if (/^esc(?:ape)?$/i.test(key)) return 'Escape'
-  if (/^(return|enter)$/i.test(key)) return 'Enter'
-  if (/^tab$/i.test(key)) return 'Tab'
-  if (/^arrowup$/i.test(key)) return 'ArrowUp'
-  if (/^arrowdown$/i.test(key)) return 'ArrowDown'
-  if (/^arrowleft$/i.test(key)) return 'ArrowLeft'
-  if (/^arrowright$/i.test(key)) return 'ArrowRight'
+  if (!key) return null;
+  if (isModifierKey(key)) return null;
+  if (key === " ") return "Space";
+  if (/^esc(?:ape)?$/i.test(key)) return "Escape";
+  if (/^(return|enter)$/i.test(key)) return "Enter";
+  if (/^tab$/i.test(key)) return "Tab";
+  if (/^arrowup$/i.test(key)) return "ArrowUp";
+  if (/^arrowdown$/i.test(key)) return "ArrowDown";
+  if (/^arrowleft$/i.test(key)) return "ArrowLeft";
+  if (/^arrowright$/i.test(key)) return "ArrowRight";
   if (key.length === 1) {
-    if (/[A-Za-z]/.test(key)) return key.toUpperCase()
-    return key
+    if (/[A-Za-z]/.test(key)) return key.toUpperCase();
+    return key;
   }
-  return key
+  return key;
 }
 
 function normalizeSequenceBaseToken(key: string): string | null {
-  if (!key) return null
-  if (isModifierKey(key)) return null
-  if (key === ' ') return 'Space'
-  if (/^esc(?:ape)?$/i.test(key)) return 'Esc'
-  if (/^(return|enter)$/i.test(key)) return 'Enter'
-  if (/^tab$/i.test(key)) return 'Tab'
-  if (/^arrowup$/i.test(key)) return 'ArrowUp'
-  if (/^arrowdown$/i.test(key)) return 'ArrowDown'
-  if (/^arrowleft$/i.test(key)) return 'ArrowLeft'
-  if (/^arrowright$/i.test(key)) return 'ArrowRight'
-  if (key.length === 1) return key
-  return key
+  if (!key) return null;
+  if (isModifierKey(key)) return null;
+  if (key === " ") return "Space";
+  if (/^esc(?:ape)?$/i.test(key)) return "Esc";
+  if (/^(return|enter)$/i.test(key)) return "Enter";
+  if (/^tab$/i.test(key)) return "Tab";
+  if (/^arrowup$/i.test(key)) return "ArrowUp";
+  if (/^arrowdown$/i.test(key)) return "ArrowDown";
+  if (/^arrowleft$/i.test(key)) return "ArrowLeft";
+  if (/^arrowright$/i.test(key)) return "ArrowRight";
+  if (key.length === 1) return key;
+  return key;
 }
 
-function normalizeModifierToken(modifier: string): 'Ctrl' | 'Alt' | 'Shift' | 'Meta' | 'Mod' | null {
-  if (/^(cmd|command|meta)$/i.test(modifier)) return 'Meta'
-  if (/^(ctrl|control)$/i.test(modifier)) return 'Ctrl'
-  if (/^(alt|option|opt)$/i.test(modifier)) return 'Alt'
-  if (/^shift$/i.test(modifier)) return 'Shift'
-  if (/^mod$/i.test(modifier)) return 'Mod'
-  return null
+function normalizeModifierToken(
+  modifier: string,
+): "Ctrl" | "Alt" | "Shift" | "Meta" | "Mod" | null {
+  if (/^(cmd|command|meta)$/i.test(modifier)) return "Meta";
+  if (/^(ctrl|control)$/i.test(modifier)) return "Ctrl";
+  if (/^(alt|option|opt)$/i.test(modifier)) return "Alt";
+  if (/^shift$/i.test(modifier)) return "Shift";
+  if (/^mod$/i.test(modifier)) return "Mod";
+  return null;
 }
 
 function normalizeModifiers(parts: string[]): string[] {
-  const order = ['Ctrl', 'Alt', 'Shift', 'Mod', 'Meta']
-  const unique = [...new Set(parts)]
-  return unique.sort((a, b) => order.indexOf(a) - order.indexOf(b))
+  const order = ["Ctrl", "Alt", "Shift", "Mod", "Meta"];
+  const unique = [...new Set(parts)];
+  return unique.sort((a, b) => order.indexOf(a) - order.indexOf(b));
 }
 
 export function normalizeShortcutBinding(input: string): string | null {
   const parts = input
-    .split('+')
+    .split("+")
     .map((part) => part.trim())
-    .filter(Boolean)
-  if (parts.length === 0) return null
-  const rawKey = parts.pop()
-  if (!rawKey) return null
-  const key = normalizeKeyName(rawKey)
-  if (!key) return null
+    .filter(Boolean);
+  if (parts.length === 0) return null;
+  const rawKey = parts.pop();
+  if (!rawKey) return null;
+  const key = normalizeKeyName(rawKey);
+  if (!key) return null;
   const modifiers = normalizeModifiers(
     parts
       .map((part) => normalizeModifierToken(part))
-      .filter((part): part is NonNullable<typeof part> => !!part)
-  )
-  return [...modifiers, key].join('+')
+      .filter((part): part is NonNullable<typeof part> => !!part),
+  );
+  return [...modifiers, key].join("+");
 }
 
 export function normalizeSequenceToken(input: string): string | null {
   const parts = input
-    .split('+')
+    .split("+")
     .map((part) => part.trim())
-    .filter(Boolean)
-  if (parts.length === 0) return null
-  const rawKey = parts.pop()
-  if (!rawKey) return null
-  let base = normalizeSequenceBaseToken(rawKey)
-  if (!base) return null
+    .filter(Boolean);
+  if (parts.length === 0) return null;
+  const rawKey = parts.pop();
+  if (!rawKey) return null;
+  let base = normalizeSequenceBaseToken(rawKey);
+  if (!base) return null;
   const modifiers = normalizeModifiers(
     parts
       .map((part) => normalizeModifierToken(part))
       .filter((part): part is NonNullable<typeof part> => !!part)
-      .filter((part) => part !== 'Mod')
-  )
+      .filter((part) => part !== "Mod"),
+  );
   // When a non-Shift modifier (Ctrl/Alt/Meta) is combined with a single
   // ASCII letter, canonicalize to uppercase. Event-produced tokens come
   // out lowercase (e.g. Ctrl+w → `'w'` since Shift isn't held), but the
@@ -770,161 +786,173 @@ export function normalizeSequenceToken(input: string): string | null {
   if (
     base.length === 1 &&
     /[a-zA-Z]/.test(base) &&
-    modifiers.some((m) => m === 'Ctrl' || m === 'Alt' || m === 'Meta')
+    modifiers.some((m) => m === "Ctrl" || m === "Alt" || m === "Meta")
   ) {
-    base = base.toUpperCase()
+    base = base.toUpperCase();
   }
-  return modifiers.length > 0 ? `${modifiers.join('+')}+${base}` : base
+  return modifiers.length > 0 ? `${modifiers.join("+")}+${base}` : base;
 }
 
 export function normalizeSequenceBinding(input: string): string | null {
   const tokens = input
     .split(/\s+/)
     .map((token) => normalizeSequenceToken(token))
-    .filter((token): token is string => !!token)
-  if (tokens.length === 0) return null
-  return tokens.join(' ')
+    .filter((token): token is string => !!token);
+  if (tokens.length === 0) return null;
+  return tokens.join(" ");
 }
 
-export function normalizeKeymapBinding(id: KeymapId, input: string): string | null {
-  const definition = getKeymapDefinition(id)
+export function normalizeKeymapBinding(
+  id: KeymapId,
+  input: string,
+): string | null {
+  const definition = getKeymapDefinition(id);
   const normalized =
-    definition.kind === 'shortcut'
+    definition.kind === "shortcut"
       ? normalizeShortcutBinding(input)
-      : normalizeSequenceBinding(input)
-  if (!normalized) return null
-  if (definition.kind === 'sequence' && definition.maxTokens) {
-    const tokenCount = normalized.split(/\s+/).filter(Boolean).length
+      : normalizeSequenceBinding(input);
+  if (!normalized) return null;
+  if (definition.kind === "sequence" && definition.maxTokens) {
+    const tokenCount = normalized.split(/\s+/).filter(Boolean).length;
     if (tokenCount > definition.maxTokens) {
       return normalized
         .split(/\s+/)
         .filter(Boolean)
         .slice(0, definition.maxTokens)
-        .join(' ')
+        .join(" ");
     }
   }
-  return normalized
+  return normalized;
 }
 
 export function normalizeKeymapOverrides(input: unknown): KeymapOverrides {
-  if (!input || typeof input !== 'object') return {}
-  const overrides: KeymapOverrides = {}
+  if (!input || typeof input !== "object") return {};
+  const overrides: KeymapOverrides = {};
   for (const definition of KEYMAP_DEFINITIONS) {
-    const raw = (input as Record<string, unknown>)[definition.id]
-    if (typeof raw !== 'string') continue
-    const normalized = normalizeKeymapBinding(definition.id, raw)
+    const raw = (input as Record<string, unknown>)[definition.id];
+    if (typeof raw !== "string") continue;
+    const normalized = normalizeKeymapBinding(definition.id, raw);
     if (normalized && normalized !== definition.defaultBinding) {
-      overrides[definition.id] = normalized
+      overrides[definition.id] = normalized;
     }
   }
-  return overrides
+  return overrides;
 }
 
 export function shortcutBindingFromEvent(event: KeyboardEvent): string | null {
-  const key = normalizeKeyName(event.key)
-  if (!key) return null
-  const modifiers: string[] = []
-  if (event.ctrlKey && !event.metaKey) modifiers.push('Mod')
-  if (event.metaKey && !event.ctrlKey) modifiers.push('Mod')
-  if (event.altKey) modifiers.push('Alt')
-  if (event.shiftKey) modifiers.push('Shift')
-  return normalizeShortcutBinding([...modifiers, key].join('+'))
+  const key = normalizeKeyName(event.key);
+  if (!key) return null;
+  const modifiers: string[] = [];
+  if (event.ctrlKey && !event.metaKey) modifiers.push("Mod");
+  if (event.metaKey && !event.ctrlKey) modifiers.push("Mod");
+  if (event.altKey) modifiers.push("Alt");
+  if (event.shiftKey) modifiers.push("Shift");
+  return normalizeShortcutBinding([...modifiers, key].join("+"));
 }
 
 export function sequenceTokenFromEvent(event: KeyboardEvent): string | null {
-  const base = normalizeSequenceBaseToken(event.key)
-  if (!base) return null
-  const modifiers: string[] = []
-  if (event.ctrlKey) modifiers.push('Ctrl')
-  if (event.altKey) modifiers.push('Alt')
-  if (event.metaKey) modifiers.push('Meta')
-  if (event.shiftKey && base.length !== 1) modifiers.push('Shift')
-  return normalizeSequenceToken(modifiers.length > 0 ? `${modifiers.join('+')}+${base}` : base)
+  const base = normalizeSequenceBaseToken(event.key);
+  if (!base) return null;
+  const modifiers: string[] = [];
+  if (event.ctrlKey) modifiers.push("Ctrl");
+  if (event.altKey) modifiers.push("Alt");
+  if (event.metaKey) modifiers.push("Meta");
+  if (event.shiftKey && base.length !== 1) modifiers.push("Shift");
+  return normalizeSequenceToken(
+    modifiers.length > 0 ? `${modifiers.join("+")}+${base}` : base,
+  );
 }
 
-export function matchesShortcutBinding(event: KeyboardEvent, binding: string): boolean {
-  const normalized = shortcutBindingFromEvent(event)
-  return !!normalized && normalized === binding
+export function matchesShortcutBinding(
+  event: KeyboardEvent,
+  binding: string,
+): boolean {
+  const normalized = shortcutBindingFromEvent(event);
+  return !!normalized && normalized === binding;
 }
 
 export function matchesShortcut(
   event: KeyboardEvent,
   overrides: KeymapOverrides | null | undefined,
-  id: KeymapId
+  id: KeymapId,
 ): boolean {
-  return matchesShortcutBinding(event, getKeymapBinding(overrides, id))
+  return matchesShortcutBinding(event, getKeymapBinding(overrides, id));
 }
 
 export function matchesSequenceToken(
   event: KeyboardEvent,
   overrides: KeymapOverrides | null | undefined,
-  id: KeymapId
+  id: KeymapId,
 ): boolean {
-  const tokens = getSequenceTokens(overrides, id)
-  if (tokens.length !== 1) return false
-  const token = sequenceTokenFromEvent(event)
-  return !!token && token === tokens[0]
+  const tokens = getSequenceTokens(overrides, id);
+  if (tokens.length !== 1) return false;
+  const token = sequenceTokenFromEvent(event);
+  return !!token && token === tokens[0];
 }
 
 export function formatKeyToken(token: string, mac = isMacPlatform()): string {
-  if (token.includes('+')) {
-    const parts = token.split('+')
-    const base = parts.pop() ?? token
-    const prefix = parts.map((part) => formatKeyToken(part, mac)).join(mac ? '' : '+')
-    return `${prefix}${mac ? '' : prefix ? '+' : ''}${formatKeyToken(base, mac)}`
+  if (token.includes("+")) {
+    const parts = token.split("+");
+    const base = parts.pop() ?? token;
+    const prefix = parts
+      .map((part) => formatKeyToken(part, mac))
+      .join(mac ? "" : "+");
+    return `${prefix}${mac ? "" : prefix ? "+" : ""}${formatKeyToken(base, mac)}`;
   }
-  if (token === 'Mod') return mac ? '⌘' : 'Ctrl'
-  if (token === 'Meta') return mac ? '⌘' : 'Meta'
-  if (token === 'Ctrl') return mac ? '⌃' : 'Ctrl'
-  if (token === 'Alt') return mac ? '⌥' : 'Alt'
-  if (token === 'Shift') return mac ? '⇧' : 'Shift'
-  if (token === 'Escape' || token === 'Esc') return 'Esc'
-  if (token === 'Enter') return mac ? '↵' : 'Enter'
-  if (token === 'Tab') return 'Tab'
-  if (token === 'Space') return 'Space'
-  if (token === 'ArrowUp') return '↑'
-  if (token === 'ArrowDown') return '↓'
-  if (token === 'ArrowLeft') return '←'
-  if (token === 'ArrowRight') return '→'
-  return token
+  if (token === "Mod") return mac ? "⌘" : "Ctrl";
+  if (token === "Meta") return mac ? "⌘" : "Meta";
+  if (token === "Ctrl") return mac ? "⌃" : "Ctrl";
+  if (token === "Alt") return mac ? "⌥" : "Alt";
+  if (token === "Shift") return mac ? "⇧" : "Shift";
+  if (token === "Escape" || token === "Esc") return "Esc";
+  if (token === "Enter") return mac ? "↵" : "Enter";
+  if (token === "Tab") return "Tab";
+  if (token === "Space") return "Space";
+  if (token === "ArrowUp") return "↑";
+  if (token === "ArrowDown") return "↓";
+  if (token === "ArrowLeft") return "←";
+  if (token === "ArrowRight") return "→";
+  return token;
 }
 
 export function formatKeymapBinding(binding: string, kind: KeymapKind): string {
-  if (kind === 'shortcut') {
-    return formatKeyToken(binding)
+  if (kind === "shortcut") {
+    return formatKeyToken(binding);
   }
   return binding
     .split(/\s+/)
     .map((token) => formatKeyToken(token))
-    .join(' ')
+    .join(" ");
 }
 
 export function getKeymapDisplay(
   overrides: KeymapOverrides | null | undefined,
-  id: KeymapId
+  id: KeymapId,
 ): string {
-  const definition = getKeymapDefinition(id)
-  return formatKeymapBinding(getKeymapBinding(overrides, id), definition.kind)
+  const definition = getKeymapDefinition(id);
+  return formatKeymapBinding(getKeymapBinding(overrides, id), definition.kind);
 }
 
 export function describeCurrentBinding(
   overrides: KeymapOverrides | null | undefined,
-  id: KeymapId
+  id: KeymapId,
 ): string {
-  return getKeymapDisplay(overrides, id)
+  return getKeymapDisplay(overrides, id);
 }
 
 export function getKeymapDefinitionsByGroup(): Array<{
-  group: KeymapGroup
-  label: string
-  items: KeymapDefinition[]
+  group: KeymapGroup;
+  label: string;
+  items: KeymapDefinition[];
 }> {
-  const groups: KeymapGroup[] = ['global', 'vim', 'navigation', 'view-actions']
+  const groups: KeymapGroup[] = ["global", "vim", "navigation", "view-actions"];
   return groups.map((group) => ({
     group,
     label: getKeymapGroupLabel(group),
-    items: KEYMAP_DEFINITIONS.filter((definition) => definition.group === group)
-  }))
+    items: KEYMAP_DEFINITIONS.filter(
+      (definition) => definition.group === group,
+    ),
+  }));
 }
 
 export function advanceSequence(
@@ -934,46 +962,46 @@ export function advanceSequence(
   timerRef: { current?: ReturnType<typeof setTimeout> },
   onMatch: () => void,
   consume: () => void,
-  timeoutMs = 500
+  timeoutMs = 500,
 ): boolean {
   const tokens = binding
     .split(/\s+/)
     .map((token) => token.trim())
-    .filter(Boolean)
-  if (tokens.length === 0) return false
-  const token = sequenceTokenFromEvent(event)
-  if (!token) return false
+    .filter(Boolean);
+  if (tokens.length === 0) return false;
+  const token = sequenceTokenFromEvent(event);
+  if (!token) return false;
 
   const reset = (): void => {
-    pendingRef.current = 0
-    if (timerRef.current) clearTimeout(timerRef.current)
-    timerRef.current = undefined
-  }
+    pendingRef.current = 0;
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = undefined;
+  };
 
   if (pendingRef.current > 0) {
     if (token === tokens[pendingRef.current]) {
-      consume()
-      pendingRef.current += 1
+      consume();
+      pendingRef.current += 1;
       if (pendingRef.current >= tokens.length) {
-        reset()
-        onMatch()
+        reset();
+        onMatch();
       } else {
-        if (timerRef.current) clearTimeout(timerRef.current)
-        timerRef.current = setTimeout(reset, timeoutMs)
+        if (timerRef.current) clearTimeout(timerRef.current);
+        timerRef.current = setTimeout(reset, timeoutMs);
       }
-      return true
+      return true;
     }
-    reset()
+    reset();
   }
 
-  if (token !== tokens[0]) return false
-  consume()
+  if (token !== tokens[0]) return false;
+  consume();
   if (tokens.length === 1) {
-    onMatch()
-    return true
+    onMatch();
+    return true;
   }
-  pendingRef.current = 1
-  if (timerRef.current) clearTimeout(timerRef.current)
-  timerRef.current = setTimeout(reset, timeoutMs)
-  return true
+  pendingRef.current = 1;
+  if (timerRef.current) clearTimeout(timerRef.current);
+  timerRef.current = setTimeout(reset, timeoutMs);
+  return true;
 }
