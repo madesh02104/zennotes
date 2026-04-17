@@ -14,6 +14,7 @@ import { findLeaf } from './pane-layout'
 import { requestPaneMode } from './pane-mode'
 import { resolveQuickNoteTitle } from './quick-note-title'
 import { getKeymapDisplay, type KeymapId } from './keymaps'
+import { dispatchKeyboardContextMenu, findTabContextMenuTarget } from './keyboard-context-menu'
 import { foldAll, foldCode, unfoldAll, unfoldCode } from '@codemirror/language'
 import { DEMO_TOUR_START_PATH } from '@shared/demo-tour'
 
@@ -235,9 +236,9 @@ export function buildCommands(options?: { includeUnavailable?: boolean }): Comma
       id: 'note.reveal',
       title: 'Reveal Note in Finder',
       category: 'Note',
-      when: () => !!getState().selectedPath,
+      when: () => !!getState().activeNote,
       run: async () => {
-        const p = getState().selectedPath
+        const p = getState().activeNote?.path
         if (p) await window.zen.revealNote(p)
       }
     },
@@ -246,9 +247,9 @@ export function buildCommands(options?: { includeUnavailable?: boolean }): Comma
       title: 'Open in Floating Window',
       category: 'Note',
       keywords: 'popout window detach',
-      when: () => !!getState().selectedPath,
+      when: () => !!getState().activeNote,
       run: async () => {
-        const p = getState().selectedPath
+        const p = getState().activeNote?.path
         if (p) await window.zen.openNoteWindow(p)
       }
     },
@@ -270,26 +271,32 @@ export function buildCommands(options?: { includeUnavailable?: boolean }): Comma
   )
 
   /* ---------------- Tabs ---------------- */
+  const getActiveLeaf = () => {
+    const s = getState()
+    return findLeaf(s.paneLayout, s.activePaneId)
+  }
+  const getActiveTabContext = () => {
+    const leaf = getActiveLeaf()
+    if (!leaf?.activeTab) return null
+    const path = leaf.activeTab
+    const pinnedSet = new Set(leaf.pinnedTabs)
+    const tabIndex = leaf.tabs.indexOf(path)
+    return {
+      leaf,
+      path,
+      isPinned: pinnedSet.has(path),
+      closableRight: leaf.tabs.slice(tabIndex + 1).filter((tab) => !pinnedSet.has(tab)),
+      closableOthers: leaf.tabs.filter((tab) => tab !== path && !pinnedSet.has(tab))
+    }
+  }
+  const getActiveTabMenuTarget = (): HTMLElement | null => {
+    const ctx = getActiveTabContext()
+    if (!ctx) return null
+    return findTabContextMenuTarget(ctx.leaf.id, ctx.path)
+  }
   // Is the active tab currently pinned in the active pane? Used to flip
   // the Pin/Unpin command title and gate visibility.
-  const isActiveTabPinned = (): boolean => {
-    const s = getState()
-    const leaf = s.paneLayout.kind === 'leaf' ? s.paneLayout : null
-    const path = s.selectedPath
-    if (!path) return false
-    // Walk the tree to find the active leaf without importing tree helpers.
-    const stack: (typeof s.paneLayout)[] = [s.paneLayout]
-    void leaf
-    while (stack.length) {
-      const n = stack.pop()!
-      if (n.kind === 'leaf') {
-        if (n.id === s.activePaneId) return n.pinnedTabs.includes(path)
-      } else {
-        for (const c of n.children) stack.push(c)
-      }
-    }
-    return false
-  }
+  const isActiveTabPinned = (): boolean => getActiveTabContext()?.isPinned ?? false
 
   cmds.push(
     {
@@ -305,10 +312,50 @@ export function buildCommands(options?: { includeUnavailable?: boolean }): Comma
       title: isActiveTabPinned() ? 'Unpin Tab' : 'Pin Tab',
       category: 'Tabs',
       keywords: 'stick sticky',
-      when: () => !!getState().selectedPath,
+      when: () => !!getState().activeNote,
       run: () => {
         const s = getState()
-        if (s.selectedPath) s.toggleTabPin(s.activePaneId, s.selectedPath)
+        if (s.activeNote) s.toggleTabPin(s.activePaneId, s.activeNote.path)
+      }
+    },
+    {
+      id: 'tab.close-others',
+      title: 'Close Other Tabs in Pane',
+      category: 'Tabs',
+      keywords: 'only siblings keep current close others',
+      when: () => (getActiveTabContext()?.closableOthers.length ?? 0) > 0,
+      run: async () => {
+        const ctx = getActiveTabContext()
+        if (!ctx) return
+        for (const path of ctx.closableOthers) {
+          await getState().closeTabInPane(ctx.leaf.id, path)
+        }
+      }
+    },
+    {
+      id: 'tab.close-right',
+      title: 'Close Tabs to the Right',
+      category: 'Tabs',
+      keywords: 'siblings later right side close',
+      when: () => (getActiveTabContext()?.closableRight.length ?? 0) > 0,
+      run: async () => {
+        const ctx = getActiveTabContext()
+        if (!ctx) return
+        for (const path of ctx.closableRight) {
+          await getState().closeTabInPane(ctx.leaf.id, path)
+        }
+      }
+    },
+    {
+      id: 'tab.menu',
+      title: 'Open Active Tab Menu',
+      category: 'Tabs',
+      shortcut: 'Shift+F10',
+      keywords: 'context menu right click active tab',
+      when: () => !!getActiveTabMenuTarget(),
+      run: () => {
+        const target = getActiveTabMenuTarget()
+        if (target) dispatchKeyboardContextMenu(target)
       }
     },
     {
@@ -858,9 +905,9 @@ export function buildCommands(options?: { includeUnavailable?: boolean }): Comma
       title: 'Pin Active Note as Reference',
       category: 'Reference',
       keywords: 'sticky side companion research',
-      when: () => !!getState().selectedPath,
+      when: () => !!getState().activeNote,
       run: async () => {
-        const path = getState().selectedPath
+        const path = getState().activeNote?.path
         if (path) await getState().pinReference(path)
       }
     },

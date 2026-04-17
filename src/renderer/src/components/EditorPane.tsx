@@ -1165,6 +1165,10 @@ export function EditorPane({ pane }: { pane: PaneLeaf }): JSX.Element {
       return (
         <div
           key={tab.path}
+          data-tab-menu-target="true"
+          data-tab-pane-id={paneId}
+          data-tab-path={tab.path}
+          data-tab-active={active ? 'true' : undefined}
           className="relative"
           draggable={!isVirtual}
           onDragStart={(e) => {

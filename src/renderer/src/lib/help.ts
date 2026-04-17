@@ -46,7 +46,7 @@ export const HELP_QUICK_START: HelpCard[] = [
   {
     title: 'Stay keyboard-first',
     body:
-      'Search notes, search vault text, and open the command palette from their configured shortcuts, and use Vim mode for ex commands, pane motion, hint mode, leader hints, and link-following. Vault text search can use auto-detected system tools like fzf or ripgrep when they are available, can be pointed at custom binary paths, or can fall back to the built-in searcher. If you explicitly turn Vim mode off, the non-Vim search shortcut becomes available too.'
+      'Search notes, search vault text, and open the command palette from their configured shortcuts, and use Vim mode for ex commands, pane motion, hint mode, leader hints, link-following, and keyboard-opened context menus. Sidebar rows, note-list rows, and the active tab all expose their right-click actions without leaving the keyboard. Vault text search can use auto-detected system tools like fzf or ripgrep when they are available, can be pointed at custom binary paths, or can fall back to the built-in searcher. If you explicitly turn Vim mode off, the non-Vim search shortcut becomes available too.'
   },
   {
     title: 'Insert structure inline',
@@ -79,7 +79,12 @@ export const HELP_CORE_CONCEPTS: HelpCard[] = [
   {
     title: 'Tabs and splits are first-class',
     body:
-      'Each editor pane can hold multiple tabs. Split the current tab right or down, move between panes with pane motions, switch the active note between Edit, Split, and Preview from commands, and, if you hide tabs, use the buffer switcher shortcut or `:buffers`. If you disable Vim mode, use the command palette instead.'
+      'Each editor pane can hold multiple tabs. Split the current tab right or down, move between panes with pane motions, switch the active note between Edit, Split, and Preview from commands, and, if you hide tabs, use the buffer switcher shortcut or `:buffers`. The active tab also has a full keyboard context menu, so actions like Close Others, Close Tabs to the Right, Pin Tab, Pin as Reference, Open in Floating Window, and Reveal in Finder stay accessible without the mouse. If you disable Vim mode, use the command palette instead.'
+  },
+  {
+    title: 'Context menus are part of the keyboard model',
+    body:
+      'ZenNotes treats context menus as keyboard-reachable UI, not mouse-only escape hatches. Use the configured context-menu binding on the selected sidebar or note-list row, or use `Shift+F10` / the system Context Menu key to open the active tab menu from the editor or preview side. The command palette also exposes the same high-value tab actions directly.'
   },
   {
     title: 'Sessions restore on relaunch',
@@ -100,6 +105,11 @@ export const HELP_CORE_CONCEPTS: HelpCard[] = [
     title: 'Moving notes is path-first',
     body:
       'Use the note context menu or the command palette to move a note into Inbox or Archive. The move prompt autocompletes folder paths, so you can type and Tab through existing destinations instead of dragging.'
+  },
+  {
+    title: 'Command palette mirrors the important tab actions',
+    body:
+      'You do not need to remember where a tab action lives. The command palette exposes direct entries for closing the current tab, closing sibling tabs, closing tabs to the right, pinning or unpinning the tab, opening the active tab menu, splitting the current tab, pinning the active note as a reference, opening the note in a floating window, and revealing it in Finder.'
   },
   {
     title: 'Slash commands speed up writing',
@@ -200,7 +210,7 @@ export const HELP_SHORTCUT_SECTIONS: HelpShortcutSection[] = [
       { keys: 'h', action: 'Collapse or move left', detail: 'Collapse the current folder or move focus back toward the editor.' },
       { keys: 'o', action: 'Toggle folder', detail: 'Expand or collapse the selected folder in the sidebar.' },
       { keys: '/', action: 'Search notes', detail: 'Open note search directly from keyboard navigation mode.' },
-      { keys: 'm', action: 'Open context menu', detail: 'Open the right-click menu for the selected sidebar row.' },
+      { keys: 'm', action: 'Open context menu', detail: 'Open the right-click menu for the selected sidebar or note-list row, including move, archive, trash, floating-window, and reveal actions where they apply.' },
       { keys: 'Esc', action: 'Return to editor', detail: 'Drop back into the main editor focus path.' }
     ]
   },
@@ -243,6 +253,7 @@ export const HELP_SHORTCUT_SECTIONS: HelpShortcutSection[] = [
       { keys: 'j / k', action: 'Scroll preview', detail: 'Move through rendered preview content line-by-line.' },
       { keys: 'Ctrl-d / Ctrl-u', action: 'Half-page scroll', detail: 'Move preview content by half a viewport.' },
       { keys: 'g g / G', action: 'Jump to top or bottom', detail: 'Go to the start or end of the preview or connections list.' },
+      { keys: 'm / Shift+F10', action: 'Open active tab menu', detail: 'Open the right-click menu for the active tab while you are reading preview content. This exposes Close, Close Others, Close Tabs to the Right, Pin Tab, Split Right, Split Down, Pin as Reference, Open in Floating Window, and Reveal in Finder.' },
       { keys: '/', action: 'Search notes', detail: 'Open note search without leaving keyboard navigation.' },
       { keys: 'p', action: 'Peek backlink', detail: 'In the connections panel, open the hover preview for the selected note.' },
       { keys: 'h / Esc', action: 'Back out', detail: 'Return from hover preview to connections, or from connections to the editor.' }
@@ -358,6 +369,11 @@ export const HELP_VIM_COMMANDS: HelpExCommand[] = [
     detail: 'Fuzzy-run the best matching command, or open the full command palette.'
   },
   {
+    command: ':tab_menu / :tab_close_others / :tab_close_right',
+    summary: 'Run tab-menu actions from the ex line',
+    detail: 'Every command-palette tab action is also registered on the `:` line. Use these aliases to open the active tab menu itself, close sibling tabs in the current pane, or close tabs to the right without touching the tab strip.'
+  },
+  {
     command: 'gd',
     summary: 'Follow the link under the cursor',
     detail: 'Open wikilinks, open external links, create missing notes, or pin PDFs into the reference pane.'
@@ -467,6 +483,7 @@ export const HELP_SETTINGS: HelpSettingsSection[] = [
     items: [
       { label: 'Shortcut overrides', detail: 'Remap global app shortcuts, Vim-specific bindings, panel navigation keys, and view actions from one place.' },
       { label: 'Recorded sequences', detail: 'Capture single shortcuts or multi-step sequences such as Leader flows, pane prefixes, `g g`, `g d`, or fold motions without editing raw config files.' },
+      { label: 'Context-menu bindings', detail: 'The same keymap table controls the context-menu action used in the sidebar, note list, and preview-side active-tab menu, so mouse-free navigation stays configurable.' },
       { label: 'Reset controls', detail: 'Clear an individual override or reset the entire keymap table back to the shipped defaults.' }
     ]
   },

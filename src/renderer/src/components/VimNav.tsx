@@ -10,6 +10,7 @@ import {
   resolveNextPanel
 } from '../lib/vim-nav'
 import { focusPaneInDirection } from '../lib/pane-nav'
+import { findLeaf } from '../lib/pane-layout'
 import {
   advanceSequence,
   getKeymapBinding,
@@ -18,6 +19,7 @@ import {
   matchesSequenceToken,
   sequenceTokenFromEvent
 } from '../lib/keymaps'
+import { dispatchKeyboardContextMenu, findTabContextMenuTarget } from '../lib/keyboard-context-menu'
 
 function escapeForAttr(value: string): string {
   if (typeof CSS !== 'undefined' && typeof CSS.escape === 'function') return CSS.escape(value)
@@ -527,6 +529,16 @@ export function VimNav(): JSX.Element | null {
         return
       }
 
+      const wantsEditorTabMenu =
+        wantsNativeContextMenuKey(e) &&
+        (isEditorFocused(state.editorViewRef) ||
+          (previewEl ? isPreviewNavigationActive(previewEl, state, target) : false))
+      if (wantsEditorTabMenu && openActiveTabContextMenu(state)) {
+        e.preventDefault()
+        e.stopImmediatePropagation()
+        return
+      }
+
       // ------- Editor focused -------------------------------------------
       if (isEditorFocused(state.editorViewRef)) {
         if (isEditorInsertMode(state.editorViewRef, state.vimMode)) {
@@ -701,6 +713,9 @@ export function VimNav(): JSX.Element | null {
     const count = items.length
     const max = count - 1
     const currentPos = findPositionByIndex(items, 'notelistIdx', state.noteListCursorIndex)
+    const wantsContextMenu =
+      matchesSequenceToken(e, overrides, 'nav.contextMenu') ||
+      wantsNativeContextMenuKey(e)
 
     const wantsHandledKey =
       matchesSequenceToken(e, overrides, 'nav.moveDown') ||
@@ -716,7 +731,8 @@ export function VimNav(): JSX.Element | null {
       key === 'ArrowDown' ||
       key === 'ArrowUp' ||
       key === 'ArrowLeft' ||
-      key === 'ArrowRight'
+      key === 'ArrowRight' ||
+      wantsContextMenu
     if (wantsHandledKey) {
       e.preventDefault()
       e.stopImmediatePropagation()
@@ -787,6 +803,10 @@ export function VimNav(): JSX.Element | null {
     }
     if (matchesSequenceToken(e, overrides, 'vim.hintMode')) {
       setHint(true)
+      return
+    }
+    if (wantsContextMenu) {
+      openContextMenuForIndexedElement(items[currentPos])
       return
     }
   }
@@ -927,6 +947,10 @@ export function VimNav(): JSX.Element | null {
     ])
     const wantsHalfPageDown = matchesSequenceToken(e, overrides, 'nav.halfPageDown')
     const wantsHalfPageUp = matchesSequenceToken(e, overrides, 'nav.halfPageUp')
+    const wantsContextMenu =
+      (matchesSequenceToken(e, overrides, 'nav.contextMenu') ||
+        wantsNativeContextMenuKey(e)) &&
+      !!getActiveTabContextMenuTarget(state)
 
     if (
       navKeys.has(key) ||
@@ -937,7 +961,8 @@ export function VimNav(): JSX.Element | null {
       matchesSequenceToken(e, overrides, 'nav.jumpBottom') ||
       sequenceTokenFromEvent(e) === getSequenceTokens(overrides, 'nav.jumpTop')[0] ||
       matchesSequenceToken(e, overrides, 'vim.hintMode') ||
-      matchesSequenceToken(e, overrides, 'nav.filter')
+      matchesSequenceToken(e, overrides, 'nav.filter') ||
+      wantsContextMenu
     ) {
       e.preventDefault()
       e.stopImmediatePropagation()
@@ -991,6 +1016,10 @@ export function VimNav(): JSX.Element | null {
     }
     if (matchesSequenceToken(e, overrides, 'nav.filter')) {
       state.setSearchOpen(true)
+      return
+    }
+    if (wantsContextMenu) {
+      openActiveTabContextMenu(state)
       return
     }
     if (matchesSequenceToken(e, overrides, 'vim.hintMode')) {
@@ -1127,23 +1156,29 @@ export function VimNav(): JSX.Element | null {
 
   function openContextMenuForIndexedElement(el: HTMLElement | undefined): void {
     if (!el) return
-    const rect = el.getBoundingClientRect()
-    const clientX = Math.min(
-      window.innerWidth - 12,
-      Math.max(12, rect.left + Math.min(28, Math.max(12, rect.width * 0.25)))
-    )
-    const clientY = Math.min(window.innerHeight - 12, Math.max(12, rect.top + rect.height / 2))
-    el.dispatchEvent(
-      new MouseEvent('contextmenu', {
-        bubbles: true,
-        cancelable: true,
-        view: window,
-        button: 2,
-        buttons: 2,
-        clientX,
-        clientY
-      })
-    )
+    dispatchKeyboardContextMenu(el)
+  }
+
+  function wantsNativeContextMenuKey(e: KeyboardEvent): boolean {
+    return e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')
+  }
+
+  function getActiveTabContextMenuTarget(
+    state: ReturnType<typeof useStore.getState>
+  ): HTMLElement | null {
+    const leaf = findLeaf(state.paneLayout, state.activePaneId)
+    if (!leaf?.activeTab) return null
+    return findTabContextMenuTarget(leaf.id, leaf.activeTab)
+  }
+
+  function openActiveTabContextMenu(
+    state: ReturnType<typeof useStore.getState>
+  ): boolean {
+    const target = getActiveTabContextMenuTarget(state)
+    if (!target) return false
+    state.setFocusedPanel('editor')
+    dispatchKeyboardContextMenu(target)
+    return true
   }
 
   function activateSidebarItem(el: HTMLElement | undefined, state: ReturnType<typeof useStore.getState>): void {
