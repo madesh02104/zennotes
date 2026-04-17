@@ -48,6 +48,7 @@
     "@replit/codemirror-vim": "^6.3.0",
     "chokidar": "^4.0.3",
     "codemirror": "^6.0.1",
+    "electron-updater": "^6.8.3",
     "font-list": "^2.0.2",
     "function-plot": "^1.25.3",
     "fuse.js": "^7.0.0",
@@ -105,6 +106,14 @@
       "out/**/*",
       "!**/*.map"
     ],
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "ZenNotes",
+        "repo": "zennotes"
+      }
+    ],
+    "electronUpdaterCompatibility": ">=2.16",
     "mac": {
       "category": "public.app-category.productivity",
       "extendInfo": {

@@ -2,6 +2,7 @@ import { clipboard, contextBridge, ipcRenderer, webUtils } from 'electron'
 import path from 'node:path'
 import { IPC } from '@shared/ipc'
 import type {
+  AppUpdateState,
   AssetMeta,
   VaultDemoTourResult,
   FolderEntry,
@@ -27,6 +28,13 @@ import type {
 const api = {
   platform: (): Promise<NodeJS.Platform> => ipcRenderer.invoke(IPC.APP_PLATFORM),
   listSystemFonts: (): Promise<string[]> => ipcRenderer.invoke(IPC.APP_LIST_FONTS),
+  getAppUpdateState: (): Promise<AppUpdateState> =>
+    ipcRenderer.invoke(IPC.APP_UPDATER_GET_STATE),
+  checkForAppUpdates: (): Promise<AppUpdateState> =>
+    ipcRenderer.invoke(IPC.APP_UPDATER_CHECK),
+  downloadAppUpdate: (): Promise<AppUpdateState> =>
+    ipcRenderer.invoke(IPC.APP_UPDATER_DOWNLOAD),
+  installAppUpdate: (): Promise<void> => ipcRenderer.invoke(IPC.APP_UPDATER_INSTALL),
 
   getCurrentVault: (): Promise<VaultInfo | null> => ipcRenderer.invoke(IPC.VAULT_GET_CURRENT),
   pickVault: (): Promise<VaultInfo | null> => ipcRenderer.invoke(IPC.VAULT_PICK),
@@ -159,6 +167,16 @@ const api = {
     const listener = (_: unknown, ev: VaultChangeEvent): void => cb(ev)
     ipcRenderer.on(IPC.VAULT_ON_CHANGE, listener)
     return () => ipcRenderer.removeListener(IPC.VAULT_ON_CHANGE, listener)
+  },
+  onOpenSettings: (cb: () => void): (() => void) => {
+    const listener = (): void => cb()
+    ipcRenderer.on(IPC.APP_OPEN_SETTINGS, listener)
+    return () => ipcRenderer.removeListener(IPC.APP_OPEN_SETTINGS, listener)
+  },
+  onAppUpdateState: (cb: (state: AppUpdateState) => void): (() => void) => {
+    const listener = (_: unknown, state: AppUpdateState): void => cb(state)
+    ipcRenderer.on(IPC.APP_UPDATER_ON_STATE, listener)
+    return () => ipcRenderer.removeListener(IPC.APP_UPDATER_ON_STATE, listener)
   },
 
   windowMinimize: (): void => ipcRenderer.send(IPC.WINDOW_MINIMIZE),

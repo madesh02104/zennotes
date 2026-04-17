@@ -1045,10 +1045,23 @@ export function VimNav(): JSX.Element | null {
     // split-mode scroll sync), which reads as "jumped to the top"
     // to the user at the end of the document.
     const maxTop = Math.max(0, previewEl.scrollHeight - previewEl.clientHeight)
-    const nextTop = Math.max(0, Math.min(maxTop, previewEl.scrollTop + delta))
-    if (nextTop === previewEl.scrollTop) return
+    const epsilon = 1
+    const currentTop = Math.max(0, Math.min(maxTop, previewEl.scrollTop))
+    const nextTop = Math.max(0, Math.min(maxTop, currentTop + delta))
+    if (Math.abs(nextTop - currentTop) < epsilon) {
+      const settledTop = nextTop <= epsilon ? 0 : maxTop
+      // Chromium can keep a stale smooth-scroll animation alive at the
+      // boundary; settle the element explicitly so repeated Ctrl+D /
+      // Ctrl+U presses stop cleanly instead of appearing to wrap.
+      previewEl.scrollTo({ top: settledTop, behavior: 'auto' })
+      return
+    }
     const smooth = useStore.getState().previewSmoothScroll
-    previewEl.scrollTo({ top: nextTop, behavior: smooth ? 'smooth' : 'auto' })
+    const hitsBoundary = nextTop <= epsilon || nextTop >= maxTop - epsilon
+    previewEl.scrollTo({
+      top: nextTop,
+      behavior: smooth && !hitsBoundary ? 'smooth' : 'auto'
+    })
   }
 
   function scrollPreviewTo(previewEl: HTMLElement, top: number): void {

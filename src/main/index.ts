@@ -55,6 +55,13 @@ import {
   installMcpForClient,
   uninstallMcpForClient
 } from './mcp-integrations'
+import {
+  checkForAppUpdates,
+  downloadAppUpdate,
+  getAppUpdateState,
+  initAppUpdater,
+  installAppUpdate
+} from './updater'
 import type { McpClientId, McpInstructionsPayload } from '@shared/mcp-clients'
 import {
   instructionsFilePath,
@@ -433,6 +440,12 @@ function registerIpc(): void {
     console.log(`listFontFamilies: returning ${list.length} families`)
     return list
   })
+  ipcMain.handle(IPC.APP_UPDATER_GET_STATE, () => getAppUpdateState())
+  ipcMain.handle(IPC.APP_UPDATER_CHECK, async () => await checkForAppUpdates())
+  ipcMain.handle(IPC.APP_UPDATER_DOWNLOAD, async () => await downloadAppUpdate())
+  ipcMain.handle(IPC.APP_UPDATER_INSTALL, () => {
+    installAppUpdate()
+  })
 
   ipcMain.handle(IPC.VAULT_GET_CURRENT, async () => {
     if (currentVault) return currentVault
@@ -782,10 +795,17 @@ function installAppMenu(): void {
         { label: 'About ZenNotes', role: 'about' },
         { type: 'separator' },
         {
+          label: 'Check for Updates…',
+          click: () => {
+            void checkForAppUpdates()
+          }
+        },
+        { type: 'separator' },
+        {
           label: 'Settings…',
           accelerator: 'CmdOrCtrl+,',
           click: () => {
-            mainWindow?.webContents.send('menu:open-settings')
+            mainWindow?.webContents.send(IPC.APP_OPEN_SETTINGS)
           }
         },
         { type: 'separator' },
@@ -877,6 +897,7 @@ app.whenReady().then(async () => {
 
   installAppMenu()
   registerIpc()
+  initAppUpdater()
   await createWindow()
 
   app.on('activate', () => {

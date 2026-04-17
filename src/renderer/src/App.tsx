@@ -41,6 +41,7 @@ function App(): JSX.Element {
   const selectedTags = useStore((s) => s.selectedTags)
   const unifiedSidebar = useStore((s) => s.unifiedSidebar)
   const settingsOpen = useStore((s) => s.settingsOpen)
+  const setSettingsOpen = useStore((s) => s.setSettingsOpen)
   const themeId = useStore((s) => s.themeId)
   const themeFamily = useStore((s) => s.themeFamily)
   const themeMode = useStore((s) => s.themeMode)
@@ -59,6 +60,12 @@ function App(): JSX.Element {
   useEffect(() => {
     void init()
   }, [init])
+
+  useEffect(() => {
+    return window.zen.onOpenSettings(() => {
+      setSettingsOpen(true)
+    })
+  }, [setSettingsOpen])
 
   useEffect(() => {
     if (!vault || !workspaceRestored) return

@@ -1,5 +1,9 @@
 # ZenNotes
 
+<p align="center">
+  <img src="build/icon.png" alt="ZenNotes app icon" width="160">
+</p>
+
 ZenNotes is a keyboard-first desktop notes app built on Electron,
 React, TypeScript, and CodeMirror 6. It keeps notes as ordinary local
 Markdown files, adds a Vim-friendly editing and navigation model, and

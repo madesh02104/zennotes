@@ -35,6 +35,12 @@ export const IPC = {
   VAULT_SCAN_TASKS: 'vault:scan-tasks',
   VAULT_SCAN_TASKS_FOR: 'vault:scan-tasks-for',
   APP_LIST_FONTS: 'app:list-fonts',
+  APP_OPEN_SETTINGS: 'app:open-settings',
+  APP_UPDATER_GET_STATE: 'app-updater:get-state',
+  APP_UPDATER_CHECK: 'app-updater:check',
+  APP_UPDATER_DOWNLOAD: 'app-updater:download',
+  APP_UPDATER_INSTALL: 'app-updater:install',
+  APP_UPDATER_ON_STATE: 'app-updater:on-state',
   VAULT_ON_CHANGE: 'vault:on-change',
   WINDOW_TOGGLE_MAXIMIZE: 'window:toggle-maximize',
   WINDOW_MINIMIZE: 'window:minimize',
@@ -54,6 +60,30 @@ export interface TikzRenderResponse {
   ok: boolean
   svg?: string
   error?: string
+}
+
+export type AppUpdatePhase =
+  | 'unsupported'
+  | 'idle'
+  | 'checking'
+  | 'available'
+  | 'not-available'
+  | 'downloading'
+  | 'downloaded'
+  | 'error'
+
+export interface AppUpdateState {
+  phase: AppUpdatePhase
+  currentVersion: string
+  availableVersion: string | null
+  releaseName: string | null
+  releaseDate: string | null
+  releaseNotes: string | null
+  progressPercent: number | null
+  transferredBytes: number | null
+  totalBytes: number | null
+  bytesPerSecond: number | null
+  message: string
 }
 
 export type NoteFolder = 'inbox' | 'quick' | 'archive' | 'trash'

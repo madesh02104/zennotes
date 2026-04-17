@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type {
+  AppUpdateState,
   VaultTextSearchBackendPreference,
   VaultTextSearchCapabilities,
   VaultTextSearchToolPaths
@@ -70,6 +71,61 @@ function resolvedVaultTextSearchBackendLabel(
   return 'Checking…'
 }
 
+function formatUpdatePhaseLabel(phase: AppUpdateState['phase']): string {
+  switch (phase) {
+    case 'unsupported':
+      return 'Unavailable'
+    case 'checking':
+      return 'Checking'
+    case 'available':
+      return 'Update available'
+    case 'not-available':
+      return 'Up to date'
+    case 'downloading':
+      return 'Downloading'
+    case 'downloaded':
+      return 'Ready to install'
+    case 'error':
+      return 'Update error'
+    case 'idle':
+    default:
+      return 'Manual check'
+  }
+}
+
+function updatePhaseBadgeClass(phase: AppUpdateState['phase']): string {
+  switch (phase) {
+    case 'available':
+    case 'downloaded':
+      return 'border-accent/30 bg-accent/10 text-accent'
+    case 'checking':
+    case 'downloading':
+      return 'border-paper-300/70 bg-paper-100/85 text-ink-700'
+    case 'error':
+      return 'border-red-400/25 bg-red-500/10 text-red-700'
+    case 'not-available':
+      return 'border-emerald-400/25 bg-emerald-500/10 text-emerald-700'
+    case 'unsupported':
+      return 'border-paper-300/70 bg-paper-100/80 text-ink-500'
+    case 'idle':
+    default:
+      return 'border-paper-300/70 bg-paper-100/80 text-ink-600'
+  }
+}
+
+function formatBytes(bytes: number | null): string | null {
+  if (bytes == null || !Number.isFinite(bytes) || bytes <= 0) return null
+  const units = ['B', 'KB', 'MB', 'GB']
+  let value = bytes
+  let unit = units[0]
+  for (let i = 1; i < units.length && value >= 1024; i += 1) {
+    value /= 1024
+    unit = units[i]
+  }
+  const rounded = value >= 100 ? value.toFixed(0) : value >= 10 ? value.toFixed(1) : value.toFixed(2)
+  return `${rounded} ${unit}`
+}
+
 export function SettingsModal(): JSX.Element {
   const setSettingsOpen = useStore((s) => s.setSettingsOpen)
   const vimMode = useStore((s) => s.vimMode)
@@ -127,6 +183,7 @@ export function SettingsModal(): JSX.Element {
   const setMonoFont = useStore((s) => s.setMonoFont)
   const darkSidebar = useStore((s) => s.darkSidebar)
   const setDarkSidebar = useStore((s) => s.setDarkSidebar)
+  const [appUpdateState, setAppUpdateState] = useState<AppUpdateState | null>(null)
 
   // Lazy-load the system font list on mount. Retried on every mount
   // when the list comes back empty (IPC failure / no fonts yet).
@@ -170,6 +227,32 @@ export function SettingsModal(): JSX.Element {
       cancelled = true
     }
   }, [searchToolPaths])
+
+  useEffect(() => {
+    let cancelled = false
+    void window.zen.getAppUpdateState().then((state) => {
+      if (!cancelled) setAppUpdateState(state)
+    })
+    const unsubscribe = window.zen.onAppUpdateState((state) => {
+      if (!cancelled) setAppUpdateState(state)
+    })
+    return () => {
+      cancelled = true
+      unsubscribe()
+    }
+  }, [])
+
+  const triggerUpdateCheck = useCallback(() => {
+    void window.zen.checkForAppUpdates()
+  }, [])
+
+  const triggerUpdateDownload = useCallback(() => {
+    void window.zen.downloadAppUpdate()
+  }, [])
+
+  const triggerUpdateInstall = useCallback(() => {
+    void window.zen.installAppUpdate()
+  }, [])
 
   // Family list — Apple is the default, followed by the other families.
   const familyOptions = useMemo<{ id: ThemeFamily; label: string }[]>(
@@ -734,8 +817,8 @@ export function SettingsModal(): JSX.Element {
     {
       id: 'about',
       title: 'About',
-      description: 'App identity, version, and company information.',
-      keywords: ['version', 'company', 'lumary', 'about', 'logo'],
+      description: 'App identity, version, updater status, and company information.',
+      keywords: ['version', 'company', 'lumary', 'about', 'logo', 'updates'],
       content: (
         <Section title="ZenNotes">
           <div className="px-5 py-5">
@@ -743,6 +826,109 @@ export function SettingsModal(): JSX.Element {
               <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-center">
                 <span className="font-medium text-ink-900">ZenNotes</span>
                 <span className="text-xs text-ink-500">v{appPackage.version}</span>
+              </div>
+              <div className="mx-auto mt-5 max-w-[44rem] rounded-2xl border border-paper-300/65 bg-paper-50/65 p-4 text-left shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-ink-500">
+                      Updates
+                    </div>
+                    <div className="mt-1 flex flex-wrap items-center gap-2">
+                      <span
+                        className={[
+                          'rounded-full border px-2.5 py-1 text-[11px] font-medium',
+                          updatePhaseBadgeClass(appUpdateState?.phase ?? 'idle')
+                        ].join(' ')}
+                      >
+                        {formatUpdatePhaseLabel(appUpdateState?.phase ?? 'idle')}
+                      </span>
+                      {appUpdateState?.availableVersion && (
+                        <span className="text-xs text-ink-500">
+                          Latest: v{appUpdateState.availableVersion}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center justify-end gap-2">
+                    {appUpdateState?.phase === 'available' ? (
+                      <button
+                        onClick={triggerUpdateDownload}
+                        className="rounded-xl border border-accent/30 bg-accent/10 px-3.5 py-2 text-xs font-medium text-accent transition-colors hover:bg-accent/15"
+                      >
+                        Download Update
+                      </button>
+                    ) : appUpdateState?.phase === 'downloaded' ? (
+                      <button
+                        onClick={triggerUpdateInstall}
+                        className="rounded-xl border border-accent/30 bg-accent/10 px-3.5 py-2 text-xs font-medium text-accent transition-colors hover:bg-accent/15"
+                      >
+                        Install and Relaunch
+                      </button>
+                    ) : (
+                      <button
+                        onClick={triggerUpdateCheck}
+                        disabled={
+                          appUpdateState?.phase === 'checking' ||
+                          appUpdateState?.phase === 'downloading'
+                        }
+                        className={[
+                          'rounded-xl border px-3.5 py-2 text-xs font-medium transition-colors',
+                          appUpdateState?.phase === 'checking' ||
+                          appUpdateState?.phase === 'downloading'
+                            ? 'cursor-not-allowed border-paper-300/60 bg-paper-100/45 text-ink-400'
+                            : 'border-paper-300/70 bg-paper-100/80 text-ink-800 hover:bg-paper-200'
+                        ].join(' ')}
+                      >
+                        Check for Updates
+                      </button>
+                    )}
+                    <a
+                      href={appPackage.homepage}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="rounded-xl border border-paper-300/70 bg-paper-100/80 px-3.5 py-2 text-xs font-medium text-ink-700 transition-colors hover:bg-paper-200"
+                    >
+                      View Release
+                    </a>
+                  </div>
+                </div>
+                <p className="mt-3 text-sm leading-6 text-ink-600">
+                  {appUpdateState?.message ?? 'Check GitHub releases for a newer ZenNotes build.'}
+                </p>
+                {appUpdateState?.phase === 'downloading' && (
+                  <div className="mt-3">
+                    <div className="h-2 overflow-hidden rounded-full bg-paper-200/90">
+                      <div
+                        className="h-full rounded-full bg-accent transition-[width] duration-200"
+                        style={{ width: `${Math.max(0, Math.min(100, appUpdateState.progressPercent ?? 0))}%` }}
+                      />
+                    </div>
+                    <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-500">
+                      <span>{Math.round(appUpdateState.progressPercent ?? 0)}%</span>
+                      {formatBytes(appUpdateState.transferredBytes) && formatBytes(appUpdateState.totalBytes) && (
+                        <span>
+                          {formatBytes(appUpdateState.transferredBytes)} / {formatBytes(appUpdateState.totalBytes)}
+                        </span>
+                      )}
+                      {formatBytes(appUpdateState.bytesPerSecond) && (
+                        <span>{formatBytes(appUpdateState.bytesPerSecond)}/s</span>
+                      )}
+                    </div>
+                  </div>
+                )}
+                {appUpdateState?.releaseNotes && (
+                  <details className="mt-3 rounded-xl border border-paper-300/60 bg-paper-100/60 px-3 py-2.5">
+                    <summary className="cursor-pointer text-xs font-medium uppercase tracking-[0.16em] text-ink-500">
+                      Release notes
+                    </summary>
+                    <pre className="mt-2 whitespace-pre-wrap font-sans text-sm leading-6 text-ink-600">
+                      {appUpdateState.releaseNotes}
+                    </pre>
+                  </details>
+                )}
+                <div className="mt-3 text-xs leading-5 text-ink-500">
+                  In-app updates use the published GitHub release feed. For general users, that feed must be publicly reachable.
+                </div>
               </div>
               <p className="mx-auto mt-2 max-w-[44rem] text-center">
                 {appPackage.description}. Visit{' '}
