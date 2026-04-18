@@ -95,9 +95,26 @@ const DEFAULT_WINDOW_HEIGHT = 820
 const MIN_WINDOW_WIDTH = 900
 const MIN_WINDOW_HEIGHT = 600
 const WINDOW_STATE_PERSIST_DELAY_MS = 150
+const DEFAULT_ZOOM_FACTOR = 1
+const MIN_ZOOM_FACTOR = 0.5
+const MAX_ZOOM_FACTOR = 3
+const ZOOM_STEP = 0.1
+const MAC_WINDOW_BACKGROUND_COLOR = '#1f1f1f'
+const APP_WEBSITE_URL = 'https://zennotes.org'
+const APP_DISCORD_URL = 'https://discord.gg/W4fWzapKS6'
+const APP_REPOSITORY_URL = 'https://github.com/ZenNotes/zennotes'
+const APP_RELEASES_URL = 'https://github.com/ZenNotes/zennotes/releases/latest'
+const APP_ISSUES_URL = 'https://github.com/ZenNotes/zennotes/issues'
+let currentZoomFactor = DEFAULT_ZOOM_FACTOR
 
 function isMac(): boolean {
   return process.platform === 'darwin'
+}
+
+function windowIconPath(): string {
+  return app.isPackaged
+    ? path.join(process.resourcesPath, 'icon.png')
+    : path.join(__dirname, '../../build/icon.png')
 }
 
 function openAllowedExternalUrl(url: string): void {
@@ -202,6 +219,91 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max)
 }
 
+function normalizeZoomFactor(value: number): number {
+  return Math.round(clamp(value, MIN_ZOOM_FACTOR, MAX_ZOOM_FACTOR) * 100) / 100
+}
+
+async function persistZoomFactor(factor: number): Promise<number> {
+  const normalized = normalizeZoomFactor(factor)
+  currentZoomFactor = normalized
+  await updateConfig((cfg) => ({ ...cfg, zoomFactor: normalized }))
+  return normalized
+}
+
+function applyZoomFactor(win: BrowserWindow, factor: number): number {
+  const normalized = normalizeZoomFactor(factor)
+  win.webContents.setZoomFactor(normalized)
+  currentZoomFactor = normalized
+  return normalized
+}
+
+async function setWindowZoom(
+  win: BrowserWindow | null | undefined,
+  factor: number
+): Promise<number> {
+  const target = win && !win.isDestroyed() ? win : mainWindow
+  const normalized = normalizeZoomFactor(factor)
+  const windows = BrowserWindow.getAllWindows()
+  if (windows.length > 0) {
+    for (const openWin of windows) {
+      if (!openWin.isDestroyed()) applyZoomFactor(openWin, normalized)
+    }
+  } else if (target && !target.isDestroyed()) {
+    applyZoomFactor(target, normalized)
+  }
+  return await persistZoomFactor(normalized)
+}
+
+async function adjustWindowZoom(
+  win: BrowserWindow | null | undefined,
+  delta: number
+): Promise<number> {
+  const target = win && !win.isDestroyed() ? win : mainWindow
+  const base = target && !target.isDestroyed() ? target.webContents.getZoomFactor() : currentZoomFactor
+  return await setWindowZoom(target, base + delta)
+}
+
+function isZoomShortcut(input: Electron.Input, key: string, code: string): boolean {
+  return input.key === key || input.code === code
+}
+
+function installZoomControls(win: BrowserWindow): void {
+  win.webContents.on('before-input-event', (event, input) => {
+    const mod = input.control || input.meta
+    if (!mod || input.alt) return
+
+    if (
+      isZoomShortcut(input, '0', 'Digit0') ||
+      isZoomShortcut(input, ')', 'Digit0') ||
+      isZoomShortcut(input, '0', 'Numpad0') ||
+      isZoomShortcut(input, 'Insert', 'Numpad0')
+    ) {
+      event.preventDefault()
+      void setWindowZoom(win, DEFAULT_ZOOM_FACTOR)
+      return
+    }
+
+    if (
+      isZoomShortcut(input, '=', 'Equal') ||
+      isZoomShortcut(input, '+', 'Equal') ||
+      isZoomShortcut(input, '+', 'NumpadAdd')
+    ) {
+      event.preventDefault()
+      void adjustWindowZoom(win, ZOOM_STEP)
+      return
+    }
+
+    if (
+      isZoomShortcut(input, '-', 'Minus') ||
+      isZoomShortcut(input, '_', 'Minus') ||
+      isZoomShortcut(input, '-', 'NumpadSubtract')
+    ) {
+      event.preventDefault()
+      void adjustWindowZoom(win, -ZOOM_STEP)
+    }
+  })
+}
+
 function sanitizeWindowState(state: PersistedWindowState | null): PersistedWindowState | null {
   if (!state) return null
 
@@ -255,6 +357,7 @@ async function createWindow(): Promise<void> {
   const mac = isMac()
   const cfg = await loadConfig()
   const restoredState = sanitizeWindowState(cfg.windowState)
+  currentZoomFactor = normalizeZoomFactor(cfg.zoomFactor)
   const win = new BrowserWindow({
     width: restoredState?.width ?? DEFAULT_WINDOW_WIDTH,
     height: restoredState?.height ?? DEFAULT_WINDOW_HEIGHT,
@@ -265,20 +368,17 @@ async function createWindow(): Promise<void> {
     autoHideMenuBar: true,
     titleBarStyle: mac ? 'hiddenInset' : 'hidden',
     trafficLightPosition: { x: 16, y: 16 },
-    // Apple Liquid Glass: we want system materials to show through the
-    // window chrome. On macOS 26+ Electron maps `vibrancy: 'fullscreen-ui'`
-    // to the new glass material; older macOS versions fall back to the
-    // traditional vibrancy behaviour automatically.
     ...(mac
       ? {
-          vibrancy: 'under-window' as const,
-          visualEffectState: 'active' as const,
-          backgroundColor: '#00000000',
-          transparent: true
+          // The renderer now runs fully opaque, so keeping the
+          // BrowserWindow transparent forces macOS into an unnecessary
+          // compositing path that makes typing feel mushy on large
+          // displays. Use a solid background instead.
+          backgroundColor: MAC_WINDOW_BACKGROUND_COLOR
         }
       : {
           backgroundColor: '#faf7f0',
-          icon: path.join(__dirname, '../../build/icon.png')
+          icon: windowIconPath()
         }),
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.js'),
@@ -322,6 +422,8 @@ async function createWindow(): Promise<void> {
   })
 
   installNavigationGuards(win)
+  installZoomControls(win)
+  applyZoomFactor(win, currentZoomFactor)
 
   const devServerUrl = process.env['ELECTRON_RENDERER_URL']
   if (devServerUrl) {
@@ -471,8 +573,20 @@ function registerIpc(): void {
       return null
     }
   })
+  ipcMain.handle(IPC.APP_ZOOM_IN, async (e) => {
+    return await adjustWindowZoom(BrowserWindow.fromWebContents(e.sender), ZOOM_STEP)
+  })
+  ipcMain.handle(IPC.APP_ZOOM_OUT, async (e) => {
+    return await adjustWindowZoom(BrowserWindow.fromWebContents(e.sender), -ZOOM_STEP)
+  })
+  ipcMain.handle(IPC.APP_ZOOM_RESET, async (e) => {
+    return await setWindowZoom(BrowserWindow.fromWebContents(e.sender), DEFAULT_ZOOM_FACTOR)
+  })
   ipcMain.handle(IPC.APP_UPDATER_GET_STATE, () => getAppUpdateState())
   ipcMain.handle(IPC.APP_UPDATER_CHECK, async () => await checkForAppUpdates())
+  ipcMain.handle(IPC.APP_UPDATER_CHECK_WITH_UI, async () => {
+    await runMenuUpdateCheck()
+  })
   ipcMain.handle(IPC.APP_UPDATER_DOWNLOAD, async () => await downloadAppUpdate())
   ipcMain.handle(IPC.APP_UPDATER_INSTALL, () => {
     installAppUpdate()
@@ -764,13 +878,11 @@ function openFloatingNoteWindow(relPath: string): void {
     trafficLightPosition: { x: 12, y: 12 },
     ...(mac
       ? {
-          backgroundColor: '#00000000',
-          vibrancy: 'under-window' as const,
-          visualEffectState: 'active' as const,
-          transparent: true
+          backgroundColor: MAC_WINDOW_BACKGROUND_COLOR
         }
       : {
-          backgroundColor: '#faf7f0'
+          backgroundColor: '#faf7f0',
+          icon: windowIconPath()
         }),
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.js'),
@@ -786,6 +898,8 @@ function openFloatingNoteWindow(relPath: string): void {
   })
   win.on('ready-to-show', () => win.show())
   installNavigationGuards(win)
+  installZoomControls(win)
+  applyZoomFactor(win, currentZoomFactor)
 
   const params = `?floating=1&note=${encodeURIComponent(relPath)}`
   const devServerUrl = process.env['ELECTRON_RENDERER_URL']
@@ -868,9 +982,27 @@ function installAppMenu(): void {
           ? []
           : ([{ role: 'toggleDevTools' }] as Electron.MenuItemConstructorOptions[])),
         { type: 'separator' },
-        { role: 'resetZoom' },
-        { role: 'zoomIn' },
-        { role: 'zoomOut' },
+        {
+          label: 'Actual Size',
+          accelerator: 'CmdOrCtrl+0',
+          click: () => {
+            void setWindowZoom(BrowserWindow.getFocusedWindow(), DEFAULT_ZOOM_FACTOR)
+          }
+        },
+        {
+          label: 'Zoom In',
+          accelerator: 'CmdOrCtrl+=',
+          click: () => {
+            void adjustWindowZoom(BrowserWindow.getFocusedWindow(), ZOOM_STEP)
+          }
+        },
+        {
+          label: 'Zoom Out',
+          accelerator: 'CmdOrCtrl+-',
+          click: () => {
+            void adjustWindowZoom(BrowserWindow.getFocusedWindow(), -ZOOM_STEP)
+          }
+        },
         { type: 'separator' },
         { role: 'togglefullscreen' }
       ]
@@ -882,6 +1014,42 @@ function installAppMenu(): void {
         { role: 'zoom' },
         { type: 'separator' },
         { role: 'front' }
+      ]
+    },
+    {
+      label: 'Help',
+      submenu: [
+        {
+          label: 'ZenNotes Website',
+          click: () => {
+            openAllowedExternalUrl(APP_WEBSITE_URL)
+          }
+        },
+        {
+          label: 'Join Discord',
+          click: () => {
+            openAllowedExternalUrl(APP_DISCORD_URL)
+          }
+        },
+        { type: 'separator' },
+        {
+          label: 'GitHub Repository',
+          click: () => {
+            openAllowedExternalUrl(APP_REPOSITORY_URL)
+          }
+        },
+        {
+          label: 'Latest Release',
+          click: () => {
+            openAllowedExternalUrl(APP_RELEASES_URL)
+          }
+        },
+        {
+          label: 'Report an Issue',
+          click: () => {
+            openAllowedExternalUrl(APP_ISSUES_URL)
+          }
+        }
       ]
     }
   ]

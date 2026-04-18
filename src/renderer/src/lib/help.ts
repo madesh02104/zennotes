@@ -29,44 +29,87 @@ export interface HelpSettingsSection {
 
 export const HELP_QUICK_START: HelpCard[] = [
   {
-    title: 'Choose a vault',
+    title: 'Pick a vault you control',
     body:
-      'A vault is just a folder of markdown files. ZenNotes reads it directly, keeps everything file-based, and never hides your notes behind a database.'
+      'A vault is just a folder of markdown files. ZenNotes reads and writes that folder directly, so your notes stay portable, syncable, and readable outside the app too.'
   },
   {
-    title: 'Use the three working zones',
+    title: 'Learn the three working zones',
     body:
-      'The sidebar is your navigator, the note list is your current folder or attachments view, and the editor pane is where tabs, splits, preview, and focused writing happen.'
+      'The sidebar is your navigator, the note list shows the current folder or special list view, and the main pane is where tabs, splits, preview, and writing happen.'
   },
   {
-    title: 'Capture, organize, archive',
+    title: 'Start in Inbox, use Quick Notes for capture',
     body:
-      'Quick Notes are for fast capture, Inbox is active work, Archive is cold storage, and Trash is recoverable deletion. Archive and Trash both open as dedicated main-pane list views so the sidebar stays singular, while Quick Notes stays foldable in the sidebar and can also open its own list tab from the context menu.'
+      'Inbox is for active notes. Quick Notes are for fast capture. Archive is for notes you want to keep without keeping them in the way, and Trash is recoverable deletion rather than immediate loss.'
   },
   {
-    title: 'Stay keyboard-first',
+    title: 'Use the keyboard from the start',
     body:
-      'Search notes, search vault text, and open the command palette from their configured shortcuts, and use Vim mode for ex commands, pane motion, hint mode, leader hints, link-following, and keyboard-opened context menus. Sidebar rows, note-list rows, and the active tab all expose their right-click actions without leaving the keyboard. Vault text search can use auto-detected system tools like fzf or ripgrep when they are available, can be pointed at custom binary paths, or can fall back to the built-in searcher. If you explicitly turn Vim mode off, the non-Vim search shortcut becomes available too.'
+      'Search notes, search vault text, switch panes, open context menus, and run commands without leaving the keyboard. If Vim mode is on, leader flows and ex commands become part of the normal editing loop instead of an extra mode to learn later.'
   },
   {
-    title: 'Insert structure inline',
+    title: 'Insert structure while you type',
     body:
-      'Type `/` in the editor to open a slash menu for headings, lists, callouts, code blocks, dividers, tables, links, images, and more. Type `@` to insert date shortcuts like Today, Yesterday, and Tomorrow as markdown-friendly ISO dates.'
+      'Type `/` to insert headings, lists, callouts, code blocks, tables, links, images, and other markdown structures. Type `@` to insert date shortcuts like Today and Tomorrow as ISO dates.'
   },
   {
-    title: 'Use the built-in manual',
+    title: 'Switch between write and read modes',
     body:
-      'Open Help from the sidebar footer or with `:help` to browse shortcuts, commands, panel behavior, Vim flows, and settings in one place.'
+      'Use Edit when you want raw markdown control, Split when you want source and rendered output together, and Preview when you want a clean reading surface with keyboard navigation.'
   },
   {
-    title: 'Seed a starter vault tour',
+    title: 'Find things in the right place',
     body:
-      'Use the command palette entry `Generate Demo Tour Notes` to add a guided set of demo notes under `inbox/demo`, plus a local attachment, to the current vault. If you want to clear them later, run `Remove Demo Tour Notes`.'
+      'Use note search when you know the note title or path, vault text search when you know a phrase inside the note, and the command palette when you know the action you want but not where it lives.'
+  },
+  {
+    title: 'Keep supporting material nearby',
+    body:
+      'Tabs, splits, floating windows, the reference pane, and the connections panel are all there to help you keep related material visible while you write instead of forcing constant back-and-forth navigation.'
   },
   {
     title: 'Pick up where you left off',
     body:
-      'ZenNotes restores the last open tabs, splits, built-in views, and sidebar layout for each vault, and the app also remembers the main window size, position, and maximized state between launches.'
+      'ZenNotes restores open tabs, splits, built-in views, and sidebar layout per vault. It also remembers the main window bounds, so reopening the app feels like returning to a workspace rather than starting over.'
+  }
+]
+
+export const HELP_HOW_TO_GUIDES: HelpCard[] = [
+  {
+    title: 'Capture a quick note',
+    body:
+      'Use the Quick Note shortcut or the command palette entry to create a fast capture note. If date-titled Quick Notes are enabled, ZenNotes names it from today’s date automatically; otherwise it creates a normal quick note and focuses the title so you can keep moving.'
+  },
+  {
+    title: 'Create a note in the folder you are already in',
+    body:
+      'When you are browsing a folder, use the current-folder note command instead of creating in Inbox and moving later. That keeps new notes close to the project or area you were already working in.'
+  },
+  {
+    title: 'Move a note without dragging',
+    body:
+      'Use the note context menu, search for `move` or `mv` in the command palette, or run `:move` or `:mv`. With no argument, ZenNotes opens a folder picker; with a target like `archive/Reference` or `inbox/Work`, it moves the note directly.'
+  },
+  {
+    title: 'Read a note beside its source',
+    body:
+      'Switch the active pane to Split mode when you want markdown on one side and rendered output on the other. Use Preview when you only want the rendered view, or keep Edit when you want the least visual noise while writing.'
+  },
+  {
+    title: 'Search the right thing',
+    body:
+      'Use note search for titles and paths, note outline for headings inside the current note, and vault text search for matching lines across the vault. Those three tools solve different problems, and using the right one makes the app feel much faster.'
+  },
+  {
+    title: 'Keep supporting notes visible',
+    body:
+      'Open a note in a floating window when you want it in a separate OS window, or pin a note or PDF as a reference when you want it attached to the current writing context inside ZenNotes.'
+  },
+  {
+    title: 'Check for updates and install them',
+    body:
+      'Use Check for Updates from the app menu, the command palette, or Settings → About. When a release is available, ZenNotes can download it in the background and then prompt you to install and relaunch.'
   }
 ]
 
@@ -75,6 +118,11 @@ export const HELP_CORE_CONCEPTS: HelpCard[] = [
     title: 'Notes are real markdown files',
     body:
       'ZenNotes edits markdown on disk. Rename, move, archive, restore, and floating-window operations all work on the underlying files, not an internal copy.'
+  },
+  {
+    title: 'System folders are workflow buckets',
+    body:
+      'Inbox, Quick Notes, Archive, and Trash are built-in top-level buckets with specific jobs. You can rename how they appear in the UI without renaming the actual folders on disk, which keeps your workflow flexible without breaking the file layout.'
   },
   {
     title: 'Tabs and splits are first-class',
@@ -155,6 +203,11 @@ export const HELP_CORE_CONCEPTS: HelpCard[] = [
     title: 'Destructive actions ask first',
     body:
       'Moving a note to Trash now asks for confirmation before anything is deleted from the active workspace, and the Trash view separates restore from permanent delete.'
+  },
+  {
+    title: 'Updates are release-driven',
+    body:
+      'In-app updates read the published GitHub release feed. That means update checks, download prompts, and release notes are all driven by the same public releases you can open manually from the app menu or command palette.'
   }
 ]
 
@@ -173,6 +226,9 @@ export const HELP_SHORTCUT_SECTIONS: HelpShortcutSection[] = [
       { keys: 'Mod+2', action: 'Toggle connections', detail: 'Toggle the connections panel for the active editor pane.' },
       { keys: 'Mod+.', action: 'Toggle Zen mode', detail: 'Hide or restore the app chrome so only the active editor, preview, or split view stays on screen.' },
       { keys: 'Mod+W', action: 'Close active tab', detail: 'Close the current note or virtual tab.' },
+      { keys: 'Mod+=', action: 'Zoom in', detail: 'Scale the whole app up, including chrome, editor, and preview.' },
+      { keys: 'Mod+-', action: 'Zoom out', detail: 'Scale the whole app down when the UI feels too large.' },
+      { keys: 'Mod+0', action: 'Reset zoom', detail: 'Return the app to its default scale.' },
       { keys: 'Alt+Z', action: 'Toggle word wrap', detail: 'Switch between wrapped lines and horizontal scrolling.' },
       { keys: 'Esc', action: 'Dismiss overlay', detail: 'Close note search or the command palette when they are open.' }
     ]
@@ -495,13 +551,16 @@ export const HELP_SETTINGS: HelpSettingsSection[] = [
   {
     title: 'Vault',
     items: [
-      { label: 'Vault location', detail: 'Reveal or change the root folder ZenNotes treats as the active vault.' }
+      { label: 'Vault location', detail: 'Reveal or change the root folder ZenNotes treats as the active vault.' },
+      { label: 'System folder labels', detail: 'Rename how Inbox, Quick Notes, Archive, and Trash appear in the UI without renaming the real folders on disk.' }
     ]
   },
   {
     title: 'About',
     items: [
       { label: 'App identity', detail: 'See the ZenNotes app icon, current version, and a short description of the app as a keyboard-first markdown workflow with Vim motions and plain local files.' },
+      { label: 'Updates and releases', detail: 'Check for updates, download a newer build, install and relaunch, or jump straight to the latest GitHub release from inside the app.' },
+      { label: 'Website, community, and issue links', detail: 'The app now exposes direct links to the ZenNotes website, Discord, GitHub repository, and issue tracker so support paths stay discoverable.' },
       { label: 'Lumary Labs', detail: 'The About section links to Lumary Labs at lumarylabs.com so company details stay easy to find from inside the app.' }
     ]
   }

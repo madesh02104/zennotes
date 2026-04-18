@@ -30,10 +30,15 @@ const api = {
   platformSync: (): NodeJS.Platform => process.platform,
   listSystemFonts: (): Promise<string[]> => ipcRenderer.invoke(IPC.APP_LIST_FONTS),
   getAppIconDataUrl: (): Promise<string | null> => ipcRenderer.invoke(IPC.APP_ICON_DATA_URL),
+  zoomInApp: (): Promise<number> => ipcRenderer.invoke(IPC.APP_ZOOM_IN),
+  zoomOutApp: (): Promise<number> => ipcRenderer.invoke(IPC.APP_ZOOM_OUT),
+  resetAppZoom: (): Promise<number> => ipcRenderer.invoke(IPC.APP_ZOOM_RESET),
   getAppUpdateState: (): Promise<AppUpdateState> =>
     ipcRenderer.invoke(IPC.APP_UPDATER_GET_STATE),
   checkForAppUpdates: (): Promise<AppUpdateState> =>
     ipcRenderer.invoke(IPC.APP_UPDATER_CHECK),
+  checkForAppUpdatesWithUi: (): Promise<void> =>
+    ipcRenderer.invoke(IPC.APP_UPDATER_CHECK_WITH_UI),
   downloadAppUpdate: (): Promise<AppUpdateState> =>
     ipcRenderer.invoke(IPC.APP_UPDATER_DOWNLOAD),
   installAppUpdate: (): Promise<void> => ipcRenderer.invoke(IPC.APP_UPDATER_INSTALL),

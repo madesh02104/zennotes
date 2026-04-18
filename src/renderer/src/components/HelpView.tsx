@@ -4,6 +4,7 @@ import { buildCommands, type Command } from '../lib/commands'
 import { getKeymapDisplay, type KeymapId, type KeymapOverrides } from '../lib/keymaps'
 import {
   HELP_CORE_CONCEPTS,
+  HELP_HOW_TO_GUIDES,
   HELP_QUICK_START,
   HELP_SETTINGS,
   HELP_SHORTCUT_SECTIONS,
@@ -51,6 +52,9 @@ function resolveShortcutKeys(
     if (action === 'Toggle connections') return shortcut(overrides, 'global.toggleConnections')
     if (action === 'Toggle Zen mode') return shortcut(overrides, 'global.toggleZenMode')
     if (action === 'Close active tab') return shortcut(overrides, 'global.closeActiveTab')
+    if (action === 'Zoom in') return 'Mod+='
+    if (action === 'Zoom out') return 'Mod+-'
+    if (action === 'Reset zoom') return 'Mod+0'
     if (action === 'Toggle word wrap') return shortcut(overrides, 'global.toggleWordWrap')
   }
 
@@ -132,7 +136,9 @@ function resolveVimCommandLabel(command: string, overrides: KeymapOverrides): st
 }
 
 const HELP_SECTION_LINKS = [
-  { id: 'help-overview', label: 'Overview' },
+  { id: 'help-start', label: 'Start Here' },
+  { id: 'help-howto', label: 'How-To' },
+  { id: 'help-concepts', label: 'Concepts' },
   { id: 'help-shortcuts', label: 'Shortcuts' },
   { id: 'help-vim', label: 'Vim + Ex' },
   { id: 'help-commands', label: 'Commands' },
@@ -194,6 +200,14 @@ export function HelpView(): JSX.Element {
   const coreConcepts = useMemo(
     () =>
       HELP_CORE_CONCEPTS.filter((card) =>
+        matchesQuery(deferredQuery, card.title, card.body)
+      ),
+    [deferredQuery]
+  )
+
+  const howToGuides = useMemo(
+    () =>
+      HELP_HOW_TO_GUIDES.filter((card) =>
         matchesQuery(deferredQuery, card.title, card.body)
       ),
     [deferredQuery]
@@ -295,6 +309,7 @@ export function HelpView(): JSX.Element {
 
   const hasMatches =
     quickStart.length > 0 ||
+    howToGuides.length > 0 ||
     coreConcepts.length > 0 ||
     shortcutSections.length > 0 ||
     vimCommands.length > 0 ||
@@ -326,12 +341,12 @@ export function HelpView(): JSX.Element {
                     ZenNotes Manual
                   </div>
                   <h1 className="mt-4 font-serif text-3xl font-semibold tracking-tight text-ink-900 sm:text-4xl">
-                    One place to learn the whole app.
+                    Learn the app in layers, not all at once.
                   </h1>
                   <p className="mt-3 max-w-2xl text-sm leading-7 text-ink-600 sm:text-[15px]">
-                    This page documents the current app surface: vault structure, navigation model,
-                    core workflows, keyboard shortcuts, Vim bindings, ex commands, command palette
-                    entries, and preferences.
+                    Start with the onboarding cards, use the how-to section for common jobs, read
+                    the concepts section when you want the app model to make sense, and use the
+                    rest of the page as a living reference for shortcuts, commands, and settings.
                   </p>
                   <p className="mt-3 max-w-2xl text-xs leading-6 text-ink-500 sm:text-sm">
                     Shortcut labels on this page are rendered for {platformLabel}. The primary app
@@ -372,19 +387,19 @@ export function HelpView(): JSX.Element {
 
               <div className="grid gap-3 sm:grid-cols-3">
                 <HeroStat
-                  label="Commands"
-                  value={String(allCommands.length)}
-                  detail="Command palette entries, grouped below."
+                  label="Start Here"
+                  value={String(HELP_QUICK_START.length)}
+                  detail="Onboarding cards for first launch and first notes."
                 />
                 <HeroStat
-                  label="Vim"
-                  value={String(HELP_VIM_COMMANDS.length)}
-                  detail="Curated ex commands and keyboard-first flows."
+                  label="How-To"
+                  value={String(HELP_HOW_TO_GUIDES.length)}
+                  detail="Common tasks written as practical recipes."
                 />
                 <HeroStat
-                  label="Shortcut groups"
-                  value={String(HELP_SHORTCUT_SECTIONS.length)}
-                  detail="Global, panel, preview, and virtual-view keymaps."
+                  label="Reference"
+                  value={String(allCommands.length + HELP_VIM_COMMANDS.length)}
+                  detail="Command palette entries plus curated Vim and ex commands."
                 />
               </div>
 
@@ -447,7 +462,11 @@ export function HelpView(): JSX.Element {
         {hasMatches && (
           <>
             {quickStart.length > 0 && (
-              <SectionShell title="Quick Start" subtitle="The shortest path from first launch to productive use.">
+              <SectionShell
+                id="help-start"
+                title="Start Here"
+                subtitle="A short tutorial path for getting productive without learning the whole app first."
+              >
                 <div className="grid gap-4 lg:grid-cols-2">
                   {quickStart.map((card) => (
                     <InfoCard key={card.title} title={card.title} body={card.body} />
@@ -456,8 +475,26 @@ export function HelpView(): JSX.Element {
               </SectionShell>
             )}
 
+            {howToGuides.length > 0 && (
+              <SectionShell
+                id="help-howto"
+                title="How-To Guides"
+                subtitle="Task-focused recipes for the jobs people repeat most often."
+              >
+                <div className="grid gap-4 lg:grid-cols-2">
+                  {howToGuides.map((card) => (
+                    <InfoCard key={card.title} title={card.title} body={card.body} />
+                  ))}
+                </div>
+              </SectionShell>
+            )}
+
             {coreConcepts.length > 0 && (
-              <SectionShell title="Core Concepts" subtitle="The app model ZenNotes is built around.">
+              <SectionShell
+                id="help-concepts"
+                title="Concepts"
+                subtitle="Explanations that make the app model, file model, and workflow model easier to reason about."
+              >
                 <div className="grid gap-4 lg:grid-cols-2">
                   {coreConcepts.map((card) => (
                     <InfoCard key={card.title} title={card.title} body={card.body} />

@@ -779,6 +779,17 @@ export function Sidebar(): JSX.Element {
   // VimNav clamps cursor position via Math.min/Math.max on each
   // keystroke using the actual DOM element count — no extra clamping needed.
 
+  const syncSidebarCursorFromTarget = (target: EventTarget | null): void => {
+    const el =
+      target instanceof HTMLElement
+        ? (target.closest("[data-sidebar-idx]") as HTMLElement | null)
+        : null;
+    const idx = Number(el?.dataset.sidebarIdx);
+    if (Number.isFinite(idx) && idx !== sidebarCursorIndex) {
+      useStore.getState().setSidebarCursorIndex(idx);
+    }
+  };
+
   useEffect(() => {
     if (!isSidebarFocused) return;
 
@@ -895,7 +906,10 @@ export function Sidebar(): JSX.Element {
     <aside
       className={`glass-sidebar relative flex shrink-0 flex-col pt-3${isSidebarFocused ? " panel-focused" : ""}`}
       style={{ width: sidebarWidth }}
-      onMouseDownCapture={() => setFocusedPanel("sidebar")}
+      onMouseDownCapture={(e) => {
+        syncSidebarCursorFromTarget(e.target);
+        setFocusedPanel("sidebar");
+      }}
       onFocusCapture={() => setFocusedPanel("sidebar")}
     >
       {/* Vault header + top-right actions */}

@@ -19,6 +19,12 @@ import { resolveSystemFolderLabels } from './system-folder-labels'
 import { foldAll, foldCode, unfoldAll, unfoldCode } from '@codemirror/language'
 import { DEMO_TOUR_START_PATH } from '@shared/demo-tour'
 
+const APP_WEBSITE_URL = 'https://zennotes.org'
+const APP_DISCORD_URL = 'https://discord.gg/W4fWzapKS6'
+const APP_REPOSITORY_URL = 'https://github.com/ZenNotes/zennotes'
+const APP_RELEASES_URL = 'https://github.com/ZenNotes/zennotes/releases/latest'
+const APP_ISSUES_URL = 'https://github.com/ZenNotes/zennotes/issues'
+
 export interface Command {
   /** Stable identifier — used as React key and for analytics. */
   id: string
@@ -49,6 +55,9 @@ export function buildCommands(options?: { includeUnavailable?: boolean }): Comma
     const primary = shortcut('global.searchNotes')
     if (state.vimMode) return primary
     return `${primary} / ${shortcut('global.searchNotesNonVim')}`
+  }
+  const openExternal = (url: string): void => {
+    window.open(url, '_blank')
   }
   const cmds: Command[] = []
 
@@ -420,6 +429,80 @@ export function buildCommands(options?: { includeUnavailable?: boolean }): Comma
       keywords: 'reading rendered markdown pane mode toolbar',
       when: () => !!getState().activeNote,
       run: () => requestPaneMode('preview')
+    },
+    {
+      id: 'view.zoom.in',
+      title: 'Zoom In',
+      category: 'View',
+      shortcut: 'Mod+=',
+      keywords: 'bigger larger scale ui app browser',
+      run: async () => {
+        await window.zen.zoomInApp()
+      }
+    },
+    {
+      id: 'view.zoom.out',
+      title: 'Zoom Out',
+      category: 'View',
+      shortcut: 'Mod+-',
+      keywords: 'smaller decrease scale ui app browser',
+      run: async () => {
+        await window.zen.zoomOutApp()
+      }
+    },
+    {
+      id: 'view.zoom.reset',
+      title: 'Reset Zoom',
+      category: 'View',
+      shortcut: 'Mod+0',
+      keywords: 'actual size normal reset scale ui app browser',
+      run: async () => {
+        await window.zen.resetAppZoom()
+      }
+    },
+    {
+      id: 'app.check-updates',
+      title: 'Check for Updates…',
+      category: 'App',
+      keywords: 'update updates upgrade version release github',
+      run: async () => {
+        await window.zen.checkForAppUpdatesWithUi()
+      }
+    },
+    {
+      id: 'app.website',
+      title: 'Open ZenNotes Website',
+      category: 'App',
+      keywords: 'homepage website docs learn',
+      run: () => openExternal(APP_WEBSITE_URL)
+    },
+    {
+      id: 'app.discord',
+      title: 'Join ZenNotes Discord',
+      category: 'App',
+      keywords: 'community chat support server discord',
+      run: () => openExternal(APP_DISCORD_URL)
+    },
+    {
+      id: 'app.github',
+      title: 'Open GitHub Repository',
+      category: 'App',
+      keywords: 'github source repository code',
+      run: () => openExternal(APP_REPOSITORY_URL)
+    },
+    {
+      id: 'app.release',
+      title: 'View Latest Release',
+      category: 'App',
+      keywords: 'release download changelog latest',
+      run: () => openExternal(APP_RELEASES_URL)
+    },
+    {
+      id: 'app.report-issue',
+      title: 'Report an Issue',
+      category: 'App',
+      keywords: 'bug issue github feedback problem',
+      run: () => openExternal(APP_ISSUES_URL)
     },
     {
       id: 'fold.heading',

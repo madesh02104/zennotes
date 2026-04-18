@@ -78,11 +78,13 @@ export interface PersistedWindowState {
 export interface PersistedConfig {
   vaultRoot: string | null
   windowState: PersistedWindowState | null
+  zoomFactor: number
 }
 
 const DEFAULT_CONFIG: PersistedConfig = {
   vaultRoot: null,
-  windowState: null
+  windowState: null,
+  zoomFactor: 1
 }
 
 let configWriteQueue = Promise.resolve()
@@ -122,9 +124,14 @@ function normalizeWindowState(value: unknown): PersistedWindowState | null {
 function normalizePersistedConfig(value: unknown): PersistedConfig {
   if (!value || typeof value !== 'object') return { ...DEFAULT_CONFIG }
   const candidate = value as Partial<PersistedConfig>
+  const zoomFactor =
+    typeof candidate.zoomFactor === 'number' && Number.isFinite(candidate.zoomFactor)
+      ? Math.min(3, Math.max(0.5, Math.round(candidate.zoomFactor * 100) / 100))
+      : DEFAULT_CONFIG.zoomFactor
   return {
     vaultRoot: typeof candidate.vaultRoot === 'string' ? candidate.vaultRoot : null,
-    windowState: normalizeWindowState(candidate.windowState)
+    windowState: normalizeWindowState(candidate.windowState),
+    zoomFactor
   }
 }
 
