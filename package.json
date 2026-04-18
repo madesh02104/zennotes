@@ -149,6 +149,9 @@
       ],
       "maintainer": "Adib Hanna <adibhanna@gmail.com>",
       "category": "Office"
+    },
+    "deb": {
+      "afterInstall": "build/after-install.sh"
     }
   }
 }
