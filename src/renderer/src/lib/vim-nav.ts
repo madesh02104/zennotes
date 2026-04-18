@@ -9,6 +9,7 @@ import type { NoteFolder, NoteMeta } from '@shared/ipc'
 export type Panel =
   | 'sidebar'
   | 'notelist'
+  | 'tabs'
   | 'editor'
   | 'connections'
   | 'hoverpreview'

@@ -1059,6 +1059,11 @@ textarea,
 
 .cm-editor {
   background: transparent !important;
+  --z-heading-line-height: clamp(
+    1.15,
+    calc(var(--z-editor-line-height, 1.7) - 0.25),
+    1.45
+  );
   /* Text font (editor + preview body). Falls back to SF Mono so
      writing feels code-ish out of the box. */
   font-family: var(
@@ -1268,7 +1273,7 @@ textarea,
 .cm-editor .tok-heading6 {
   font-weight: 700;
   letter-spacing: -0.01em;
-  line-height: 1.25;
+  line-height: var(--z-heading-line-height);
 }
 .cm-editor .tok-heading1 {
   font-size: 2em;
@@ -1481,6 +1486,26 @@ textarea,
 /* --- Rendered markdown (preview) --------------------------------------- */
 
 .prose-zen {
+  --z-heading-line-height: clamp(
+    1.15,
+    calc(var(--z-editor-line-height, 1.7) - 0.25),
+    1.45
+  );
+  --z-prose-block-gap: clamp(
+    0.55em,
+    calc(var(--z-editor-line-height, 1.7) * 0.4em),
+    0.82em
+  );
+  --z-prose-section-gap: clamp(
+    0.9em,
+    calc(var(--z-editor-line-height, 1.7) * 0.72em),
+    1.25em
+  );
+  --z-prose-heading-gap: clamp(
+    0.28em,
+    calc(var(--z-editor-line-height, 1.7) * 0.2em),
+    0.44em
+  );
   width: min(100%, var(--z-preview-max-width, 920px));
   max-width: none;
   margin: 0 auto;
@@ -1511,43 +1536,43 @@ textarea,
   font-weight: 700;
   color: theme("colors.ink.900");
   letter-spacing: -0.01em;
-  line-height: 1.25;
+  line-height: var(--z-heading-line-height);
 }
 .prose-zen h1 {
   font-size: 2em;
   margin-top: 0;
-  margin-bottom: 0.6em;
+  margin-bottom: calc(var(--z-prose-heading-gap) * 1.35);
 }
 .prose-zen h2 {
   font-size: 1.6em;
-  margin-top: 1.4em;
-  margin-bottom: 0.5em;
+  margin-top: var(--z-prose-section-gap);
+  margin-bottom: var(--z-prose-heading-gap);
 }
 .prose-zen h3 {
   font-size: 1.3em;
-  margin-top: 1.2em;
-  margin-bottom: 0.4em;
+  margin-top: calc(var(--z-prose-section-gap) * 0.92);
+  margin-bottom: var(--z-prose-heading-gap);
 }
 .prose-zen h4 {
   font-size: 1.15em;
-  margin-top: 1em;
-  margin-bottom: 0.4em;
+  margin-top: calc(var(--z-prose-section-gap) * 0.85);
+  margin-bottom: var(--z-prose-heading-gap);
 }
 .prose-zen h5 {
   font-size: 1em;
-  margin-top: 1em;
-  margin-bottom: 0.35em;
+  margin-top: calc(var(--z-prose-section-gap) * 0.82);
+  margin-bottom: var(--z-prose-heading-gap);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
 .prose-zen h6 {
   font-size: 0.92em;
-  margin-top: 1em;
-  margin-bottom: 0.35em;
+  margin-top: calc(var(--z-prose-section-gap) * 0.82);
+  margin-bottom: var(--z-prose-heading-gap);
   color: theme("colors.ink.700");
 }
 .prose-zen p {
-  margin: 0.85em 0;
+  margin: var(--z-prose-block-gap) 0;
 }
 .prose-zen a {
   color: theme("colors.accent.DEFAULT");
@@ -1560,10 +1585,10 @@ textarea,
 .prose-zen ul,
 .prose-zen ol {
   padding-left: 1.4em;
-  margin: 0.75em 0;
+  margin: var(--z-prose-block-gap) 0;
 }
 .prose-zen li {
-  margin: 0.25em 0;
+  margin: 0;
 }
 .prose-zen ul > li {
   list-style: disc;
@@ -1583,7 +1608,7 @@ textarea,
   accent-color: theme("colors.accent.DEFAULT");
 }
 .prose-zen blockquote {
-  margin: 1em 0;
+  margin: var(--z-prose-block-gap) 0;
   padding: 0.2em 1em;
   border-left: 3px solid theme("colors.paper.400");
   color: theme("colors.ink.600");
@@ -1614,7 +1639,7 @@ textarea,
   border-radius: 10px;
   padding: 14px 16px;
   overflow-x: auto;
-  margin: 1em 0;
+  margin: var(--z-prose-block-gap) 0;
 }
 .prose-zen pre code {
   background: transparent;
@@ -1625,7 +1650,7 @@ textarea,
 .prose-zen table {
   border-collapse: collapse;
   width: 100%;
-  margin: 1em 0;
+  margin: var(--z-prose-block-gap) 0;
   font-size: 0.94em;
 }
 .prose-zen th,
@@ -1641,7 +1666,7 @@ textarea,
 .prose-zen hr {
   border: none;
   border-top: 1px solid theme("colors.paper.300");
-  margin: 2em 0;
+  margin: calc(var(--z-prose-section-gap) * 1.25) 0;
 }
 .prose-zen img {
   max-width: 100%;
@@ -2015,7 +2040,7 @@ textarea,
 
 .prose-hover-preview {
   font-size: 13px;
-  line-height: 1.55;
+  line-height: var(--z-editor-line-height, 1.7);
 }
 
 .prose-hover-preview :is(h1, h2, h3) {
@@ -2046,7 +2071,7 @@ textarea,
 
 /* Callouts (Obsidian style) */
 .prose-zen .callout {
-  margin: 1em 0;
+  margin: var(--z-prose-block-gap) 0;
   padding: 0.8em 1em;
   border-radius: 10px;
   border: 1px solid theme("colors.paper.300");
@@ -2368,7 +2393,6 @@ textarea,
 .cm-editor .cm-heading-line {
   position: relative;
   --z-heading-font-size: var(--z-editor-font-size, 16px);
-  --z-heading-line-height: 1.25;
   --z-heading-fold-first-line: calc(
     var(--z-heading-font-size) * var(--z-heading-line-height)
   );
@@ -2482,7 +2506,9 @@ textarea,
   --z-heading-fold-arrow-size: 24px;
   position: absolute;
   left: -30px;
-  top: calc((1.25em - var(--z-heading-fold-arrow-size)) / 2);
+  top: calc(
+    (var(--z-heading-line-height) * 1em - var(--z-heading-fold-arrow-size)) / 2
+  );
   transform: none;
   display: inline-flex;
   align-items: center;

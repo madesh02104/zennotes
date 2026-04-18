@@ -63,6 +63,20 @@ export function VimNav(): JSX.Element | null {
     state.setFocusedPanel('editor')
     state.editorViewRef?.focus()
   }, [])
+  const focusTabs = useCallback(() => {
+    const state = useStore.getState()
+    const leaf = findLeaf(state.paneLayout, state.activePaneId)
+    if (!leaf?.activeTab || leaf.tabs.length === 0 || !state.tabsEnabled || state.zenMode) {
+      return false
+    }
+    state.setFocusedPanel('tabs')
+    ;(document.activeElement as HTMLElement | null)?.blur?.()
+    requestAnimationFrame(() => {
+      const target = findTabContextMenuTarget(leaf.id, leaf.activeTab ?? '')
+      target?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+    })
+    return true
+  }, [])
   const jumpNoteHistory = useCallback((direction: 'back' | 'forward') => {
     const state = useStore.getState()
     const previewEl = getPreviewScrollElement()
@@ -269,8 +283,26 @@ export function VimNav(): JSX.Element | null {
                   ? 'k'
                   : null
         if (
+          paneDir === 'k' &&
+          (editorHasFocus ||
+            state.focusedPanel === 'editor' ||
+            state.focusedPanel === null) &&
+          focusTabs()
+        ) {
+          return
+        }
+
+        if (paneDir === 'j' && state.focusedPanel === 'tabs') {
+          focusEditor()
+          return
+        }
+
+        if (
           paneDir &&
-          (editorHasFocus || state.focusedPanel === 'editor' || state.focusedPanel === null) &&
+          (editorHasFocus ||
+            state.focusedPanel === 'editor' ||
+            state.focusedPanel === 'tabs' ||
+            state.focusedPanel === null) &&
           focusPaneInDirection(paneDir)
         ) {
           return
@@ -297,6 +329,8 @@ export function VimNav(): JSX.Element | null {
               : null
         const currentPanel = editorHasFocus
           ? 'editor'
+          : state.focusedPanel === 'tabs'
+            ? 'editor'
           : state.focusedPanel === 'hoverpreview'
             ? 'connections'
             : state.focusedPanel
@@ -521,6 +555,11 @@ export function VimNav(): JSX.Element | null {
 
       if (state.focusedPanel === 'connections') {
         handleConnectionsKey(e, state)
+        return
+      }
+
+      if (state.focusedPanel === 'tabs') {
+        handleTabsKey(e, state)
         return
       }
 
@@ -902,6 +941,66 @@ export function VimNav(): JSX.Element | null {
       state.setConnectionPreview(null)
       focusEditor()
       return
+    }
+  }
+
+  function handleTabsKey(e: KeyboardEvent, state: ReturnType<typeof useStore.getState>): void {
+    const key = e.key
+    const overrides = state.keymapOverrides
+    const leaf = findLeaf(state.paneLayout, state.activePaneId)
+    if (!leaf?.activeTab || leaf.tabs.length === 0 || !state.tabsEnabled || state.zenMode) {
+      focusEditor()
+      return
+    }
+
+    const wantsContextMenu =
+      matchesSequenceToken(e, overrides, 'nav.contextMenu') ||
+      wantsNativeContextMenuKey(e)
+    const wantsHandledKey =
+      key === 'h' ||
+      key === 'l' ||
+      key === 'j' ||
+      key === 'Enter' ||
+      key === 'Escape' ||
+      key === 'ArrowLeft' ||
+      key === 'ArrowRight' ||
+      key === 'ArrowDown' ||
+      wantsContextMenu
+    if (!wantsHandledKey) return
+
+    e.preventDefault()
+    e.stopImmediatePropagation()
+
+    const currentIdx = Math.max(0, leaf.tabs.indexOf(leaf.activeTab))
+    const scrollActiveTab = (): void => {
+      requestAnimationFrame(() => {
+        const target = findTabContextMenuTarget(leaf.id, useStore.getState().selectedPath ?? '')
+        target?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+      })
+    }
+
+    if (key === 'h' || key === 'ArrowLeft') {
+      const next = leaf.tabs[Math.max(0, currentIdx - 1)]
+      if (next) {
+        void state.focusTabInPane(leaf.id, next)
+        scrollActiveTab()
+      }
+      return
+    }
+    if (key === 'l' || key === 'ArrowRight') {
+      const next = leaf.tabs[Math.min(leaf.tabs.length - 1, currentIdx + 1)]
+      if (next) {
+        void state.focusTabInPane(leaf.id, next)
+        scrollActiveTab()
+      }
+      return
+    }
+    if (key === 'j' || key === 'ArrowDown' || key === 'Enter' || key === 'Escape') {
+      focusEditor()
+      return
+    }
+    if (wantsContextMenu) {
+      openActiveTabContextMenu(state)
     }
   }
 

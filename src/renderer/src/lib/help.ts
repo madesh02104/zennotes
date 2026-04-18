@@ -182,7 +182,7 @@ export const HELP_SHORTCUT_SECTIONS: HelpShortcutSection[] = [
     title: 'Pane and panel motion',
     description: 'These are the primary keyboard-first movement patterns. The Vim-style ones assume Vim mode is on.',
     items: [
-      { keys: 'Ctrl-w h / j / k / l', action: 'Move focus', detail: 'Move between sidebar, note list, editor, connections, or adjacent editor panes.' },
+      { keys: 'Ctrl-w h / j / k / l', action: 'Move focus', detail: 'Move between sidebar, note list, the active pane’s tab strip, editor, connections, or adjacent editor panes. From tabs, use h / l to switch tabs and j to return to the editor.' },
       { keys: 'Ctrl-w v', action: 'Split right', detail: 'Clone the current tab into a pane to the right.' },
       { keys: 'Ctrl-w s', action: 'Split down', detail: 'Clone the current tab into a pane below.' },
       { keys: 'Space o', action: 'Open buffers', detail: 'Show a searchable list of every open buffer across every pane.' },

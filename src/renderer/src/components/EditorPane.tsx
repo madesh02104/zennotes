@@ -1246,7 +1246,9 @@ export function EditorPane({ pane }: { pane: PaneLeaf }): JSX.Element {
               'group flex h-8 min-w-0 items-center gap-1 rounded-t-lg border border-b-0 px-1.5 text-sm transition-colors',
               tab.pinned ? 'max-w-[140px]' : 'max-w-[220px]',
               active && isActive
-                ? 'border-paper-300/80 bg-paper-100 text-ink-900'
+                ? focusedPanel === 'tabs'
+                  ? 'border-accent/70 bg-paper-100 text-ink-900 ring-1 ring-inset ring-accent/60'
+                  : 'border-paper-300/80 bg-paper-100 text-ink-900'
                 : active
                   ? 'border-paper-300/60 bg-paper-100/70 text-ink-800'
                   : 'border-transparent bg-paper-200/45 text-ink-500 hover:bg-paper-200/70 hover:text-ink-900'
@@ -1308,6 +1310,7 @@ export function EditorPane({ pane }: { pane: PaneLeaf }): JSX.Element {
       activeTab,
       closeTabInPane,
       focusTabInPane,
+      focusedPanel,
       getTabDropInfo,
       isActive,
       movePaneTab,
