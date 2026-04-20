@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { NoteMeta } from "@shared/ipc";
 import { renderMarkdown } from "../lib/markdown";
@@ -298,7 +298,7 @@ async function renderMermaidBlocks(
   }
 }
 
-export function Preview({
+export const Preview = memo(function Preview({
   markdown,
   notePath,
   onRequestEdit,
@@ -377,48 +377,55 @@ export function Preview({
     useState<ExpandedDiagram | null>(null);
 
   const html = useMemo(() => renderMarkdown(markdown), [markdown]);
+  const notesRef = useRef(notes);
+  const markdownRef = useRef(markdown);
+  const notePathRef = useRef(notePath);
+  const onRequestEditRef = useRef(onRequestEdit);
+  const vaultRootRef = useRef(vault?.root ?? null);
+  const pinnedAssetPathRef = useRef<string | null>(pinnedAssetPath);
+  const pinnedRefVisibleRef = useRef(pinnedRefVisible);
+  const togglePinnedRefVisibleRef = useRef(togglePinnedRefVisible);
+  const selectNoteRef = useRef(selectNote);
+  const updateActiveBodyRef = useRef(updateActiveBody);
+  const persistActiveRef = useRef(persistActive);
 
-  // After render: mark broken wikilinks, wire clicks, render mermaid.
+  useEffect(() => {
+    notesRef.current = notes;
+  }, [notes]);
+  useEffect(() => {
+    markdownRef.current = markdown;
+  }, [markdown]);
+  useEffect(() => {
+    notePathRef.current = notePath;
+  }, [notePath]);
+  useEffect(() => {
+    onRequestEditRef.current = onRequestEdit;
+  }, [onRequestEdit]);
+  useEffect(() => {
+    vaultRootRef.current = vault?.root ?? null;
+  }, [vault?.root]);
+  useEffect(() => {
+    pinnedAssetPathRef.current = pinnedAssetPath;
+  }, [pinnedAssetPath]);
+  useEffect(() => {
+    pinnedRefVisibleRef.current = pinnedRefVisible;
+  }, [pinnedRefVisible]);
+  useEffect(() => {
+    togglePinnedRefVisibleRef.current = togglePinnedRefVisible;
+  }, [togglePinnedRefVisible]);
+  useEffect(() => {
+    selectNoteRef.current = selectNote;
+  }, [selectNote]);
+  useEffect(() => {
+    updateActiveBodyRef.current = updateActiveBody;
+  }, [updateActiveBody]);
+  useEffect(() => {
+    persistActiveRef.current = persistActive;
+  }, [persistActive]);
+
   useEffect(() => {
     const root = ref.current;
     if (!root) return;
-
-    // Resolve wikilinks against the current vault.
-    root.querySelectorAll<HTMLAnchorElement>("a.wikilink").forEach((a) => {
-      const target = a.getAttribute("data-wikilink") || "";
-      const resolved = resolveWikilinkTarget(notes, target);
-      if (resolved) {
-        a.classList.remove("broken");
-        a.dataset.resolvedPath = resolved.path;
-      } else {
-        a.classList.add("broken");
-        delete a.dataset.resolvedPath;
-      }
-    });
-
-    enhanceLocalAssetNodes(root, {
-      vaultRoot: vault?.root,
-      notePath,
-      onRequestEdit,
-      pinnedAssetPath,
-      onActivatePinnedRef: () => {
-        if (!pinnedRefVisible) togglePinnedRefVisible();
-      },
-    });
-
-    enhancePreviewHeadingFolds(root);
-
-    root
-      .querySelectorAll<HTMLInputElement>(
-        'li.task-list-item input[type="checkbox"]',
-      )
-      .forEach((input, idx) => {
-        input.disabled = false;
-        input.dataset.taskIndex = String(idx);
-        input.setAttribute("role", "checkbox");
-        input.classList.add("cursor-pointer");
-      });
-
     const onClick = (e: MouseEvent): void => {
       const target = e.target as HTMLElement;
       const expandButton = target.closest(
@@ -441,7 +448,7 @@ export function Preview({
       if (anchor.classList.contains("wikilink")) {
         e.preventDefault();
         const path = anchor.dataset.resolvedPath;
-        if (path) void selectNote(path);
+        if (path) void selectNoteRef.current(path);
         return;
       }
       if (anchor.classList.contains("hashtag")) {
@@ -471,7 +478,7 @@ export function Preview({
       if (!anchor) return;
       const resolvedPath = anchor.dataset.resolvedPath;
       if (!resolvedPath) return;
-      const note = notes.find((item) => item.path === resolvedPath);
+      const note = notesRef.current.find((item) => item.path === resolvedPath);
       if (!note) return;
       clearHoverDismiss();
       setHovered({ note, rect: anchor.getBoundingClientRect() });
@@ -489,7 +496,7 @@ export function Preview({
       }
       const resolvedPath = anchor.dataset.resolvedPath;
       if (!resolvedPath) return;
-      const note = notes.find((item) => item.path === resolvedPath);
+      const note = notesRef.current.find((item) => item.path === resolvedPath);
       if (!note) return;
       clearHoverDismiss();
       setHovered({ note, rect: anchor.getBoundingClientRect() });
@@ -504,13 +511,13 @@ export function Preview({
       const taskIndex = Number.parseInt(input.dataset.taskIndex ?? "-1", 10);
       if (!Number.isFinite(taskIndex) || taskIndex < 0) return;
       const nextMarkdown = toggleTaskAtIndex(
-        markdown,
+        markdownRef.current,
         taskIndex,
         input.checked,
       );
-      if (nextMarkdown === markdown) return;
-      updateActiveBody(nextMarkdown);
-      void persistActive();
+      if (nextMarkdown === markdownRef.current) return;
+      updateActiveBodyRef.current(nextMarkdown);
+      void persistActiveRef.current();
     };
     const onContextMenu = (e: MouseEvent): void => {
       const target = e.target as HTMLElement;
@@ -526,8 +533,9 @@ export function Preview({
         host.dataset.localAssetHref || host.getAttribute("href") || "";
       if (!url) return;
       e.preventDefault();
-      const vaultRel = vault?.root
-        ? resolveAssetVaultRelativePath(vault.root, notePath, href || url)
+      const vaultRoot = vaultRootRef.current;
+      const vaultRel = vaultRoot
+        ? resolveAssetVaultRelativePath(vaultRoot, notePathRef.current, href || url)
         : null;
       setAssetMenu({ x: e.clientX, y: e.clientY, url, vaultRel, href });
     };
@@ -547,51 +555,76 @@ export function Preview({
       root.removeEventListener("change", onChange);
       root.removeEventListener("contextmenu", onContextMenu);
     };
-  }, [
-    html,
-    markdown,
-    notePath,
-    notes,
-    onRequestEdit,
-    persistActive,
-    selectNote,
-    setView,
-    updateActiveBody,
-    vault?.root,
-    pinnedAssetPath,
-    pinnedRefVisible,
-    togglePinnedRefVisible,
-  ]);
+  }, []);
 
-  // Theme-aware mermaid rendering. Runs independently of the DOM-wiring
-  // effect above so it can re-render diagrams when the user switches
-  // themes without re-attaching every click/hover listener. Each block
-  // keeps its source in `data-mermaid-source` (set by the rehype plugin)
-  // so we can re-parse it even after the first render replaced the div's
-  // innerHTML with an SVG.
   useEffect(() => {
     const root = ref.current;
     if (!root) return;
     let cancelled = false;
-    void renderMermaidBlocks(root, effectiveMode).catch(() => {
-      /* render errors are surfaced inline per block */
+
+    const stage = document.createElement("article");
+    stage.innerHTML = html;
+
+    stage.querySelectorAll<HTMLAnchorElement>("a.wikilink").forEach((a) => {
+      const target = a.getAttribute("data-wikilink") || "";
+      const resolved = resolveWikilinkTarget(notes, target);
+      if (resolved) {
+        a.classList.remove("broken");
+        a.dataset.resolvedPath = resolved.path;
+      } else {
+        a.classList.add("broken");
+        delete a.dataset.resolvedPath;
+      }
     });
+
+    enhanceLocalAssetNodes(stage, {
+      vaultRoot: vault?.root,
+      notePath,
+      onRequestEdit,
+      pinnedAssetPath,
+      onActivatePinnedRef: () => {
+        if (!pinnedRefVisible) togglePinnedRefVisible();
+      },
+    });
+
+    enhancePreviewHeadingFolds(stage);
+
+    stage
+      .querySelectorAll<HTMLInputElement>('li.task-list-item input[type="checkbox"]')
+      .forEach((input, idx) => {
+        input.disabled = false;
+        input.dataset.taskIndex = String(idx);
+        input.setAttribute("role", "checkbox");
+        input.classList.add("cursor-pointer");
+      });
+
+    const applyRenderedDom = async (): Promise<void> => {
+      try {
+        await renderMermaidBlocks(stage, effectiveMode);
+      } catch {
+        /* render errors are surfaced inline per block */
+      }
+      await renderDiagrams(stage, { themeKey: effectiveMode, expanded: false });
+      if (cancelled) return;
+      root.replaceChildren(...Array.from(stage.childNodes));
+    };
+
+    void applyRenderedDom();
+
     return () => {
       cancelled = true;
     };
-  }, [html, effectiveMode]);
-
-  // TikZ / JSXGraph / function-plot rendering. Mirrors the mermaid
-  // effect — placeholder divs get discovered after each render and
-  // turned into SVG / interactive canvases. Theme changes trigger a
-  // re-render of any theme-sensitive renderers (currently JSXGraph and
-  // function-plot; TikZ output is static SVG we post-tint to
-  // `currentColor`).
-  useEffect(() => {
-    const root = ref.current;
-    if (!root) return;
-    void renderDiagrams(root, { themeKey: effectiveMode, expanded: false });
-  }, [html, effectiveMode]);
+  }, [
+    effectiveMode,
+    html,
+    notePath,
+    notes,
+    onRequestEdit,
+    pinnedAssetPath,
+    pinnedRefVisible,
+    togglePinnedRefVisible,
+    vault?.root,
+  ]);
 
   const assetMenuItems = useMemo<ContextMenuItem[]>(() => {
     if (!assetMenu) return [];
@@ -628,7 +661,6 @@ export function Preview({
         data-preview-content
         ref={ref}
         className="prose-zen py-8"
-        dangerouslySetInnerHTML={{ __html: html }}
       />
       {hovered && (
         <NoteHoverPreview
@@ -656,7 +688,7 @@ export function Preview({
       )}
     </>
   );
-}
+});
 
 function ExpandedDiagramModal({
   diagram,

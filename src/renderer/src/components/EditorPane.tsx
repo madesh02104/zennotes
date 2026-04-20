@@ -71,6 +71,7 @@ import {
   moveImageBlockInEditor,
   readImageBlockDragPayload
 } from '../lib/image-block-dnd'
+import { useSettledMarkdown } from '../lib/use-rendered-markdown'
 import {
   ArchiveIcon,
   ArrowUpRightIcon,
@@ -610,7 +611,7 @@ export function EditorPane({ pane }: { pane: PaneLeaf }): JSX.Element {
       ignoreEditorScrollRef.current = false
       ignorePreviewScrollRef.current = false
     }
-  }, [content, mode])
+  }, [content?.path, mode])
 
   // Apply pendingJumpLocation — only for the active pane.
   useEffect(() => {
@@ -1390,6 +1391,18 @@ export function EditorPane({ pane }: { pane: PaneLeaf }): JSX.Element {
   const showPreview = !!content && mode !== 'edit'
   const splitMode = mode === 'split'
   const hasTabs = !zenMode && tabsEnabled && tabs.length > 0
+  const { settledMarkdown: previewMarkdown } = useSettledMarkdown(
+    content?.body ?? '',
+    splitMode ? 75 : 0
+  )
+
+  const handlePreviewRequestEdit = useCallback(() => {
+    if (mode === 'preview') {
+      applyPaneMode('edit')
+      return
+    }
+    focusEditorNormalMode()
+  }, [applyPaneMode, mode])
 
   const paneFrameClass = [
     'relative flex min-h-0 min-w-0 flex-1 flex-col',
@@ -1549,15 +1562,9 @@ export function EditorPane({ pane }: { pane: PaneLeaf }): JSX.Element {
                   ].join(' ')}
                 >
                   <Preview
-                    markdown={content.body}
+                    markdown={previewMarkdown}
                     notePath={content.path}
-                    onRequestEdit={() => {
-                      if (mode === 'preview') {
-                        applyPaneMode('edit')
-                        return
-                      }
-                      focusEditorNormalMode()
-                    }}
+                    onRequestEdit={handlePreviewRequestEdit}
                   />
                 </div>
               )}
@@ -1816,23 +1823,22 @@ function Breadcrumb({
   const [value, setValue] = useState(note.title)
   const [warning, setWarning] = useState('')
   const inputRef = useRef<HTMLInputElement | null>(null)
+  const editingNow = editing || autoFocus
 
   useEffect(() => setValue(note.title), [note.title])
   useEffect(() => setWarning(''), [note.path])
-  useEffect(() => setEditing(false), [note.path])
   useEffect(() => {
-    if (!autoFocus) return
-    setEditing(true)
+    setEditing(autoFocus)
   }, [autoFocus, note.path])
   useEffect(() => {
-    if (!editing) return
+    if (!editingNow) return
     const raf = requestAnimationFrame(() => {
       inputRef.current?.focus()
       inputRef.current?.select()
       if (autoFocus) onAutoFocusHandled()
     })
     return () => cancelAnimationFrame(raf)
-  }, [autoFocus, editing, onAutoFocusHandled])
+  }, [autoFocus, editingNow, onAutoFocusHandled])
 
   const parts = note.path.split('/')
   const topFolder = parts[0] as 'inbox' | 'quick' | 'archive' | 'trash'
@@ -1886,7 +1892,7 @@ function Breadcrumb({
           <span className="text-ink-400">›</span>
         </span>
       ))}
-      {editing ? (
+      {editingNow ? (
         <input
           ref={inputRef}
           spellCheck={false}

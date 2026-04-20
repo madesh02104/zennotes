@@ -38,27 +38,72 @@ import {
 
 const HEADING_RE = /^(#{1,6})\s+/
 
+function restoreStyleProperty(
+  el: HTMLElement,
+  key: 'width' | 'min-width' | 'height' | 'max-height' | 'line-height' | 'transform',
+  value: string
+): void {
+  if (value) el.style.setProperty(key, value)
+  else el.style.removeProperty(key)
+}
+
+function measureNaturalCursorRect(el: HTMLElement): DOMRect | null {
+  const prevWidth = el.style.getPropertyValue('width')
+  const prevMinWidth = el.style.getPropertyValue('min-width')
+  const prevHeight = el.style.getPropertyValue('height')
+  const prevMaxHeight = el.style.getPropertyValue('max-height')
+  const prevLineHeight = el.style.getPropertyValue('line-height')
+  const prevTransform = el.style.getPropertyValue('transform')
+  el.style.removeProperty('width')
+  el.style.removeProperty('min-width')
+  el.style.removeProperty('height')
+  el.style.removeProperty('max-height')
+  el.style.removeProperty('line-height')
+  el.style.removeProperty('transform')
+  const rect = el.getBoundingClientRect()
+  restoreStyleProperty(el, 'width', prevWidth)
+  restoreStyleProperty(el, 'min-width', prevMinWidth)
+  restoreStyleProperty(el, 'height', prevHeight)
+  restoreStyleProperty(el, 'max-height', prevMaxHeight)
+  restoreStyleProperty(el, 'line-height', prevLineHeight)
+  restoreStyleProperty(el, 'transform', prevTransform)
+  return rect.width > 0 && rect.height > 0 ? rect : null
+}
+
 function fixFatCursorHeight(view: EditorView): void {
   const cursors = view.scrollDOM.querySelectorAll<HTMLElement>('.cm-fat-cursor')
-  const activeLine = view.scrollDOM.querySelector<HTMLElement>('.cm-activeLine')
-  const activeLineStyle = activeLine ? getComputedStyle(activeLine) : null
-  const activeLineFontSize = activeLineStyle ? Number.parseFloat(activeLineStyle.fontSize) : Number.NaN
-  const activeLineLineHeight = activeLineStyle
-    ? Number.parseFloat(activeLineStyle.lineHeight)
-    : Number.NaN
-  const isHeadingLine = activeLine?.classList.contains('cm-heading-line') ?? false
   for (const el of cursors) {
+    el.style.removeProperty('width')
+    el.style.removeProperty('min-width')
     el.style.removeProperty('height')
     el.style.removeProperty('max-height')
-    el.style.removeProperty('--z-fat-cursor-scale')
-    if (isHeadingLine && Number.isFinite(activeLineLineHeight) && activeLineLineHeight > 0) {
-      el.style.setProperty('--z-active-cursor-height', `${activeLineLineHeight}px`)
-      el.style.setProperty('--z-fat-cursor-scale', '1')
-    } else if (Number.isFinite(activeLineFontSize) && activeLineFontSize > 0) {
-      el.style.setProperty('--z-active-cursor-height', `${activeLineFontSize}px`)
-    } else {
-      el.style.removeProperty('--z-active-cursor-height')
+    el.style.removeProperty('line-height')
+    el.style.removeProperty('transform')
+
+    const pluginHeight = Number.parseFloat(el.style.height)
+    const naturalCursorRect = measureNaturalCursorRect(el)
+    const targetHeight =
+      naturalCursorRect?.height && naturalCursorRect.height > 0
+        ? naturalCursorRect.height
+        : Number.isFinite(pluginHeight) && pluginHeight > 0
+          ? pluginHeight
+          : null
+    if (!(targetHeight && targetHeight > 0)) continue
+
+    const targetWidth =
+      naturalCursorRect?.width && naturalCursorRect.width > 0
+        ? naturalCursorRect.width
+        : null
+    const anchorHeight = Number.isFinite(pluginHeight) && pluginHeight > 0 ? pluginHeight : targetHeight
+    const offset = (anchorHeight - targetHeight) / 2
+    if (targetWidth) {
+      el.style.width = `${targetWidth}px`
+      el.style.minWidth = `${targetWidth}px`
     }
+    el.style.height = `${targetHeight}px`
+    el.style.maxHeight = `${targetHeight}px`
+    el.style.lineHeight = `${targetHeight}px`
+    el.style.transform = `translateY(${offset}px)`
   }
 }
 
@@ -226,6 +271,7 @@ const headingArrowPlugin = ViewPlugin.fromClass(
     constructor(view: EditorView) {
       this.view = view
       this.decorations = buildDecorations(view)
+      this.cursorFixFrame = requestAnimationFrame(() => fixFatCursorHeight(this.view))
     }
 
     update(update: ViewUpdate): void {
@@ -239,7 +285,7 @@ const headingArrowPlugin = ViewPlugin.fromClass(
       ) {
         this.decorations = buildDecorations(update.view)
       }
-      if (update.selectionSet || update.geometryChanged) {
+      if (update.selectionSet || update.geometryChanged || update.docChanged || update.viewportChanged) {
         cancelAnimationFrame(this.cursorFixFrame)
         this.cursorFixFrame = requestAnimationFrame(() => fixFatCursorHeight(this.view))
       }

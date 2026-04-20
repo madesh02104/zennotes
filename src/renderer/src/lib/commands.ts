@@ -8,6 +8,7 @@
  */
 import { isTagsViewActive, isTasksViewActive, isTrashViewActive, useStore } from '../store'
 import { promptApp } from '../components/PromptHost'
+import { confirmApp } from '../components/ConfirmHost'
 import { buildMoveNotePrompt, parseMoveNoteTarget } from './move-note'
 import { focusPaneInDirection } from './pane-nav'
 import { findLeaf } from './pane-layout'
@@ -1099,11 +1100,15 @@ export function buildCommands(options?: { includeUnavailable?: boolean }): Comma
       when: () => !!getState().vault,
       run: async () => {
         const installed = getState().notes.some((note) => note.path === DEMO_TOUR_START_PATH)
-        const ok = window.confirm(
-          installed
-            ? 'Regenerate the built-in demo tour in this vault? This will overwrite the seeded demo notes under inbox/demo and reset the demo attachment.'
-            : 'Generate the built-in demo tour in this vault? This will add starter notes under inbox/demo and a demo attachment file.'
-        )
+        const ok = await confirmApp({
+          title: installed
+            ? 'Regenerate the built-in demo tour in this vault?'
+            : 'Generate the built-in demo tour in this vault?',
+          description: installed
+            ? 'This will overwrite the seeded demo notes under inbox/demo and reset the demo attachment.'
+            : 'This will add starter notes under inbox/demo and a demo attachment file.',
+          confirmLabel: installed ? 'Regenerate' : 'Generate'
+        })
         if (!ok) return
         const result = await window.zen.generateDemoTour()
         await getState().refreshNotes()
@@ -1120,9 +1125,13 @@ export function buildCommands(options?: { includeUnavailable?: boolean }): Comma
       keywords: 'demo onboarding starter tour sample example delete clear uninstall',
       when: () => getState().notes.some((note) => note.path === DEMO_TOUR_START_PATH),
       run: async () => {
-        const ok = window.confirm(
-          'Remove the built-in demo tour from this vault? This deletes the seeded demo notes under inbox/demo and the demo attachment file.'
-        )
+        const ok = await confirmApp({
+          title: 'Remove the built-in demo tour from this vault?',
+          description:
+            'This deletes the seeded demo notes under inbox/demo and the demo attachment file.',
+          confirmLabel: 'Remove demo tour',
+          danger: true
+        })
         if (!ok) return
         const result = await window.zen.removeDemoTour()
         await getState().refreshNotes()

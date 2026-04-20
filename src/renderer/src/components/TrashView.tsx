@@ -5,6 +5,7 @@ import { ArrowUpRightIcon, TrashIcon } from './icons'
 import { CollectionViewHeader } from './CollectionViewHeader'
 import { advanceSequence, getKeymapBinding, matchesSequenceToken } from '../lib/keymaps'
 import { getSystemFolderLabel } from '../lib/system-folder-labels'
+import { confirmApp } from './ConfirmHost'
 
 function formatDate(ms: number): string {
   const d = new Date(ms)
@@ -95,9 +96,12 @@ export function TrashView(): JSX.Element {
 
   const deleteNoteForever = useCallback(
     async (note: NoteMeta) => {
-      const ok = window.confirm(
-        `Delete "${note.title}" permanently? This cannot be undone.`
-      )
+      const ok = await confirmApp({
+        title: `Delete "${note.title}" permanently?`,
+        description: 'This cannot be undone.',
+        confirmLabel: 'Delete permanently',
+        danger: true
+      })
       if (!ok) return
       await window.zen.deleteNote(note.path)
       await refreshNotes()
@@ -107,9 +111,12 @@ export function TrashView(): JSX.Element {
 
   const emptyTrash = useCallback(async () => {
     if (trashed.length === 0) return
-    const ok = window.confirm(
-      `Delete ${trashed.length} trashed note${trashed.length === 1 ? '' : 's'} permanently? This cannot be undone.`
-    )
+    const ok = await confirmApp({
+      title: `Delete ${trashed.length} trashed note${trashed.length === 1 ? '' : 's'} permanently?`,
+      description: 'This cannot be undone.',
+      confirmLabel: 'Empty trash',
+      danger: true
+    })
     if (!ok) return
     await window.zen.emptyTrash()
     await refreshNotes()

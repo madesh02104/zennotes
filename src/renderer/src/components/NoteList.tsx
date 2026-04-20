@@ -60,7 +60,7 @@ export function NoteList(): JSX.Element {
   const noteListWidth = useStore((s) => s.noteListWidth)
   const setNoteListWidth = useStore((s) => s.setNoteListWidth)
   const noteSortOrder = useStore((s) => s.noteSortOrder)
-  const renameActive = useStore((s) => s.renameActive)
+  const renameNote = useStore((s) => s.renameNote)
   const moveNote = useStore((s) => s.moveNote)
   const tabsEnabled = useStore((s) => s.tabsEnabled)
   const openNoteInTab = useStore((s) => s.openNoteInTab)
@@ -124,7 +124,7 @@ export function NoteList(): JSX.Element {
       if (selectedPath === n.path) await selectNote(meta.path)
     }
     const onTrash = async (): Promise<void> => {
-      if (!confirmMoveToTrash(n.title)) return
+      if (!(await confirmMoveToTrash(n.title))) return
       await window.zen.moveToTrash(n.path)
       await refreshNotes()
       if (selectedPath === n.path) await selectNote(null)
@@ -171,15 +171,7 @@ export function NoteList(): JSX.Element {
             }
           })
           if (!next || next === n.title) return
-          if (selectedPath === n.path) {
-            await renameActive(next)
-          } else {
-            const meta = await window.zen.renameNote(n.path, next)
-            useStore.setState((s) => ({
-              notes: s.notes.map((note) => (note.path === n.path ? meta : note))
-            }))
-            await refreshNotes()
-          }
+          await renameNote(n.path, next)
         }
       })
       items.push({ label: 'Move…', onSelect: onMove })
@@ -238,7 +230,7 @@ export function NoteList(): JSX.Element {
     selectedPath,
     selectNote,
     prompt,
-    renameActive,
+    renameNote,
     moveNote,
     tabsEnabled,
     openNoteInTab,

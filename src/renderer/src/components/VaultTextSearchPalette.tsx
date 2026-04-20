@@ -6,6 +6,7 @@ import type {
 } from '@shared/ipc'
 import { useStore } from '../store'
 import { resolveSystemFolderLabels } from '../lib/system-folder-labels'
+import { recordRendererPerf } from '../lib/perf'
 
 type ResolvedVaultTextSearchBackend = 'builtin' | 'ripgrep' | 'fzf'
 
@@ -152,6 +153,7 @@ export function VaultTextSearchPalette(): JSX.Element {
   )
   const [loading, setLoading] = useState(false)
   const inputRef = useRef<HTMLInputElement | null>(null)
+  const openedAtRef = useRef(performance.now())
   const requestIdRef = useRef(0)
   const bodyCacheRef = useRef(new Map<string, string>())
   const notesRef = useRef(notes)
@@ -161,6 +163,15 @@ export function VaultTextSearchPalette(): JSX.Element {
   useEffect(() => {
     inputRef.current?.focus()
   }, [])
+
+  useEffect(() => {
+    const raf = window.requestAnimationFrame(() => {
+      recordRendererPerf('vaultTextSearch.open', performance.now() - openedAtRef.current, {
+        preferredBackend: backend
+      })
+    })
+    return () => window.cancelAnimationFrame(raf)
+  }, [backend])
 
   useEffect(() => {
     let cancelled = false
@@ -295,6 +306,7 @@ export function VaultTextSearchPalette(): JSX.Element {
     setLoading(true)
     const timer = window.setTimeout(() => {
       const runSearch = async (): Promise<void> => {
+        const startedAt = performance.now()
         try {
           const matches =
             typeof window.zen.searchVaultText === 'function'
@@ -306,6 +318,11 @@ export function VaultTextSearchPalette(): JSX.Element {
           if (requestIdRef.current !== requestId) return
           setResults(matches)
           setLoading(false)
+          recordRendererPerf('vaultTextSearch.results', performance.now() - startedAt, {
+            backend: resolvedBackend ?? backend,
+            queryLength: trimmed.length,
+            results: matches.length
+          })
         } catch (error) {
           console.error('searchVaultText failed, falling back to renderer search', error)
           try {
@@ -313,11 +330,24 @@ export function VaultTextSearchPalette(): JSX.Element {
             if (requestIdRef.current !== requestId) return
             setResults(matches)
             setLoading(false)
+            recordRendererPerf(
+              'vaultTextSearch.results.fallback',
+              performance.now() - startedAt,
+              {
+                backend: resolvedBackend ?? backend,
+                queryLength: trimmed.length,
+                results: matches.length
+              }
+            )
           } catch (fallbackError) {
             console.error('fallbackSearchVaultText failed', fallbackError)
             if (requestIdRef.current !== requestId) return
             setResults([])
             setLoading(false)
+            recordRendererPerf('vaultTextSearch.results.error', performance.now() - startedAt, {
+              backend: resolvedBackend ?? backend,
+              queryLength: trimmed.length
+            })
           }
         }
       }
@@ -326,7 +356,7 @@ export function VaultTextSearchPalette(): JSX.Element {
     }, 120)
 
     return () => window.clearTimeout(timer)
-  }, [backend, fzfBinaryPath, query, ripgrepBinaryPath])
+  }, [backend, fzfBinaryPath, query, resolvedBackend, ripgrepBinaryPath])
 
   const openMatch = async (match: VaultTextSearchMatch): Promise<void> => {
     setOpen(false)

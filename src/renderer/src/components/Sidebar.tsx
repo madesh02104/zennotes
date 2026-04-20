@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   isArchiveViewActive,
   isHelpViewActive,
@@ -38,7 +38,9 @@ import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
 import { ResizeHandle } from "./ResizeHandle";
 import { VaultBadge } from "./VaultBadge";
 import { usePrompt } from "./PromptModal";
+import { confirmApp } from "./ConfirmHost";
 import { resolveQuickNoteTitle } from "../lib/quick-note-title";
+import { recordRendererPerf } from "../lib/perf";
 import {
   hasZenItem,
   readDragPayload,
@@ -51,6 +53,17 @@ function escapeForAttr(value: string): string {
   if (typeof CSS !== "undefined" && typeof CSS.escape === "function")
     return CSS.escape(value);
   return value.replace(/["\\]/g, "\\$&");
+}
+
+function defaultNewNoteTarget(
+  activeNote: NoteMeta | null,
+): { folder: NoteFolder; subpath: string } {
+  if (!activeNote) return { folder: "inbox", subpath: "" };
+  const parts = activeNote.path.split("/");
+  return {
+    folder: activeNote.folder,
+    subpath: parts.slice(1, -1).join("/"),
+  };
 }
 
 export function Sidebar(): JSX.Element {
@@ -108,7 +121,7 @@ export function Sidebar(): JSX.Element {
   const openNoteInTab = useStore((s) => s.openNoteInTab);
   const systemFolderLabels = useStore((s) => s.systemFolderLabels);
   const moveNoteAction = useStore((s) => s.moveNote);
-  const renameActive = useStore((s) => s.renameActive);
+  const renameNote = useStore((s) => s.renameNote);
   const { prompt, modal: promptModal } = usePrompt();
   const folderLabels = useMemo(
     () => resolveSystemFolderLabels(systemFolderLabels),
@@ -182,7 +195,20 @@ export function Sidebar(): JSX.Element {
   const toggleCollapseAction = useStore((s) => s.toggleCollapseFolder);
   const setCollapsedFoldersAction = useStore((s) => s.setCollapsedFolders);
   const collapsed = useMemo(() => new Set(collapsedList), [collapsedList]);
-  const toggleCollapse = toggleCollapseAction;
+  const toggleCollapse = useCallback(
+    (key: string): void => {
+      const startedAt = performance.now();
+      const nextCollapsed = !collapsed.has(key);
+      toggleCollapseAction(key);
+      requestAnimationFrame(() => {
+        recordRendererPerf("sidebar.toggle-folder", performance.now() - startedAt, {
+          key,
+          nextCollapsed,
+        });
+      });
+    },
+    [collapsed, toggleCollapseAction],
+  );
   const setCollapsed = (next: Set<string>): void =>
     setCollapsedFoldersAction([...next]);
 
@@ -271,6 +297,7 @@ export function Sidebar(): JSX.Element {
     selectedPath && !selectedPath.startsWith("zen://") ? selectedPath : null;
   useEffect(() => {
     if (!autoReveal || !activePath) return;
+    const startedAt = performance.now();
     const parts = activePath.split("/");
     const folder = parts[0] as NoteFolder;
     // Collect every ancestor key we need to make sure is expanded.
@@ -298,6 +325,10 @@ export function Sidebar(): JSX.Element {
       ) as HTMLElement | null;
       if (noteEl) {
         noteEl.scrollIntoView({ block: "nearest" });
+        recordRendererPerf("sidebar.auto-reveal", performance.now() - startedAt, {
+          path: activePath,
+          revealed: "note",
+        });
         return;
       }
 
@@ -310,9 +341,17 @@ export function Sidebar(): JSX.Element {
         ) as HTMLElement | null;
         if (folderEl) {
           folderEl.scrollIntoView({ block: "nearest" });
+          recordRendererPerf("sidebar.auto-reveal", performance.now() - startedAt, {
+            path: activePath,
+            revealed: "folder",
+          });
           return;
         }
       }
+      recordRendererPerf("sidebar.auto-reveal", performance.now() - startedAt, {
+        path: activePath,
+        revealed: "miss",
+      });
     };
     raf1 = requestAnimationFrame(() => {
       raf2 = requestAnimationFrame(reveal);
@@ -351,9 +390,12 @@ export function Sidebar(): JSX.Element {
           danger: true,
           disabled: trashCount === 0,
           onSelect: async () => {
-            const ok = window.confirm(
-              `Delete ${trashCount} trashed note${trashCount === 1 ? "" : "s"} permanently? This cannot be undone.`,
-            );
+            const ok = await confirmApp({
+              title: `Delete ${trashCount} trashed note${trashCount === 1 ? "" : "s"} permanently?`,
+              description: "This cannot be undone.",
+              confirmLabel: `Empty ${folderLabels.trash}`,
+              danger: true,
+            });
             if (!ok) return;
             await window.zen.emptyTrash();
             await refreshNotes();
@@ -490,9 +532,12 @@ export function Sidebar(): JSX.Element {
         label: "Delete folder…",
         danger: true,
         onSelect: async () => {
-          const ok = window.confirm(
-            `Delete "${subpath}" and everything inside it? This cannot be undone.`,
-          );
+          const ok = await confirmApp({
+            title: `Delete "${subpath}" and everything inside it?`,
+            description: "This cannot be undone.",
+            confirmLabel: "Delete folder",
+            danger: true,
+          });
           if (!ok) return;
           try {
             await deleteFolderAction(folder, subpath);
@@ -556,19 +601,7 @@ export function Sidebar(): JSX.Element {
             },
           });
           if (!next || next === n.title) return;
-          // If this note is currently open, use the live renameActive
-          // so the editor state follows along. Otherwise rename via IPC.
-          if (selectedPath === n.path) {
-            await renameActive(next);
-          } else {
-            const meta = await window.zen.renameNote(n.path, next);
-            useStore.setState((s) => ({
-              notes: s.notes.map((note) =>
-                note.path === n.path ? meta : note,
-              ),
-            }));
-            await refreshNotes();
-          }
+          await renameNote(n.path, next);
         },
       });
       items.push({
@@ -642,7 +675,7 @@ export function Sidebar(): JSX.Element {
         icon: <TrashIcon />,
         danger: true,
         onSelect: async () => {
-          if (!confirmMoveToTrash(n.title)) return;
+          if (!(await confirmMoveToTrash(n.title))) return;
           await window.zen.moveToTrash(n.path);
           await refreshNotes();
           if (selectedPath === n.path) await selectNote(null);
@@ -663,7 +696,7 @@ export function Sidebar(): JSX.Element {
         icon: <TrashIcon />,
         danger: true,
         onSelect: async () => {
-          if (!confirmMoveToTrash(n.title)) return;
+          if (!(await confirmMoveToTrash(n.title))) return;
           await window.zen.moveToTrash(n.path);
           await refreshNotes();
           if (selectedPath === n.path) await selectNote(null);
@@ -699,7 +732,7 @@ export function Sidebar(): JSX.Element {
     selectedPath,
     refreshNotes,
     prompt,
-    renameActive,
+    renameNote,
     moveNoteAction,
     tabsEnabled,
     openNoteInTab,
@@ -741,9 +774,12 @@ export function Sidebar(): JSX.Element {
         label: "Delete tag from all notes",
         danger: true,
         onSelect: async () => {
-          const ok = window.confirm(
-            `Remove #${tag} from every note that contains it? The notes themselves are left intact.`,
-          );
+          const ok = await confirmApp({
+            title: `Remove #${tag} from every note that contains it?`,
+            description: "The notes themselves are left intact.",
+            confirmLabel: "Remove tag",
+            danger: true,
+          });
           if (!ok) return;
           await deleteTag(tag);
         },
@@ -947,12 +983,8 @@ export function Sidebar(): JSX.Element {
           <IconBtn
             title="New note"
             onClick={() => {
-              const view = useStore.getState().view;
-              const target =
-                view.kind === "folder" && view.folder !== "trash"
-                  ? { folder: view.folder, sub: view.subpath }
-                  : { folder: "inbox" as NoteFolder, sub: "" };
-              void createAndOpen(target.folder, target.sub);
+              const target = defaultNewNoteTarget(useStore.getState().activeNote);
+              void createAndOpen(target.folder, target.subpath);
             }}
           >
             <NotePlusIcon />

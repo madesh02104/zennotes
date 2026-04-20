@@ -70,6 +70,7 @@ import {
   writeCustomInstructions,
   MCP_SERVER_INSTRUCTIONS
 } from '../mcp/instructions-store'
+import { recordMainPerf } from './perf'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const LOCAL_ASSET_SCHEME = 'zen-asset'
@@ -354,6 +355,7 @@ async function persistWindowState(win: BrowserWindow): Promise<void> {
 }
 
 async function createWindow(): Promise<void> {
+  const createWindowStartedAt = performance.now()
   const mac = isMac()
   const cfg = await loadConfig()
   const restoredState = sanitizeWindowState(cfg.windowState)
@@ -407,8 +409,16 @@ async function createWindow(): Promise<void> {
   }
 
   win.on('ready-to-show', () => {
+    recordMainPerf('main.window.ready-to-show', performance.now() - createWindowStartedAt, {
+      restored: !!restoredState
+    })
     if (restoredState?.isMaximized) win.maximize()
     win.show()
+  })
+  win.webContents.once('did-finish-load', () => {
+    recordMainPerf('main.window.did-finish-load', performance.now() - createWindowStartedAt, {
+      restored: !!restoredState
+    })
   })
 
   win.on('move', scheduleWindowStatePersist)
@@ -860,6 +870,7 @@ function registerIpc(): void {
  */
 const floatingNoteWindows = new Map<string, BrowserWindow>()
 function openFloatingNoteWindow(relPath: string): void {
+  const floatingWindowStartedAt = performance.now()
   const existing = floatingNoteWindows.get(relPath)
   if (existing && !existing.isDestroyed()) {
     if (existing.isMinimized()) existing.restore()
@@ -896,7 +907,19 @@ function openFloatingNoteWindow(relPath: string): void {
   win.on('closed', () => {
     floatingNoteWindows.delete(relPath)
   })
-  win.on('ready-to-show', () => win.show())
+  win.on('ready-to-show', () => {
+    recordMainPerf('main.floating-window.ready-to-show', performance.now() - floatingWindowStartedAt, {
+      path: relPath
+    })
+    win.show()
+  })
+  win.webContents.once('did-finish-load', () => {
+    recordMainPerf(
+      'main.floating-window.did-finish-load',
+      performance.now() - floatingWindowStartedAt,
+      { path: relPath }
+    )
+  })
   installNavigationGuards(win)
   installZoomControls(win)
   applyZoomFactor(win, currentZoomFactor)

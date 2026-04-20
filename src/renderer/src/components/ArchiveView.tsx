@@ -38,7 +38,7 @@ export function ArchiveView(): JSX.Element {
   const moveNote = useStore((s) => s.moveNote)
   const tabsEnabled = useStore((s) => s.tabsEnabled)
   const selectedPath = useStore((s) => s.selectedPath)
-  const renameActive = useStore((s) => s.renameActive)
+  const renameNote = useStore((s) => s.renameNote)
   const keymapOverrides = useStore((s) => s.keymapOverrides)
   const setFocusedPanel = useStore((s) => s.setFocusedPanel)
   const systemFolderLabels = useStore((s) => s.systemFolderLabels)
@@ -110,7 +110,7 @@ export function ArchiveView(): JSX.Element {
 
   const moveNoteToTrash = useCallback(
     async (note: NoteMeta) => {
-      if (!confirmMoveToTrash(note.title)) return
+      if (!(await confirmMoveToTrash(note.title))) return
       await window.zen.moveToTrash(note.path)
       await refreshNotes()
     },
@@ -167,15 +167,7 @@ export function ArchiveView(): JSX.Element {
           }
         })
         if (!next || next === note.title) return
-        if (selectedPath === note.path) {
-          await renameActive(next)
-          return
-        }
-        const meta = await window.zen.renameNote(note.path, next)
-        useStore.setState((s) => ({
-          notes: s.notes.map((entry) => (entry.path === note.path ? meta : entry))
-        }))
-        await refreshNotes()
+        await renameNote(note.path, next)
       }
     })
     items.push({
@@ -243,7 +235,7 @@ export function ArchiveView(): JSX.Element {
       icon: <TrashIcon />,
       danger: true,
       onSelect: async () => {
-        if (!confirmMoveToTrash(note.title)) return
+        if (!(await confirmMoveToTrash(note.title))) return
         await window.zen.moveToTrash(note.path)
         await refreshNotes()
         if (selectedPath === note.path) await selectNote(null)
@@ -260,7 +252,7 @@ export function ArchiveView(): JSX.Element {
     openNoteInTab,
     prompt,
     refreshNotes,
-    renameActive,
+    renameNote,
     selectNote,
     selectedPath,
     tabsEnabled,

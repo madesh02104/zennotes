@@ -1133,31 +1133,18 @@ textarea,
  */
 .cm-editor .cm-fat-cursor,
 .cm-editor.cm-focused .cm-fat-cursor {
-  --z-active-cursor-height: 1em;
-  --z-fat-cursor-scale: 1.14;
-  --z-fat-cursor-height: calc(
-    var(--z-active-cursor-height) * var(--z-fat-cursor-scale)
-  );
-  background: rgb(var(--z-accent) / 0.55) !important;
+  background: rgb(var(--z-accent) / 0.92) !important;
   outline: none !important;
   border: none !important;
-  min-width: 0.55em;
-  height: var(--z-fat-cursor-height) !important;
-  max-height: var(--z-fat-cursor-height) !important;
-  transform: translateY(
-    calc((var(--z-active-cursor-height) - var(--z-fat-cursor-height)) / 2)
-  );
-  color: rgb(var(--z-fg)) !important;
-  mix-blend-mode: multiply;
+  min-width: 0 !important;
+  color: rgb(var(--z-bg)) !important;
+  text-shadow: none !important;
+  mix-blend-mode: normal;
   border-radius: 2px;
-}
-:root[data-theme^="dark"] .cm-editor .cm-fat-cursor,
-:root[data-theme^="dark"] .cm-editor.cm-focused .cm-fat-cursor {
-  mix-blend-mode: screen;
 }
 /* Secondary/inactive fat cursor */
 .cm-editor .cm-fat-cursor.cm-cursor-secondary {
-  background: rgb(var(--z-grey-1) / 0.4) !important;
+  background: rgb(var(--z-grey-1) / 0.55) !important;
   outline: none !important;
 }
 /* When in fat-cursor mode, hide the thin bar cursor entirely */

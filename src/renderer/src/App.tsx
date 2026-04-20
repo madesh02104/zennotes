@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { useStore } from './store'
 import { resolveAuto } from './lib/themes'
 import { Sidebar } from './components/Sidebar'
@@ -14,11 +14,15 @@ import { SettingsModal } from './components/SettingsModal'
 import { VimNav } from './components/VimNav'
 import { EmptyVault } from './components/EmptyVault'
 import { PromptHost } from './components/PromptHost'
+import { ConfirmHost } from './components/ConfirmHost'
 import { PinnedReferencePane } from './components/PinnedReferencePane'
 import { resolveQuickNoteTitle } from './lib/quick-note-title'
 import { matchesShortcut } from './lib/keymaps'
+import { recordRendererPerf } from './lib/perf'
 
 function App(): JSX.Element {
+  const mountedAtRef = useRef(performance.now())
+  const workspaceReadyLoggedRef = useRef(false)
   const vault = useStore((s) => s.vault)
   const init = useStore((s) => s.init)
   const workspaceRestored = useStore((s) => s.workspaceRestored)
@@ -62,6 +66,13 @@ function App(): JSX.Element {
   }, [init])
 
   useEffect(() => {
+    const raf = window.requestAnimationFrame(() => {
+      recordRendererPerf('renderer.app.mounted', performance.now() - mountedAtRef.current)
+    })
+    return () => window.cancelAnimationFrame(raf)
+  }, [])
+
+  useEffect(() => {
     return window.zen.onOpenSettings(() => {
       setSettingsOpen(true)
     })
@@ -69,6 +80,14 @@ function App(): JSX.Element {
 
   useEffect(() => {
     if (!vault || !workspaceRestored) return
+    if (!workspaceReadyLoggedRef.current) {
+      workspaceReadyLoggedRef.current = true
+      requestAnimationFrame(() => {
+        recordRendererPerf('renderer.workspace.ready', performance.now() - mountedAtRef.current, {
+          hasVault: true
+        })
+      })
+    }
     persistWorkspace()
   }, [
     activePaneId,
@@ -290,6 +309,7 @@ function App(): JSX.Element {
       {outlinePaletteOpen && <OutlinePalette />}
       {settingsOpen && <SettingsModal />}
       <PromptHost />
+      <ConfirmHost />
       <VimNav />
     </div>
   )

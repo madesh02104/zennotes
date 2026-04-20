@@ -27,6 +27,7 @@ import {
   type SystemFolderLabels,
   normalizeSystemFolderLabels
 } from './lib/system-folder-labels'
+import { recordRendererPerf } from './lib/perf'
 import type { Panel } from './lib/vim-nav'
 import {
   allLeaves,
@@ -1152,6 +1153,7 @@ interface Store {
   updateActiveBody: (body: string) => void
   persistActive: () => Promise<void>
   formatActiveNote: () => Promise<void>
+  renameNote: (oldPath: string, nextTitle: string) => Promise<void>
   renameActive: (nextTitle: string) => Promise<void>
   createAndOpen: (
     folder: NoteFolder,
@@ -1335,6 +1337,45 @@ function activeFieldsFrom(
   }
 }
 
+function renameNoteState(
+  s: Store,
+  oldPath: string,
+  meta: NoteMeta
+): Partial<Store> {
+  const rewrite = (p: string): string => (p === oldPath ? meta.path : p)
+  const nextLayout = rewritePathsInTree(s.paneLayout, rewrite)
+  const ensured = ensureActivePane(nextLayout, s.activePaneId)
+  const contents = { ...s.noteContents }
+  const dirty = { ...s.noteDirty }
+  const prevContent = contents[oldPath]
+  const prevDirty = dirty[oldPath] ?? false
+  if (oldPath !== meta.path) {
+    delete contents[oldPath]
+    delete dirty[oldPath]
+  }
+  if (prevContent) {
+    contents[meta.path] = { ...prevContent, ...meta }
+  }
+  dirty[meta.path] = prevDirty
+  return {
+    paneLayout: ensured.layout,
+    activePaneId: ensured.activePaneId,
+    noteContents: contents,
+    noteDirty: dirty,
+    notes: replaceNoteMeta(s.notes, oldPath, meta),
+    noteBackstack: rewriteNoteJumpHistory(s.noteBackstack, rewrite),
+    noteForwardstack: rewriteNoteJumpHistory(s.noteForwardstack, rewrite),
+    pendingJumpLocation:
+      s.pendingJumpLocation?.path === oldPath
+        ? { ...s.pendingJumpLocation, path: meta.path }
+        : s.pendingJumpLocation,
+    pendingTitleFocusPath:
+      s.pendingTitleFocusPath === oldPath ? meta.path : s.pendingTitleFocusPath,
+    pinnedRefPath: s.pinnedRefPath === oldPath ? meta.path : s.pinnedRefPath,
+    ...activeFieldsFrom(ensured.layout, ensured.activePaneId, contents, dirty)
+  }
+}
+
 /** Ensure `activePaneId` points at a real leaf. Falls back to first leaf. */
 function ensureActivePane(
   layout: PaneLayout,
@@ -1354,6 +1395,7 @@ export const useStore = create<Store>((set, get) => {
     relPath: string | null,
     historyMode: 'push' | 'preserve' = 'push'
   ): Promise<boolean> => {
+    const startedAt = performance.now()
     const state = get()
     const activeLeaf = findLeaf(state.paneLayout, state.activePaneId)
     if (!activeLeaf) return false
@@ -1398,6 +1440,36 @@ export const useStore = create<Store>((set, get) => {
           ...activeFieldsFrom(layout, state.activePaneId, state.noteContents, state.noteDirty)
         })
       }
+      recordRendererPerf('note.open.cached', performance.now() - startedAt, {
+        path: relPath
+      })
+      return true
+    }
+
+    if (state.noteContents[relPath]) {
+      const nextLayout =
+        updateLeaf(state.paneLayout, activeLeaf.id, (l) => leafWithAddedTab(l, relPath)) ??
+        state.paneLayout
+      set({
+        paneLayout: nextLayout,
+        noteBackstack: historyMode === 'push' &&
+          state.selectedPath !== null &&
+          state.selectedPath !== relPath
+          ? appendNoteJumpHistory(state.noteBackstack, captureNoteJumpLocation(state))
+          : state.noteBackstack,
+        noteForwardstack:
+          historyMode === 'push' &&
+          state.selectedPath !== null &&
+          state.selectedPath !== relPath
+            ? []
+            : state.noteForwardstack,
+        pendingJumpLocation: null,
+        loadingNote: false,
+        ...activeFieldsFrom(nextLayout, state.activePaneId, state.noteContents, state.noteDirty)
+      })
+      recordRendererPerf('note.open.cached', performance.now() - startedAt, {
+        path: relPath
+      })
       return true
     }
 
@@ -1440,8 +1512,14 @@ export const useStore = create<Store>((set, get) => {
         noteForwardstack: nextForwardstack,
         pendingJumpLocation: null
       })
+      recordRendererPerf('note.open.uncached', performance.now() - startedAt, {
+        path: relPath
+      })
       return true
     } catch (err) {
+      recordRendererPerf('note.open.error', performance.now() - startedAt, {
+        path: relPath
+      })
       console.error('readNote failed', err)
       set({ loadingNote: false, pendingJumpLocation: null })
       return false
@@ -1541,13 +1619,18 @@ export const useStore = create<Store>((set, get) => {
       layout,
       typeof snapshot.activePaneId === 'string' ? snapshot.activePaneId : ''
     )
+    const active = activeFieldsFrom(ensured.layout, ensured.activePaneId, contents, dirty)
+    const restoredView = normalizeWorkspaceView(snapshot.view)
+    const nextView: View = active.selectedPath
+      ? restoredView
+      : { kind: 'folder', folder: 'inbox', subpath: '' }
 
     set({
       paneLayout: ensured.layout,
       activePaneId: ensured.activePaneId,
       noteContents: contents,
       noteDirty: dirty,
-      view: normalizeWorkspaceView(snapshot.view),
+      view: nextView,
       sidebarOpen:
         typeof snapshot.sidebarOpen === 'boolean'
           ? snapshot.sidebarOpen
@@ -1558,7 +1641,7 @@ export const useStore = create<Store>((set, get) => {
           : get().noteListOpen,
       selectedTags: normalizeWorkspaceTags(snapshot.selectedTags),
       workspaceRestored: true,
-      ...activeFieldsFrom(ensured.layout, ensured.activePaneId, contents, dirty)
+      ...active
     })
   }
 
@@ -1918,6 +2001,7 @@ export const useStore = create<Store>((set, get) => {
         window.zen.hasAssetsDir()
       ])
       set((s) => {
+        const noteMetaByPath = new Map(notes.map((note) => [note.path, note] as const))
         const existingPaths = new Set(notes.map((n) => n.path))
         // Drop tabs whose notes no longer exist — except keep the currently
         // focused selectedPath so the editor doesn't blank out mid-save.
@@ -1948,7 +2032,9 @@ export const useStore = create<Store>((set, get) => {
         const contents: Record<string, NoteContent> = {}
         const dirty: Record<string, boolean> = {}
         for (const [path, content] of Object.entries(s.noteContents)) {
-          if (referenced.has(path)) contents[path] = content
+          if (!referenced.has(path)) continue
+          const latestMeta = noteMetaByPath.get(path)
+          contents[path] = latestMeta ? { ...content, ...latestMeta } : content
         }
         for (const [path, isDirty] of Object.entries(s.noteDirty)) {
           if (referenced.has(path)) dirty[path] = isDirty
@@ -2122,45 +2208,21 @@ export const useStore = create<Store>((set, get) => {
     }
   },
 
-  renameActive: async (nextTitle) => {
-    const s0 = get()
-    const oldPath = s0.selectedPath
-    const active = oldPath ? s0.noteContents[oldPath] : null
-    if (!oldPath || !active) return
+  renameNote: async (oldPath, nextTitle) => {
+    if (!oldPath) return
     try {
       const meta = await window.zen.renameNote(oldPath, nextTitle)
-      set((s) => {
-        const rewrite = (p: string): string => (p === oldPath ? meta.path : p)
-        const nextLayout = rewritePathsInTree(s.paneLayout, rewrite)
-        const ensured = ensureActivePane(nextLayout, s.activePaneId)
-        const contents = { ...s.noteContents }
-        const dirty = { ...s.noteDirty }
-        if (oldPath !== meta.path) {
-          delete contents[oldPath]
-          delete dirty[oldPath]
-        }
-        contents[meta.path] = { ...active, ...meta }
-        dirty[meta.path] = s.noteDirty[oldPath] ?? false
-        return {
-          paneLayout: ensured.layout,
-          activePaneId: ensured.activePaneId,
-          noteContents: contents,
-          noteDirty: dirty,
-          notes: replaceNoteMeta(s.notes, oldPath, meta),
-          noteBackstack: rewriteNoteJumpHistory(s.noteBackstack, rewrite),
-          noteForwardstack: rewriteNoteJumpHistory(s.noteForwardstack, rewrite),
-          pendingJumpLocation:
-            s.pendingJumpLocation?.path === oldPath
-              ? { ...s.pendingJumpLocation, path: meta.path }
-              : s.pendingJumpLocation,
-          pinnedRefPath: s.pinnedRefPath === oldPath ? meta.path : s.pinnedRefPath,
-          ...activeFieldsFrom(ensured.layout, ensured.activePaneId, contents, dirty)
-        }
-      })
+      set((s) => renameNoteState(s, oldPath, meta))
       await get().refreshNotes()
     } catch (err) {
       console.error('renameNote failed', err)
     }
+  },
+
+  renameActive: async (nextTitle) => {
+    const oldPath = get().selectedPath
+    if (!oldPath) return
+    await get().renameNote(oldPath, nextTitle)
   },
 
   createAndOpen: async (folder, subpath = '', options) => {
@@ -2189,7 +2251,7 @@ export const useStore = create<Store>((set, get) => {
     const path = state.selectedPath
     if (!path) return
     const title = state.notes.find((note) => note.path === path)?.title
-    if (!confirmMoveToTrash(title)) return
+    if (!(await confirmMoveToTrash(title))) return
     try {
       await window.zen.moveToTrash(path)
       set((s) => {

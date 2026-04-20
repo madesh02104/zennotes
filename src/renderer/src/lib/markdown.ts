@@ -13,6 +13,7 @@ import rehypeStringify from 'rehype-stringify'
 import { visit, SKIP } from 'unist-util-visit'
 import type { Root as MdRoot } from 'mdast'
 import type { Root as HastRoot, Element as HastElement } from 'hast'
+import { recordRendererPerf } from './perf'
 
 /**
  * Remark plugin: `[[target]]` and `[[target|label]]` → link nodes
@@ -318,10 +319,45 @@ const processor = unified()
   .use(rehypeKatex)
   .use(rehypeStringify)
 
+const MARKDOWN_RENDER_CACHE_LIMIT = 24
+const markdownRenderCache = new Map<string, string>()
+
+function getCachedMarkdown(src: string): string | null {
+  const cached = markdownRenderCache.get(src)
+  if (cached == null) return null
+  markdownRenderCache.delete(src)
+  markdownRenderCache.set(src, cached)
+  return cached
+}
+
+function cacheRenderedMarkdown(src: string, html: string): void {
+  markdownRenderCache.set(src, html)
+  while (markdownRenderCache.size > MARKDOWN_RENDER_CACHE_LIMIT) {
+    const oldest = markdownRenderCache.keys().next().value
+    if (!oldest) break
+    markdownRenderCache.delete(oldest)
+  }
+}
+
 export function renderMarkdown(src: string): string {
+  const cached = getCachedMarkdown(src)
+  if (cached != null) {
+    recordRendererPerf('markdown.render.cache-hit', 0, { chars: src.length })
+    return cached
+  }
+
+  const startedAt = performance.now()
   try {
-    return sanitizeRenderedHtml(String(processor.processSync(src)))
+    const html = sanitizeRenderedHtml(String(processor.processSync(src)))
+    cacheRenderedMarkdown(src, html)
+    recordRendererPerf('markdown.render', performance.now() - startedAt, {
+      chars: src.length
+    })
+    return html
   } catch (err) {
+    recordRendererPerf('markdown.render.error', performance.now() - startedAt, {
+      chars: src.length
+    })
     console.error('markdown render failed', err)
     return `<pre class="text-sm text-red-600">Markdown error: ${(err as Error).message}</pre>`
   }

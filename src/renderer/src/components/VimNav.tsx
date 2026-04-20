@@ -207,7 +207,11 @@ export function VimNav(): JSX.Element | null {
         state.commandPaletteOpen ||
         state.bufferPaletteOpen
       ) return
-      if (document.querySelector('[data-ctx-menu]') || document.querySelector('[data-prompt-modal]')) return
+      if (
+        document.querySelector('[data-ctx-menu]') ||
+        document.querySelector('[data-prompt-modal]') ||
+        document.querySelector('[data-confirm-modal]')
+      ) return
 
       // Hint mode — handled entirely by HintOverlay's own listener
       if (hintRef.current) return
