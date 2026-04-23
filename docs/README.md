@@ -25,16 +25,19 @@ If you are new to ZenNotes, read these first:
 
 - [Self-Host with Docker](./how-to/self-host-with-docker.md)
 - [Connect Desktop to a Remote ZenNotes Server](./how-to/connect-desktop-to-remote-server.md)
+- [Secure Self-Hosting](./how-to/secure-self-hosting.md)
 
 ## Reference
 
 - [Settings Reference](./reference/settings-reference.md)
 - [Vault and Folder Model](./reference/vault-and-folder-model.md)
 - [Runtime and Package Map](./reference/runtime-and-package-map.md)
+- [Security Reference](./reference/security-reference.md)
 
 ## Explanation
 
 - [How ZenNotes Works](./explanation/how-zennotes-works.md)
+- [Security Model](./explanation/security-model.md)
 - [Monorepo Architecture](./monorepo-architecture.md)
 - [Web Architecture](./web-architecture.md)
 

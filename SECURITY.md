@@ -20,3 +20,11 @@ repository. Include:
 
 We aim to acknowledge reports within 3 business days and to ship a fix or
 publish a coordinated advisory within 30 days of confirmation.
+
+## Security Documentation
+
+For the current product security model and deployment guidance, read:
+
+- [docs/how-to/secure-self-hosting.md](docs/how-to/secure-self-hosting.md)
+- [docs/reference/security-reference.md](docs/reference/security-reference.md)
+- [docs/explanation/security-model.md](docs/explanation/security-model.md)
