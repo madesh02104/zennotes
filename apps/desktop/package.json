@@ -1,7 +1,7 @@
 {
   "name": "@zennotes/desktop",
   "productName": "ZenNotes",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "ZenNotes desktop shell",
   "private": true,
   "main": "./out/main/index.js",
@@ -90,7 +90,7 @@
     "@types/ws": "^8.18.1",
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.20",
-    "electron": "^41.2.1",
+    "electron": "41.2.1",
     "electron-builder": "^25.1.8",
     "electron-vite": "^2.3.0",
     "jsdom": "^29.0.2",
@@ -131,6 +131,7 @@
         "repo": "zennotes"
       }
     ],
+    "electronVersion": "41.2.1",
     "electronUpdaterCompatibility": ">=2.16",
     "mac": {
       "category": "public.app-category.productivity",
