@@ -2,6 +2,13 @@ import { resolve } from 'node:path'
 import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
 import react from '@vitejs/plugin-react'
 
+const INTERNAL_WORKSPACE_PACKAGES = [
+  '@zennotes/app-core',
+  '@zennotes/bridge-contract',
+  '@zennotes/shared-domain',
+  '@zennotes/shared-ui'
+]
+
 function rendererManualChunk(id: string): string | undefined {
   if (!id.includes('node_modules')) return undefined
 
@@ -58,7 +65,7 @@ function rendererManualChunk(id: string): string | undefined {
 
 export default defineConfig({
   main: {
-    plugins: [externalizeDepsPlugin()],
+    plugins: [externalizeDepsPlugin({ exclude: INTERNAL_WORKSPACE_PACKAGES })],
     build: {
       outDir: 'out/main',
       rollupOptions: {
@@ -82,7 +89,7 @@ export default defineConfig({
     }
   },
   preload: {
-    plugins: [externalizeDepsPlugin()],
+    plugins: [externalizeDepsPlugin({ exclude: INTERNAL_WORKSPACE_PACKAGES })],
     build: {
       outDir: 'out/preload',
       rollupOptions: {
