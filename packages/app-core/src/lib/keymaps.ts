@@ -20,6 +20,7 @@ export type KeymapId =
   | "global.toggleZenMode"
   | "global.closeActiveTab"
   | "global.toggleWordWrap"
+  | "global.exportNotePdf"
   | "vim.leaderPrefix"
   | "vim.leaderOpenBuffers"
   | "vim.leaderSearchNotes"
@@ -178,6 +179,15 @@ const KEYMAP_DEFINITIONS: KeymapDefinition[] = [
     title: "Toggle word wrap",
     description: "Switch between wrapped lines and horizontal scrolling.",
     defaultBinding: "Alt+Z",
+  },
+  {
+    id: "global.exportNotePdf",
+    kind: "shortcut",
+    scope: "app",
+    group: "global",
+    title: "Export note as PDF",
+    description: "Export the active note as a PDF file.",
+    defaultBinding: "Shift+Mod+E",
   },
   {
     id: "vim.leaderPrefix",

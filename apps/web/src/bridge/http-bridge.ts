@@ -374,6 +374,21 @@ function duplicateNote(relPath: string): Promise<NoteMeta> {
   })
 }
 
+async function exportNotePdf(_relPath: string): Promise<string | null> {
+  const url = new URL(window.location.href)
+  url.search = ''
+  url.hash = ''
+  url.searchParams.set('exportNote', _relPath)
+  const exportWindow = window.open(url.toString(), 'zennotes-pdf-export')
+  if (!exportWindow) {
+    throw new Error(
+      'ZenNotes could not open the PDF export window. Allow pop-ups for this site and try again.'
+    )
+  }
+  exportWindow.focus()
+  return null
+}
+
 function moveNote(
   relPath: string,
   targetFolder: NoteFolder,
@@ -850,6 +865,7 @@ export const httpBridge: ZenBridge = {
   archiveNote,
   unarchiveNote,
   duplicateNote,
+  exportNotePdf,
   revealNote,
   moveNote,
   importFilesToNote,

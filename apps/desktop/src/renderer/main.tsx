@@ -1,5 +1,6 @@
 import { installZenBridge } from '@zennotes/bridge-contract/bridge'
 import { renderZenNotesApp } from '@zennotes/app-core/main'
+import { renderExportNoteWindow } from './export-window'
 
 const root = document.getElementById('root')
 
@@ -34,7 +35,13 @@ try {
     throw new Error('Renderer root element #root was not found')
   }
   installZenBridge(window.zen)
-  renderZenNotesApp(root)
+  const params = new URLSearchParams(window.location.search)
+  const exportNotePath = params.get('exportNote')
+  if (exportNotePath) {
+    renderExportNoteWindow(root, exportNotePath)
+  } else {
+    renderZenNotesApp(root)
+  }
 } catch (error) {
   console.error('[desktop-renderer] boot failed', error)
   renderBootError(String(error instanceof Error ? error.stack ?? error.message : error))

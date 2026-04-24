@@ -302,10 +302,12 @@ export const Preview = memo(function Preview({
   markdown,
   notePath,
   onRequestEdit,
+  onRendered,
 }: {
   markdown: string;
   notePath: string;
   onRequestEdit?: (() => void) | null;
+  onRendered?: (() => void) | null;
 }): JSX.Element {
   const ref = useRef<HTMLDivElement | null>(null);
   const vault = useStore((s) => s.vault);
@@ -384,6 +386,7 @@ export const Preview = memo(function Preview({
   const markdownRef = useRef(markdown);
   const notePathRef = useRef(notePath);
   const onRequestEditRef = useRef(onRequestEdit);
+  const onRenderedRef = useRef(onRendered);
   const vaultRootRef = useRef(vault?.root ?? null);
   const pinnedAssetPathRef = useRef<string | null>(pinnedAssetPath);
   const pinnedRefVisibleRef = useRef(pinnedRefVisible);
@@ -404,6 +407,9 @@ export const Preview = memo(function Preview({
   useEffect(() => {
     onRequestEditRef.current = onRequestEdit;
   }, [onRequestEdit]);
+  useEffect(() => {
+    onRenderedRef.current = onRendered;
+  }, [onRendered]);
   useEffect(() => {
     vaultRootRef.current = vault?.root ?? null;
   }, [vault?.root]);
@@ -609,6 +615,9 @@ export const Preview = memo(function Preview({
       await renderDiagrams(stage, { themeKey: effectiveMode, expanded: false });
       if (cancelled) return;
       root.replaceChildren(...Array.from(stage.childNodes));
+      requestAnimationFrame(() => {
+        if (!cancelled) onRenderedRef.current?.();
+      });
     };
 
     void applyRenderedDom();

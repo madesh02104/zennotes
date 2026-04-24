@@ -115,6 +115,7 @@ export interface ZenBridge {
   archiveNote(relPath: string): Promise<NoteMeta>
   unarchiveNote(relPath: string): Promise<NoteMeta>
   duplicateNote(relPath: string): Promise<NoteMeta>
+  exportNotePdf(relPath: string): Promise<string | null>
   revealNote(relPath: string): Promise<void>
   moveNote(relPath: string, targetFolder: NoteFolder, targetSubpath: string): Promise<NoteMeta>
   importFilesToNote(notePath: string, sourcePaths: string[]): Promise<ImportedAsset[]>

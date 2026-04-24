@@ -1263,6 +1263,7 @@ interface Store {
   restoreActive: () => Promise<void>
   archiveActive: () => Promise<void>
   unarchiveActive: () => Promise<void>
+  exportActiveNotePdf: () => Promise<void>
   setSearchOpen: (open: boolean) => void
   setVaultTextSearchOpen: (open: boolean) => void
   setCommandPaletteOpen: (open: boolean) => void
@@ -2616,6 +2617,34 @@ export const useStore = create<Store>((set, get) => {
         ...activeFieldsFrom(ensured.layout, ensured.activePaneId, contents, dirty)
       }
     })
+  },
+
+  exportActiveNotePdf: async () => {
+    const path = get().selectedPath
+    if (!path) return
+    const appInfo = window.zen.getAppInfo()
+    let preparedExportWindow: Window | null = null
+    try {
+      if (appInfo.runtime === 'web') {
+        preparedExportWindow = window.open('', 'zennotes-pdf-export')
+        if (preparedExportWindow && preparedExportWindow.document) {
+          preparedExportWindow.document.title = 'Preparing PDF export…'
+          preparedExportWindow.document.body.innerHTML =
+            '<div style="margin:40px;font:16px/1.6 -apple-system,BlinkMacSystemFont,Inter,system-ui,sans-serif;color:#1f2937">Preparing PDF export…</div>'
+        }
+      }
+      await get().persistNote(path)
+      if (get().noteDirty[path]) {
+        throw new Error('Could not save the note before exporting the PDF.')
+      }
+      await window.zen.exportNotePdf(path)
+    } catch (err) {
+      preparedExportWindow?.close()
+      console.error('exportNotePdf failed', err)
+      window.alert(
+        err instanceof Error ? err.message : 'Could not export the note as a PDF.'
+      )
+    }
   },
 
   setSearchOpen: (open) =>

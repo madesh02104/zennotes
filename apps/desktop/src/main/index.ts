@@ -766,6 +766,124 @@ async function disconnectRemoteWorkspace(): Promise<VaultInfo | null> {
   return null
 }
 
+function noteTitleFromRelPath(relPath: string): string {
+  const base = path.posix.basename(relPath)
+  return base.replace(/\.md$/i, '') || 'Note'
+}
+
+function sanitizePdfFilename(name: string): string {
+  const sanitized = name
+    .replace(/[<>:"/\\|?*\x00-\x1f]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  return sanitized || 'Note'
+}
+
+function ensurePdfExtension(targetPath: string): string {
+  return targetPath.toLowerCase().endsWith('.pdf') ? targetPath : `${targetPath}.pdf`
+}
+
+async function waitForExportWindowState(
+  win: BrowserWindow,
+  timeoutMs = 15000
+): Promise<void> {
+  const startedAt = Date.now()
+  while (!win.isDestroyed()) {
+    const state = await win.webContents.executeJavaScript(
+      'document.body?.dataset.exportState ?? ""',
+      true
+    )
+    if (state === 'ready') return
+    if (state === 'error') {
+      const message = await win.webContents.executeJavaScript(
+        'document.body?.dataset.exportError ?? "The export renderer reported an error."',
+        true
+      )
+      throw new Error(typeof message === 'string' ? message : 'The export renderer reported an error.')
+    }
+    if (Date.now() - startedAt >= timeoutMs) {
+      throw new Error('Timed out while preparing the note preview for PDF export.')
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100))
+  }
+  throw new Error('The export window closed before PDF export completed.')
+}
+
+async function exportNotePdf(
+  relPath: string,
+  parentWindow: BrowserWindow | null | undefined
+): Promise<string | null> {
+  const current = currentVault ?? (isRemoteWorkspaceActive() ? await requireRemoteWorkspaceClient().getCurrentVault() : null)
+  if (!current) {
+    throw new Error('No active vault is available for PDF export.')
+  }
+
+  const suggestedName = `${sanitizePdfFilename(noteTitleFromRelPath(relPath))}.pdf`
+  const result = await dialog.showSaveDialog(parentWindow ?? undefined, {
+    title: 'Export Note as PDF',
+    defaultPath: path.join(app.getPath('documents'), suggestedName),
+    buttonLabel: 'Export PDF',
+    filters: [{ name: 'PDF', extensions: ['pdf'] }]
+  })
+  if (result.canceled || !result.filePath) return null
+
+  const targetPath = ensurePdfExtension(result.filePath)
+  const mac = isMac()
+  const exportWindow = new BrowserWindow({
+    width: 1024,
+    height: 1400,
+    show: false,
+    autoHideMenuBar: true,
+    titleBarStyle: mac ? 'hiddenInset' : 'hidden',
+    trafficLightPosition: { x: 12, y: 12 },
+    ...(mac
+      ? {
+          backgroundColor: '#ffffff'
+        }
+      : {
+          backgroundColor: '#ffffff',
+          icon: windowIconPath()
+        }),
+    webPreferences: {
+      preload: path.join(__dirname, '../preload/index.js'),
+      sandbox: false,
+      contextIsolation: true,
+      nodeIntegration: false
+    }
+  })
+
+  try {
+    installNavigationGuards(exportWindow)
+    applyZoomFactor(exportWindow, currentZoomFactor)
+    const params = `?exportNote=${encodeURIComponent(relPath)}`
+    const devServerUrl = process.env['ELECTRON_RENDERER_URL']
+    if (devServerUrl) {
+      await exportWindow.loadURL(`${devServerUrl}${params}`)
+    } else {
+      await exportWindow.loadFile(path.join(__dirname, '../renderer/index.html'), {
+        search: params.slice(1)
+      })
+    }
+
+    await waitForExportWindowState(exportWindow)
+    await exportWindow.webContents.executeJavaScript(
+      'document.fonts ? document.fonts.ready.then(() => true) : Promise.resolve(true)',
+      true
+    )
+    const pdf = await exportWindow.webContents.printToPDF({
+      printBackground: true,
+      preferCSSPageSize: true
+    })
+    await fsp.mkdir(path.dirname(targetPath), { recursive: true })
+    await fsp.writeFile(targetPath, pdf)
+    return targetPath
+  } finally {
+    if (!exportWindow.isDestroyed()) {
+      exportWindow.destroy()
+    }
+  }
+}
+
 async function listRemoteWorkspaceProfiles(): Promise<RemoteWorkspaceProfile[]> {
   const cfg = await loadConfig()
   return await Promise.all(
@@ -1344,6 +1462,10 @@ function registerIpc(): void {
     }
     const v = requireVault()
     return await duplicateNote(v.root, relPath)
+  })
+
+  handle(IPC.VAULT_EXPORT_NOTE_PDF, async (event, relPath: string) => {
+    return await exportNotePdf(relPath, BrowserWindow.fromWebContents(event.sender))
   })
 
   handle(IPC.VAULT_REVEAL_NOTE, async (_e, relPath: string) => {

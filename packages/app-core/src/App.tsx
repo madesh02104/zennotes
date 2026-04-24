@@ -215,6 +215,11 @@ function App(): JSX.Element {
         state.setWordWrap(!state.wordWrap)
         return
       }
+      if (matchesShortcut(e, overrides, 'global.exportNotePdf')) {
+        e.preventDefault()
+        void state.exportActiveNotePdf()
+        return
+      }
       if (matchesShortcut(e, overrides, 'global.searchNotes')) {
         // ⌘P — note search
         e.preventDefault()

@@ -196,6 +196,20 @@ export function buildCommands(options?: { includeUnavailable?: boolean }): Comma
       }
     },
     {
+      id: 'note.export-pdf',
+      title: 'Export Note as PDF…',
+      category: 'Note',
+      shortcut: shortcut('global.exportNotePdf'),
+      keywords: 'save print pdf export',
+      when: () =>
+        !!getState().activeNote &&
+        (window.zen.getCapabilities().supportsLocalFilesystemPickers ||
+          window.zen.getAppInfo().runtime === 'web'),
+      run: async () => {
+        await getState().exportActiveNotePdf()
+      }
+    },
+    {
       id: 'note.copy-path',
       title: 'Copy Note Path',
       category: 'Note',

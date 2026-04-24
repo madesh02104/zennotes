@@ -34,6 +34,7 @@ export const IPC = {
   VAULT_ARCHIVE_NOTE: 'vault:archive-note',
   VAULT_UNARCHIVE_NOTE: 'vault:unarchive-note',
   VAULT_DUPLICATE_NOTE: 'vault:duplicate-note',
+  VAULT_EXPORT_NOTE_PDF: 'vault:export-note-pdf',
   VAULT_REVEAL_NOTE: 'vault:reveal-note',
   VAULT_MOVE_NOTE: 'vault:move-note',
   VAULT_IMPORT_FILES: 'vault:import-files',

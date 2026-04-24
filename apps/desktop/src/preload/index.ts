@@ -241,6 +241,8 @@ const api: ZenBridge = {
     ipcRenderer.invoke(IPC.VAULT_UNARCHIVE_NOTE, relPath),
   duplicateNote: (relPath: string): Promise<NoteMeta> =>
     ipcRenderer.invoke(IPC.VAULT_DUPLICATE_NOTE, relPath),
+  exportNotePdf: (relPath: string): Promise<string | null> =>
+    ipcRenderer.invoke(IPC.VAULT_EXPORT_NOTE_PDF, relPath),
   revealNote: (relPath: string): Promise<void> => ipcRenderer.invoke(IPC.VAULT_REVEAL_NOTE, relPath),
   moveNote: (
     relPath: string,
