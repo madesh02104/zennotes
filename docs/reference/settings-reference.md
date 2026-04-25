@@ -74,6 +74,7 @@ The app includes grouped key definitions for:
 - global actions
 - editing/navigation actions
 - note and pane actions
+- zoom actions
 
 You can:
 
@@ -82,6 +83,28 @@ You can:
 - reset them
 
 ZenNotes also exposes Vim-oriented flows in the shared UI.
+
+Important current examples:
+
+- `Export note as PDF` defaults to `Shift+Mod+E`
+- `Zoom in` defaults to `Mod+=`
+- `Zoom out` defaults to `Mod+-`
+- `Reset zoom` defaults to `Mod+0`
+
+These shortcuts are editable from Settings instead of being hard-coded renderer-only behavior.
+
+### Picker navigation
+
+Command-driven pickers use the shared keymap model and also support Vim-style list movement.
+
+In the command palette, search palette, buffer picker, outline picker, and vault text search picker, you can move through results with:
+
+- `ArrowDown`
+- `ArrowUp`
+- `Ctrl+N`
+- `Ctrl+P`
+
+That behavior works in both desktop and browser builds while the picker input is focused.
 
 ## Typography
 
@@ -171,6 +194,17 @@ The current icon system supports:
 - theme-compatible rendering through `currentColor`
 
 Folder icons are intended to adapt to themes instead of carrying fixed hard-coded colors.
+
+### PDF export
+
+ZenNotes can export the current note as a PDF.
+
+Behavior depends on runtime:
+
+- desktop saves a PDF directly through the native save flow
+- browser opens a print-friendly rendered note view so you can use the browser's `Save as PDF`
+
+PDF export uses the rendered Markdown view rather than raw Markdown source, and the export surface uses a white paper-style background.
 
 ## Remote/session behavior
 

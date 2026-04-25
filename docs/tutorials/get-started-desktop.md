@@ -107,6 +107,7 @@ Desktop builds also support:
 - floating note windows
 - native menu integration
 - app updates through the desktop updater
+- direct PDF export of the current note
 
 ## 6. Learn the note modes
 
@@ -158,7 +159,23 @@ Text search can use:
 
 depending on your settings and what is available on your machine.
 
-## 9. Adjust the vault model if needed
+Picker navigation also supports keyboard-first movement:
+
+- `ArrowDown` / `ArrowUp`
+- `Ctrl+N` / `Ctrl+P`
+
+That applies to the command palette, note search, buffer picker, outline picker, and vault text search picker.
+
+## 9. Try exporting a note as PDF
+
+Open a note and run:
+
+- `Export note as PDF...` from the command palette
+- or the configured shortcut, which defaults to `Shift+Mod+E`
+
+On desktop, ZenNotes renders the note as Markdown and exports it on a white paper-style background instead of exporting the raw editor surface.
+
+## 10. Adjust the vault model if needed
 
 Open `Settings -> Vault`.
 
@@ -182,7 +199,7 @@ You can also configure:
 - daily notes directory
 - folder icons
 
-## 10. Understand what ZenNotes stores
+## 11. Understand what ZenNotes stores
 
 ZenNotes stores notes in your vault as plain Markdown files.
 
@@ -199,7 +216,7 @@ The important boundary is:
 - note content is yours, on disk, as files
 - ZenNotes behavior is layered on top of those files
 
-## 11. Where to go next
+## 12. Where to go next
 
 Now that you know the desktop basics, read one of these:
 
