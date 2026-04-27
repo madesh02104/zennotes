@@ -312,6 +312,7 @@ export const Preview = memo(function Preview({
   const ref = useRef<HTMLDivElement | null>(null);
   const vault = useStore((s) => s.vault);
   const notes = useStore((s) => s.notes);
+  const assetFiles = useStore((s) => s.assetFiles);
   const themeId = useStore((s) => s.themeId);
   const themeFamily = useStore((s) => s.themeFamily);
   const themeMode = useStore((s) => s.themeMode);
@@ -382,6 +383,10 @@ export const Preview = memo(function Preview({
     window.zen.getAppInfo().runtime === "desktop" && workspaceMode !== "remote";
 
   const html = useMemo(() => renderMarkdown(markdown), [markdown]);
+  const assetFilesKey = useMemo(
+    () => assetFiles.map((asset) => asset.path).join("\n"),
+    [assetFiles],
+  );
   const notesRef = useRef(notes);
   const markdownRef = useRef(markdown);
   const notePathRef = useRef(notePath);
@@ -626,6 +631,7 @@ export const Preview = memo(function Preview({
       cancelled = true;
     };
   }, [
+    assetFilesKey,
     effectiveMode,
     html,
     notePath,

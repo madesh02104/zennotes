@@ -37,4 +37,12 @@ describe('renderMarkdown', () => {
     expect(html).toContain('class="mermaid"')
     expect(html).toContain('graph TD; A--&gt;B')
   })
+
+  it('renders Obsidian image embeds as local image nodes', () => {
+    const html = renderMarkdown('![[CleanShot 2026-04-13 at 14.31.31@2x.png]]')
+
+    expect(html).toContain('<img')
+    expect(html).toContain('src="CleanShot 2026-04-13 at 14.31.31@2x.png"')
+    expect(html).toContain('alt="CleanShot 2026-04-13 at 14.31.31@2x.png"')
+  })
 })

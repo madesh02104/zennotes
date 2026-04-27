@@ -24,6 +24,7 @@ export function NoteHoverPreview({
 }): JSX.Element {
   const activeNote = useStore((s) => s.activeNote)
   const vault = useStore((s) => s.vault)
+  const assetFiles = useStore((s) => s.assetFiles)
   const focusedPanel = useStore((s) => s.focusedPanel)
   const setFocusedPanel = useStore((s) => s.setFocusedPanel)
   const [content, setContent] = useState<NoteContent | null>(
@@ -63,6 +64,10 @@ export function NoteHoverPreview({
     const source = (content?.body ?? '').slice(0, 1400)
     return source ? renderMarkdown(source) : ''
   }, [content?.body])
+  const assetFilesKey = useMemo(
+    () => assetFiles.map((asset) => asset.path).join('\n'),
+    [assetFiles]
+  )
 
   useEffect(() => {
     const root = articleRef.current
@@ -71,7 +76,7 @@ export function NoteHoverPreview({
       vaultRoot: vault?.root,
       notePath: content.path
     })
-  }, [content?.path, html, vault?.root])
+  }, [assetFilesKey, content?.path, html, vault?.root])
 
   const position = useMemo(() => {
     const width = 380

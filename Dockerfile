@@ -7,7 +7,10 @@
 #   2. server-build  -> Go build for apps/server with the web bundle embedded
 #   3. runtime       -> minimal image with only the server binary
 
-FROM node:22-alpine AS web-build
+# Base images pinned by digest. Refresh with Renovate/Dependabot or by
+# running `docker inspect --format='{{index .RepoDigests 0}}' <image>`
+# after a deliberate `docker pull` of the desired floating tag.
+FROM node:22-alpine@sha256:8ea2348b068a9544dae7317b4f3aafcdc032df1647bb7d768a05a5cad1a7683f AS web-build
 WORKDIR /app
 
 COPY package.json package-lock.json turbo.json tsconfig.base.json tsconfig.json tailwind.config.js postcss.config.js ./
@@ -26,7 +29,7 @@ COPY packages packages
 
 RUN npm run build --workspace @zennotes/web
 
-FROM golang:1.22-alpine AS server-build
+FROM golang:1.22-alpine@sha256:1699c10032ca2582ec89a24a1312d986a3f094aed3d5c1147b19880afe40e052 AS server-build
 WORKDIR /app
 
 COPY apps/server/go.mod apps/server/go.sum ./apps/server/

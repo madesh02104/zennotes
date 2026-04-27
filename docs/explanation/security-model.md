@@ -117,19 +117,83 @@ So the current design treats browse roots as a real boundary:
 
 This is one of the most important practical controls in the self-hosted product, because it narrows what a remote client can even ask the server to consider a vault.
 
+## Why path resolution applies inside the vault too
+
+Browse-root checking decides which roots can be vaults. Once a vault
+is selected, the server still has to translate browser-supplied
+relative paths (a note path, an asset path, a folder name) into real
+file operations. That second translation is its own boundary.
+
+Current behavior on every note/asset/folder request:
+
+- the user-supplied relative path is cleaned and joined onto the vault root
+- each existing path component is `Lstat`-ed; any symbolic link is
+  resolved and must still resolve to something inside the canonical
+  vault root
+- if any link points outside the root, the request is rejected with a
+  path-escape error before any read or write happens
+
+This matters because plain text-only path checks ("does the cleaned
+path stay under root?") quietly miss the case where a symlink already
+exists inside the vault — for example, on a shared mount, a recovered
+backup, or a vault that the user manages with other tools. Without the
+symlink-aware check, a link inside the vault pointing at `/etc/hosts`
+would be treated as "inside the vault" by the lexical check and the
+server would happily read or write through it.
+
+## What the server caps
+
+The server applies a few flat ceilings to keep an authenticated
+client (or stolen token) from making the host unusable:
+
+- per-request body size for `POST /api/notes/write` (default 10 MiB)
+- per-request body size for `POST /api/assets/upload` (default 50 MiB)
+- short exponential backoff between repeated login attempts
+- file modes `0600` for notes and `0700` for directories on Unix hosts
+
+These are not the primary defense against compromise. They are the
+"don't make a single bad request infinitely expensive" floor.
+
 ## Why Docker is part of the security story
 
 Docker is not only a convenience story for ZenNotes. It is also part of the security posture.
 
 The current default container setup:
 
-- binds to loopback
+- binds the host port to loopback
 - runs non-root
 - drops Linux capabilities
 - uses `no-new-privileges`
 - keeps the root filesystem read-only
+- uses base images pinned by digest so the build doesn't drift on a
+  fresh `docker pull`
 
 This does not make Docker magically secure. But it does mean the default self-hosted path is narrower and safer than a broad all-interfaces, writable-root, root-running container.
+
+## Why TLS is the operator's responsibility
+
+The Go server doesn't terminate TLS itself. That keeps the binary
+small and the deployment pluggable, but it also means the server has
+no way to *know* whether traffic is encrypted unless the operator
+tells it.
+
+The current design treats TLS as a deployment fact, declared by the
+operator:
+
+- `ZENNOTES_BEHIND_TLS=1` says "a TLS-terminating proxy is in front."
+  Cookies get the `Secure` flag, the server emits
+  `Strict-Transport-Security`, and the startup banner stops warning.
+- `ZENNOTES_TRUSTED_PROXIES` (a CIDR list) controls which TCP peers
+  may set `X-Forwarded-Proto`, `X-Forwarded-Host`, and
+  `X-Forwarded-For`. Without this, those headers are ignored even if
+  the proxy sends them — which is the right default, because a
+  publicly reachable plain-HTTP server would otherwise let any client
+  flip the `Secure` flag or spoof the rate-limit identity.
+
+If neither knob is set and the bind is non-loopback, the server logs
+loud, repeating warnings on startup and every 15 minutes thereafter.
+This is preferable to silently accepting an exposed plain-HTTP setup
+that *looks* fine until something goes wrong.
 
 ## Why desktop secrets stay in the main process
 

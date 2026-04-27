@@ -78,6 +78,13 @@ export function resolveLocalAssetUrl(
   if (resolvedRel) {
     return window.zen.resolveVaultAssetUrl(vaultRoot, resolvedRel)
   }
+  // If the asset list hasn't arrived yet (cold start, before
+  // `listAssets` resolves), skip producing a URL rather than baking in
+  // the notedir-relative fallback. The cm-live-preview plugin
+  // re-decorates as soon as `assetFiles` populates and the basename
+  // search will then run with real data. This stops the wrong URL from
+  // being cached by the widget on the first paint.
+  if (useStore.getState().assetFiles.length === 0) return null
   return window.zen.resolveLocalAssetUrl(vaultRoot, notePath, href)
 }
 

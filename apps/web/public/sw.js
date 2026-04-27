@@ -10,8 +10,15 @@
 // This file is deliberately small — Workbox or similar can replace it
 // later without changing the UI.
 
-const CACHE_NAME = 'zennotes-shell-v1'
-const APP_SHELL = ['/', '/index.html', '/manifest.webmanifest']
+const CACHE_NAME = 'zennotes-shell-v2'
+const APP_SHELL = [
+  '/',
+  '/index.html',
+  '/manifest.webmanifest',
+  '/favicon-32.png',
+  '/icon-192.png',
+  '/icon-512.png'
+]
 
 self.addEventListener('install', (event) => {
   event.waitUntil(

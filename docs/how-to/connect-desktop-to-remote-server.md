@@ -148,8 +148,29 @@ That was previously caused by legacy remote config migration. Current behavior s
 
 If you remove the last saved remote while connected remotely, ZenNotes should automatically switch back to the local workspace.
 
+## Rotating the server's auth token
+
+If you suspect a leaked token, rotate it from any authenticated client:
+
+```bash
+curl -X POST https://notes.example.com/api/session/rotate-token \
+  -H "Authorization: Bearer $CURRENT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"currentToken":"'"$CURRENT_TOKEN"'","newToken":"'"$NEW_TOKEN"'"}'
+```
+
+Rotation invalidates all existing sessions, so the desktop will need
+to be reconnected with the new token. Update the saved remote profile
+under **Settings → Remote workspaces** with the new value.
+
+If the server token is supplied by `ZENNOTES_AUTH_TOKEN` or
+`ZENNOTES_AUTH_TOKEN_FILE`, the API rotation request will return
+`409 Conflict`. Rotate the env value or token file on the server and
+restart ZenNotes instead.
+
 ## Related docs
 
 - [Self-Host with Docker](./self-host-with-docker.md)
+- [Secure Self-Hosting](./secure-self-hosting.md)
 - [Settings Reference](../reference/settings-reference.md)
 - [How ZenNotes Works](../explanation/how-zennotes-works.md)

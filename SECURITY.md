@@ -26,5 +26,6 @@ publish a coordinated advisory within 30 days of confirmation.
 For the current product security model and deployment guidance, read:
 
 - [docs/how-to/secure-self-hosting.md](docs/how-to/secure-self-hosting.md)
+- [docs/how-to/at-rest-encryption.md](docs/how-to/at-rest-encryption.md)
 - [docs/reference/security-reference.md](docs/reference/security-reference.md)
 - [docs/explanation/security-model.md](docs/explanation/security-model.md)

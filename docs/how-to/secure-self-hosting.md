@@ -109,6 +109,12 @@ Current guidance:
 
 - terminate TLS in Caddy, Nginx, Traefik, or another reverse proxy
 - forward traffic to ZenNotes on loopback
+- set `ZENNOTES_BEHIND_TLS=1` so the server marks cookies `Secure`
+  and emits `Strict-Transport-Security`
+- set `ZENNOTES_TRUSTED_PROXIES` to your proxy's CIDR (e.g.
+  `127.0.0.1/32` or the bridge network) so `X-Forwarded-*` headers
+  from the proxy are honoured but spoofed headers from anyone else
+  are ignored
 
 ## 5. Restrict what the server can browse
 
@@ -184,8 +190,15 @@ So the honest recommendation is:
 - keep auth enabled
 - keep the service on loopback
 - put it behind HTTPS if accessed remotely
+- set `ZENNOTES_BEHIND_TLS=1` and `ZENNOTES_TRUSTED_PROXIES` once a
+  reverse proxy is in place
 - scope browse roots narrowly
-- back up the host vault, not just the container
+- back up the host vault, not just the container — encrypt those
+  backups, see [At-Rest Encryption](./at-rest-encryption.md)
+- rotate the auth token periodically in its source of truth; use
+  `POST /api/session/rotate-token` only for host-config-managed tokens,
+  or update the env/token file and restart for Docker/systemd-managed
+  tokens
 - keep ZenNotes updated
 
 ## Related docs
@@ -193,3 +206,4 @@ So the honest recommendation is:
 - [Security Reference](../reference/security-reference.md)
 - [Security Model](../explanation/security-model.md)
 - [Self-Host with Docker](./self-host-with-docker.md)
+- [At-Rest Encryption](./at-rest-encryption.md)

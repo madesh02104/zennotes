@@ -151,12 +151,48 @@ Important points:
 - Docker defaults are intended to be safer than a wide-open dev setup
 - the browser app logs in with a bootstrap token and then uses a session cookie
 - the server restricts vault browsing based on configured browse roots
+- vault notes are written with `0600` and dirs with `0700` by default
+- asset uploads default to a 50 MiB cap and note writes to 10 MiB
 
 If you expose ZenNotes beyond your LAN, the recommended model is:
 
 - put it behind a reverse proxy
 - terminate TLS there
 - treat direct public exposure as unsupported-by-default
+- set `ZENNOTES_BEHIND_TLS=1` so cookies get the `Secure` flag and the
+  server emits HSTS
+- set `ZENNOTES_TRUSTED_PROXIES` (CIDR list) so the server only honours
+  `X-Forwarded-*` headers from your reverse proxy
+
+## Useful environment variables
+
+The container reads these on startup. Set them in `docker-compose.yml`
+or via the orchestrator of your choice.
+
+- `ZENNOTES_AUTH_TOKEN` — bootstrap token. Required for non-loopback binds.
+- `ZENNOTES_AUTH_TOKEN_FILE` — read the token from a file path. Use this
+  with Docker/Kubernetes secrets so the value never lives in `.env`.
+- `ZENNOTES_BEHIND_TLS=1` — declare that a TLS-terminating proxy is in
+  front. Enables `Secure` cookies and `Strict-Transport-Security`.
+- `ZENNOTES_TRUSTED_PROXIES` — comma-separated CIDR list. Required if
+  the proxy is on a different IP than loopback (e.g. on a Docker bridge
+  network or a separate host).
+- `ZENNOTES_ALLOWED_ORIGINS` — comma-separated origins permitted to use
+  the API from the browser. Misses are logged once per origin.
+- `ZENNOTES_BROWSE_ROOTS` — directories the server may consider as
+  vault candidates. Anything outside is rejected.
+- `ZENNOTES_MAX_NOTE_BYTES` / `ZENNOTES_MAX_ASSET_BYTES` — per-request
+  byte caps for `/api/notes/write` and `/api/assets/upload`. Defaults
+  10 MiB and 50 MiB.
+- `ZENNOTES_VAULT_FILE_MODE` / `ZENNOTES_VAULT_DIR_MODE` — octal mode
+  for new files / directories. Defaults `0600` and `0700`.
+
+For a deeper walkthrough of the security choices and a full env-var
+list, see:
+
+- [Secure Self-Hosting](./secure-self-hosting.md)
+- [At-Rest Encryption](./at-rest-encryption.md)
+- [Security Reference](../reference/security-reference.md)
 
 ## Common problems
 

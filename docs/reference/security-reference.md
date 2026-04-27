@@ -32,6 +32,7 @@ The browser login flow uses:
 
 - `POST /api/session/login`
 - `POST /api/session/logout`
+- `POST /api/session/rotate-token`
 - `GET /api/session`
 
 Behavior:
@@ -49,6 +50,24 @@ Behavior:
 Current session TTL:
 
 - 30 days
+
+### Token rotation
+
+`POST /api/session/rotate-token` replaces the bootstrap auth token in
+host config and invalidates all existing sessions when the token is
+managed by ZenNotes' host config. Requires:
+
+- a valid current session or bearer token (the route is auth-protected)
+- the *current* token in the request body (defence-in-depth against
+  CSRF-style misuse via stolen session)
+- a new token at least 16 characters long
+
+The new token is persisted with mode `0600` to the host config file.
+Clients must re-login with the new token after rotation.
+
+If the token is externally managed with `ZENNOTES_AUTH_TOKEN` or
+`ZENNOTES_AUTH_TOKEN_FILE`, the endpoint returns `409 Conflict`.
+Update the env value or token file instead, then restart the server.
 
 ### Browser auth storage
 
@@ -92,7 +111,11 @@ Current lightweight rate limiting exists for:
 - login attempts
 - unauthorized WebSocket attempts
 
-This is intentionally simple, but it is still better than treating repeated failures as free.
+Each subsequent attempt within the window also incurs an exponential
+backoff (0, 1, 2, 4, 8, 16, 32, 60s), so even the first few failures
+cost real time. Rate-limit state is in-memory only and resets on
+restart, but the bootstrap token's 256-bit entropy makes brute-force
+infeasible regardless.
 
 ## CORS and origin policy
 
@@ -106,6 +129,32 @@ Current model:
 
 This is stricter than the previous permissive `*` model.
 
+Rejected origins are logged once per unique origin in the form
+`CORS rejected origin "https://x.example.com"; add it to
+ZENNOTES_ALLOWED_ORIGINS to allow it`, so misconfigured deployments
+surface in operator logs instead of silently failing in the browser.
+
+## Trusted proxies
+
+`X-Forwarded-Proto`, `X-Forwarded-Host`, and `X-Forwarded-For` are
+honoured only when the immediate TCP peer is in the configured set.
+
+Relevant config:
+
+- `ZENNOTES_TRUSTED_PROXIES` — comma-separated list of CIDRs (e.g.
+  `127.0.0.1/32,10.0.0.0/8`) or bare IPs. When unset, no forwarded
+  headers are trusted.
+
+This affects:
+
+- the `Secure` flag on session cookies
+- the `Strict-Transport-Security` header
+- rate-limit IP keying
+
+Without a trusted-proxies list, an attacker reaching the server
+directly cannot force-set `Secure` cookies or spoof rate-limit
+identity by injecting headers.
+
 ## Content security headers
 
 The server sends browser security headers directly in HTTP responses.
@@ -116,6 +165,9 @@ Current headers include:
 - `X-Content-Type-Options: nosniff`
 - `Referrer-Policy: no-referrer`
 - `Permissions-Policy`
+- `Strict-Transport-Security: max-age=63072000; includeSubDomains` —
+  sent only when the request was effectively HTTPS (real TLS, trusted
+  `X-Forwarded-Proto: https`, or `ZENNOTES_BEHIND_TLS=1`).
 
 Important current CSP constraints:
 
@@ -153,7 +205,39 @@ If no browse roots are configured, the server falls back to:
 - default vault path
 - configured vault path
 
-depending on what exists
+depending on what exists.
+
+### Vault path resolution
+
+User-supplied relative paths (note read/write/rename/delete, asset
+upload, folder ops) go through a symlink-aware resolver. Any existing
+path component that is a symlink is followed; if any of them resolves
+outside the vault root, the request is rejected with a path-escape
+error. This stops a planted in-vault symlink (host-level mistake or
+shared mount with surprises) from being used to read/write outside the
+vault.
+
+### File modes
+
+Files created in the vault default to `0600`; directories default to
+`0700`. Override with:
+
+- `ZENNOTES_VAULT_FILE_MODE` (octal, e.g. `0644`)
+- `ZENNOTES_VAULT_DIR_MODE` (octal, e.g. `0755`)
+
+The defaults assume a single-user host where the vault is private to
+the running UID. Loosen them only if you intentionally share the vault
+with another local user.
+
+### Upload and note size limits
+
+- `ZENNOTES_MAX_NOTE_BYTES` — default 10 MiB. `POST /api/notes/write`
+  rejects bodies larger than this with `413`.
+- `ZENNOTES_MAX_ASSET_BYTES` — default 50 MiB. `POST /api/assets/upload`
+  rejects multipart uploads above this with `413`.
+
+These prevent an authenticated client (or stolen token) from filling
+the vault disk with a single request.
 
 ## Host config vs vault config
 
@@ -236,6 +320,10 @@ This is the default baseline for self-hosted browser/server deployment.
 Important current variables:
 
 - `ZENNOTES_AUTH_TOKEN`
+- `ZENNOTES_AUTH_TOKEN_FILE` — path to a file containing the token;
+  used when `ZENNOTES_AUTH_TOKEN` is unset, matching the
+  Docker/Kubernetes secrets convention so the token never has to live
+  in `.env`.
 - `ZENNOTES_CONFIG_PATH`
 - `ZENNOTES_BIND`
 - `ZENNOTES_ALLOWED_ORIGINS`
@@ -244,6 +332,14 @@ Important current variables:
 - `ZENNOTES_DEFAULT_VAULT_PATH`
 - `ZENNOTES_ALLOW_UNSCOPED_BROWSE`
 - `ZENNOTES_ALLOW_INSECURE_NOAUTH`
+- `ZENNOTES_BEHIND_TLS` — declares a TLS-terminating proxy is in
+  front; enables `Secure` cookies and `Strict-Transport-Security`.
+- `ZENNOTES_TRUSTED_PROXIES` — CIDR list whose `X-Forwarded-*`
+  headers are honoured.
+- `ZENNOTES_MAX_NOTE_BYTES` — default 10 MiB.
+- `ZENNOTES_MAX_ASSET_BYTES` — default 50 MiB.
+- `ZENNOTES_VAULT_FILE_MODE` — octal mode for note files (default `0600`).
+- `ZENNOTES_VAULT_DIR_MODE` — octal mode for note directories (default `0700`).
 
 Docker/make wrappers also use:
 

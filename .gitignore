@@ -16,3 +16,5 @@ apps/server/bin
 .claude/
 *.tsbuildinfo
 data/
+/vault/
+/remotevault/

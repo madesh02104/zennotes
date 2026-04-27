@@ -26,6 +26,7 @@ If you are new to ZenNotes, read these first:
 - [Self-Host with Docker](./how-to/self-host-with-docker.md)
 - [Connect Desktop to a Remote ZenNotes Server](./how-to/connect-desktop-to-remote-server.md)
 - [Secure Self-Hosting](./how-to/secure-self-hosting.md)
+- [At-Rest Encryption](./how-to/at-rest-encryption.md)
 
 ## Reference
 

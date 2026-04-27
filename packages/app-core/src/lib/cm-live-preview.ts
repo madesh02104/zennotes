@@ -690,7 +690,13 @@ export const livePreviewPlugin = ViewPlugin.fromClass(
           state.pinnedRefPath !== prev.pinnedRefPath ||
           state.pinnedRefKind !== prev.pinnedRefKind ||
           state.pdfEmbedInEditMode !== prev.pdfEmbedInEditMode ||
-          state.noteRefs !== prev.noteRefs
+          state.noteRefs !== prev.noteRefs ||
+          // Asset list arrives async after the editor mounts; without
+          // this, an `![[name.png]]` whose target is at the vault root
+          // (or anywhere other than the note's own directory) bakes in
+          // the wrong URL on the very first decoration pass and stays
+          // broken until you re-trigger a recompute by editing.
+          state.assetFiles !== prev.assetFiles
         ) {
           view.dispatch({ effects: refreshLivePreviewEffect.of(null) })
         }
