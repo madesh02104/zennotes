@@ -30,19 +30,11 @@ import type {
   McpServerRuntime
 } from '@zennotes/shared-domain/mcp-clients'
 
-/** Persisted preferences for the daily morning task digest. */
-export interface TaskNotificationSettings {
-  enabled: boolean
-  /** 24-hour `HH:MM` in the user's local timezone. Default `09:00`. */
-  timeOfDay: string
-}
-
 export interface ZenCapabilities {
   supportsUpdater: boolean
   supportsNativeMenus: boolean
   supportsFloatingWindows: boolean
   supportsLocalFilesystemPickers: boolean
-  supportsDesktopNotifications: boolean
   supportsRemoteWorkspace: boolean
 }
 
@@ -148,16 +140,6 @@ export interface ZenBridge {
   toggleQuickCapture(): Promise<void>
   getQuickCaptureHotkey(): Promise<string>
   setQuickCaptureHotkey(hotkey: string): Promise<{ ok: boolean; hotkey: string; error?: string }>
-  getTaskNotificationSettings(): Promise<TaskNotificationSettings>
-  setTaskNotificationSettings(
-    next: TaskNotificationSettings
-  ): Promise<TaskNotificationSettings>
-  /** Fire a digest right now using the current task list — handy for the
-   *  Settings UI's "Send a test notification" button. */
-  testTaskNotification(): Promise<{ ok: boolean; reason?: string }>
-  /** Subscribe to "open the Tasks view" requests fired by the main
-   *  process (e.g. when the user clicks a digest notification). */
-  onOpenTasksView(cb: () => void): () => void
   renderTikz(source: string): Promise<TikzRenderResponse>
 
   mcpGetRuntime(): Promise<McpServerRuntime>

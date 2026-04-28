@@ -11,10 +11,14 @@ import {
   Annotation,
   Compartment,
   EditorState,
+  StateEffect,
+  StateField,
   type Extension,
   type Transaction
 } from '@codemirror/state'
 import {
+  Decoration,
+  type DecorationSet,
   EditorView,
   drawSelection,
   highlightActiveLine,
@@ -186,6 +190,26 @@ const paperHighlight = HighlightStyle.define([
  *  switch) so the update listener skips the save schedule. */
 const programmatic = Annotation.define<boolean>()
 const OUTLINE_JUMP_TOP_MARGIN = 24
+const TASK_JUMP_HIGHLIGHT_MS = 1400
+const taskJumpHighlightEffect = StateEffect.define<number | null>()
+const taskJumpHighlightDecoration = Decoration.line({ class: 'cm-task-jump-highlight' })
+const taskJumpHighlightField = StateField.define<DecorationSet>({
+  create: () => Decoration.none,
+  update(value, tr) {
+    let next = value.map(tr.changes)
+    for (const effect of tr.effects) {
+      if (!effect.is(taskJumpHighlightEffect)) continue
+      if (effect.value == null) {
+        next = Decoration.none
+        continue
+      }
+      const pos = Math.max(0, Math.min(tr.state.doc.length, effect.value))
+      next = Decoration.set([taskJumpHighlightDecoration.range(tr.state.doc.lineAt(pos).from)])
+    }
+    return next
+  },
+  provide: (field) => EditorView.decorations.from(field)
+})
 
 function lineNumberExtension(mode: LineNumberMode): Extension {
   if (mode === 'off') return []
@@ -287,6 +311,7 @@ export function EditorPane({ pane }: { pane: PaneLeaf }): JSX.Element {
   const ignoreEditorScrollRef = useRef(false)
   const ignorePreviewScrollRef = useRef(false)
   const pendingOutlineJumpLineRef = useRef<number | null>(null)
+  const taskJumpHighlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   /**
    * Path currently rendered in this pane's CodeMirror view. The CM update
    * listener writes through to `noteContents[viewPathRef.current]`; the
@@ -453,6 +478,7 @@ export function EditorPane({ pane }: { pane: PaneLeaf }): JSX.Element {
           history(),
           drawSelection(),
           highlightActiveLine(),
+          taskJumpHighlightField,
           wordWrapCompartment.of(s0.wordWrap ? EditorView.lineWrapping : []),
           markdown({ base: markdownLanguage, codeLanguages: resolveCodeLanguage, addKeymap: true }),
           headingFolding(),
@@ -638,6 +664,10 @@ export function EditorPane({ pane }: { pane: PaneLeaf }): JSX.Element {
   useEffect(() => {
     if (!isActive) return
     if (!content || !pendingJumpLocation || pendingJumpLocation.path !== content.path) return
+    if (mode === 'preview') {
+      applyPaneMode('edit')
+      return
+    }
     const raf = requestAnimationFrame(() => {
       const view = viewRef.current
       if (!view) return
@@ -645,17 +675,33 @@ export function EditorPane({ pane }: { pane: PaneLeaf }): JSX.Element {
       const anchor = Math.max(0, Math.min(docLength, pendingJumpLocation.editorSelectionAnchor))
       const head = Math.max(0, Math.min(docLength, pendingJumpLocation.editorSelectionHead))
       const scrollMode = pendingJumpLocation.editorScrollMode ?? 'preserve'
+      const highlightEffects = pendingJumpLocation.highlightLine
+        ? [taskJumpHighlightEffect.of(anchor)]
+        : []
       if (scrollMode === 'preserve') {
-        view.dispatch({ selection: { anchor, head } })
+        view.dispatch({
+          selection: { anchor, head },
+          effects: highlightEffects
+        })
         view.scrollDOM.scrollTop = pendingJumpLocation.editorScrollTop
       } else {
         view.dispatch({
           selection: { anchor, head },
-          effects: EditorView.scrollIntoView(anchor, {
-            y: scrollMode,
-            yMargin: scrollMode === 'start' ? OUTLINE_JUMP_TOP_MARGIN : 0
-          })
+          effects: [
+            EditorView.scrollIntoView(anchor, {
+              y: scrollMode,
+              yMargin: scrollMode === 'start' ? OUTLINE_JUMP_TOP_MARGIN : 0
+            }),
+            ...highlightEffects
+          ]
         })
+      }
+      if (pendingJumpLocation.highlightLine) {
+        if (taskJumpHighlightTimerRef.current) clearTimeout(taskJumpHighlightTimerRef.current)
+        taskJumpHighlightTimerRef.current = setTimeout(() => {
+          if (viewRef.current === view) view.dispatch({ effects: taskJumpHighlightEffect.of(null) })
+          taskJumpHighlightTimerRef.current = null
+        }, TASK_JUMP_HIGHLIGHT_MS)
       }
       previewScrollRef.current?.scrollTo({
         top: pendingJumpLocation.previewScrollTop,
@@ -664,7 +710,13 @@ export function EditorPane({ pane }: { pane: PaneLeaf }): JSX.Element {
       clearPendingJumpLocation()
     })
     return () => cancelAnimationFrame(raf)
-  }, [isActive, content?.path, clearPendingJumpLocation, pendingJumpLocation])
+  }, [applyPaneMode, isActive, mode, content?.path, clearPendingJumpLocation, pendingJumpLocation])
+
+  useEffect(() => {
+    return () => {
+      if (taskJumpHighlightTimerRef.current) clearTimeout(taskJumpHighlightTimerRef.current)
+    }
+  }, [])
 
   // Focus the CM view when activePane → this pane AND focusedPanel === 'editor'.
   useEffect(() => {

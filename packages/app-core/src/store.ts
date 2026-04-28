@@ -25,7 +25,10 @@ import { ARCHIVE_TAB_PATH, isArchiveTabPath } from '@shared/archive'
 import { TRASH_TAB_PATH, isTrashTabPath } from '@shared/trash'
 import { QUICK_NOTES_TAB_PATH, isQuickNotesTabPath } from '@shared/quick-notes'
 import {
+  FENCE_RE,
+  TASK_LINE_RE,
   setTaskCheckedAtIndex,
+  setTaskDueAtIndex,
   setTaskPriorityAtIndex,
   setTaskWaitingAtIndex,
   toggleTaskAtIndex,
@@ -225,6 +228,7 @@ export type TaskMutation =
   | { kind: 'set-checked'; checked: boolean }
   | { kind: 'set-waiting'; waiting: boolean }
   | { kind: 'set-priority'; priority: TaskLinePriority | null }
+  | { kind: 'set-due'; due: string | null }
 
 const VALID_TASKS_VIEW_MODES: TasksViewMode[] = ['list', 'calendar', 'kanban']
 const VALID_KANBAN_GROUP_BYS: KanbanGroupBy[] = ['status', 'priority', 'folder']
@@ -582,6 +586,7 @@ export interface NoteJumpLocation {
   editorScrollTop: number
   previewScrollTop: number
   editorScrollMode?: 'preserve' | 'center' | 'start'
+  highlightLine?: boolean
 }
 
 export interface PreviewAnchorRect {
@@ -620,6 +625,78 @@ function captureNoteJumpLocation(state: {
     previewScrollTop: getVisiblePreviewScrollElement()?.scrollTop ?? 0,
     editorScrollMode: 'preserve'
   }
+}
+
+function resolveTaskLineNumber(body: string, task: VaultTask): number {
+  const lines = body.split('\n')
+  let currentTaskIndex = 0
+  let inFence = false
+  let fenceMarker: string | null = null
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+    const fenceMatch = line.match(FENCE_RE)
+    if (fenceMatch) {
+      const marker = fenceMatch[2]
+      if (!inFence) {
+        inFence = true
+        fenceMarker = marker
+      } else if (marker === fenceMarker) {
+        inFence = false
+        fenceMarker = null
+      }
+      continue
+    }
+    if (inFence) continue
+
+    if (!line.match(TASK_LINE_RE)) continue
+    if (currentTaskIndex === task.taskIndex) return i
+    currentTaskIndex += 1
+  }
+
+  return task.lineNumber
+}
+
+function applyTaskMutationsToTask(task: VaultTask, mutations: TaskMutation[]): VaultTask {
+  let next = task
+  for (const m of mutations) {
+    switch (m.kind) {
+      case 'set-checked':
+        if (next.checked !== m.checked) next = { ...next, checked: m.checked }
+        break
+      case 'set-waiting':
+        if (next.waiting !== m.waiting) next = { ...next, waiting: m.waiting }
+        break
+      case 'set-priority': {
+        const priority = m.priority ?? undefined
+        if (next.priority !== priority) next = { ...next, priority }
+        break
+      }
+      case 'set-due': {
+        const due = m.due ?? undefined
+        if (next.due !== due) next = { ...next, due }
+        break
+      }
+    }
+  }
+  return next
+}
+
+function yieldForOptimisticPaint(): Promise<void> {
+  return new Promise((resolve) => {
+    const scheduleAfterPaint = (): void => {
+      window.setTimeout(resolve, 0)
+    }
+
+    if (
+      typeof window.requestAnimationFrame === 'function' &&
+      document.visibilityState === 'visible'
+    ) {
+      window.requestAnimationFrame(scheduleAfterPaint)
+    } else {
+      window.setTimeout(resolve, 0)
+    }
+  })
 }
 
 function sameNoteJumpLocation(a: NoteJumpLocation | null, b: NoteJumpLocation | null): boolean {
@@ -2188,12 +2265,13 @@ export const useStore = create<Store>((set, get) => {
       }
     }
     const lines = body.split('\n')
+    const taskLineNumber = resolveTaskLineNumber(body, task)
     let offset = 0
-    for (let i = 0; i < task.lineNumber && i < lines.length; i++) {
+    for (let i = 0; i < taskLineNumber && i < lines.length; i++) {
       offset += lines[i].length + 1
     }
     // Nudge cursor past indentation + list marker so it lands on the content.
-    const lineText = lines[task.lineNumber] ?? ''
+    const lineText = lines[taskLineNumber] ?? ''
     const taskBracketMatch = lineText.match(/^\s*(?:>\s*)*(?:[-+*]|\d+[.)])\s+\[[ xX]\]\s*/)
     const insideOffset = taskBracketMatch ? taskBracketMatch[0].length : 0
     const anchor = offset + insideOffset
@@ -2212,7 +2290,9 @@ export const useStore = create<Store>((set, get) => {
         editorSelectionAnchor: anchor,
         editorSelectionHead: anchor,
         editorScrollTop: 0,
-        previewScrollTop: 0
+        previewScrollTop: 0,
+        editorScrollMode: 'center',
+        highlightLine: true
       },
       focusedPanel: 'editor'
     })
@@ -2255,10 +2335,29 @@ export const useStore = create<Store>((set, get) => {
     const mutations: TaskMutation[] = Array.isArray(mutation) ? mutation : [mutation]
     if (mutations.length === 0) return
 
-    const state = get()
     const path = task.sourcePath
-    const openBuffer = state.noteContents[path]
-    const body = openBuffer?.body ?? (await window.zen.readNote(path)).body
+    const optimisticTask = applyTaskMutationsToTask(task, mutations)
+    const hasOptimisticChange = optimisticTask !== task
+
+    if (hasOptimisticChange) {
+      set((s) => ({
+        vaultTasks: s.vaultTasks.map((t) =>
+          t.sourcePath === path && t.taskIndex === task.taskIndex ? optimisticTask : t
+        )
+      }))
+      await yieldForOptimisticPaint()
+    }
+
+    const latestState = get()
+    const latestOpenBuffer = latestState.noteContents[path]
+    let body: string
+    try {
+      body = latestOpenBuffer?.body ?? (await window.zen.readNote(path)).body
+    } catch (err) {
+      console.error('readNote (mutate) failed', err)
+      if (hasOptimisticChange) void get().rescanTasksForPath(path)
+      return
+    }
 
     let nextBody = body
     for (const m of mutations) {
@@ -2272,48 +2371,27 @@ export const useStore = create<Store>((set, get) => {
         case 'set-priority':
           nextBody = setTaskPriorityAtIndex(nextBody, task.taskIndex, m.priority)
           break
+        case 'set-due':
+          nextBody = setTaskDueAtIndex(nextBody, task.taskIndex, m.due)
+          break
       }
     }
-    if (nextBody === body) return
+    if (nextBody === body) {
+      if (hasOptimisticChange) void get().rescanTasksForPath(path)
+      return
+    }
 
-    if (openBuffer) {
+    if (latestOpenBuffer) {
       get().updateNoteBody(path, nextBody)
     } else {
       try {
         await window.zen.writeNote(path, nextBody)
       } catch (err) {
         console.error('writeNote (mutate) failed', err)
+        if (hasOptimisticChange) void get().rescanTasksForPath(path)
         return
       }
     }
-
-    // Optimistic local reflection; the vault watcher rescan will
-    // confirm shortly. Keeping this in sync with the on-disk state
-    // means the Kanban card visibly hops columns the instant the user
-    // releases the drop.
-    set((s) => ({
-      vaultTasks: s.vaultTasks.map((t) => {
-        if (t.sourcePath !== path || t.taskIndex !== task.taskIndex) return t
-        let next = t
-        for (const m of mutations) {
-          switch (m.kind) {
-            case 'set-checked':
-              next = { ...next, checked: m.checked }
-              break
-            case 'set-waiting':
-              next = { ...next, waiting: m.waiting }
-              break
-            case 'set-priority':
-              next =
-                m.priority === null
-                  ? { ...next, priority: undefined }
-                  : { ...next, priority: m.priority }
-              break
-          }
-        }
-        return next
-      })
-    }))
   },
 
   setTasksFilter: (q) => set({ tasksFilter: q, taskCursorIndex: 0 }),

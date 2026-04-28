@@ -43,7 +43,10 @@ export function TasksRow({
     <div
       data-task-row={task.id}
       onMouseEnter={onFocusRow}
-      onClick={onFocusRow}
+      onClick={() => {
+        onFocusRow()
+        onOpen()
+      }}
       className={[
         'group flex items-start gap-2 rounded-md px-3 py-1.5',
         'border-l-2 transition-colors',

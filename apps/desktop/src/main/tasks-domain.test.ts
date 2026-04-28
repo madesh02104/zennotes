@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
   bucketTasksByDueDate,
-  buildTaskDigest,
   parseTasksFromBody,
   tasksDueOn,
   toIsoDateLocal,
@@ -66,32 +65,5 @@ describe('bucketTasksByDueDate', () => {
     )
     const buckets = bucketTasksByDueDate(all)
     expect(buckets.get('2026-04-30')?.length).toBe(1)
-  })
-})
-
-describe('buildTaskDigest', () => {
-  const today = new Date(2026, 3, 30) // 2026-04-30, local
-  it('counts due-today and overdue', () => {
-    const all = tasks(
-      [
-        '- [ ] today  due:2026-04-30',
-        '- [ ] also-today  due:2026-04-30',
-        '- [ ] overdue  due:2026-04-29',
-        '- [ ] way-overdue  due:2026-01-15',
-        '- [ ] future  due:2026-05-15',
-        '- [x] done  due:2026-04-30',
-        '- [ ] waiting  due:2026-04-30 @waiting',
-        '- [ ] no-date'
-      ].join('\n')
-    )
-    const digest = buildTaskDigest(all, today)
-    expect(digest.dueToday).toBe(2)
-    expect(digest.overdue).toBe(2)
-    expect(digest.total).toBe(4)
-  })
-
-  it('returns zeros when nothing matches', () => {
-    const all = tasks(['- [ ] no-date', '- [ ] future  due:2026-12-25'].join('\n'))
-    expect(buildTaskDigest(all, today)).toEqual({ dueToday: 0, overdue: 0, total: 0 })
   })
 })

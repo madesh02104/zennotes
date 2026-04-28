@@ -667,7 +667,7 @@ export function SettingsModal(): JSX.Element {
       id: 'editor',
       title: 'Editor',
       description: 'Vim, leader hints, live preview, tabs, and writing behavior.',
-      keywords: ['vim', 'leader', 'preview', 'tabs', 'wrap', 'pdf', 'quick note', 'quick capture', 'hotkey', 'shortcut', 'task', 'tasks', 'notification', 'digest', 'reminder'],
+      keywords: ['vim', 'leader', 'preview', 'tabs', 'wrap', 'pdf', 'quick note', 'quick capture', 'hotkey', 'shortcut', 'task', 'tasks'],
       content: (
         <div className="space-y-6">
           <Section
@@ -825,13 +825,6 @@ export function SettingsModal(): JSX.Element {
             description="Floating capture window for thoughts you want in the vault without leaving whatever you're doing."
           >
             <QuickCaptureHotkeyRow />
-          </Section>
-
-          <Section
-            title="Task notifications"
-            description="Daily morning digest of tasks due today and overdue. Native system notification; clicking it opens the Tasks view."
-          >
-            <TaskNotificationsRow />
           </Section>
         </div>
       )
@@ -2029,130 +2022,6 @@ function QuickCaptureHotkeyRow(): JSX.Element {
   )
 }
 
-function TaskNotificationsRow(): JSX.Element {
-  const [enabled, setEnabled] = useState(false)
-  const [timeOfDay, setTimeOfDay] = useState('09:00')
-  const [loaded, setLoaded] = useState(false)
-  const [busy, setBusy] = useState(false)
-  const [status, setStatus] = useState<{ kind: 'idle' | 'ok' | 'err'; message?: string }>({
-    kind: 'idle'
-  })
-
-  useEffect(() => {
-    void window.zen.getTaskNotificationSettings().then((s) => {
-      setEnabled(s.enabled)
-      setTimeOfDay(s.timeOfDay)
-      setLoaded(true)
-    })
-  }, [])
-
-  const persist = async (next: { enabled: boolean; timeOfDay: string }): Promise<void> => {
-    setBusy(true)
-    setStatus({ kind: 'idle' })
-    try {
-      const saved = await window.zen.setTaskNotificationSettings(next)
-      setEnabled(saved.enabled)
-      setTimeOfDay(saved.timeOfDay)
-    } catch (err) {
-      setStatus({ kind: 'err', message: err instanceof Error ? err.message : String(err) })
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const sendTest = async (): Promise<void> => {
-    setBusy(true)
-    try {
-      const result = await window.zen.testTaskNotification()
-      if (result.ok) {
-        setStatus({ kind: 'ok', message: 'Sent. Check your notification center.' })
-      } else {
-        setStatus({ kind: 'err', message: result.reason ?? 'Test notification failed.' })
-      }
-    } catch (err) {
-      setStatus({ kind: 'err', message: err instanceof Error ? err.message : String(err) })
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  return (
-    <div className="divide-y divide-paper-300/45">
-      <div className="flex items-center justify-between gap-5 px-5 py-4">
-        <div className="min-w-0">
-          <div className="text-sm font-medium text-ink-900">Daily digest</div>
-          <div className="mt-1 text-xs leading-5 text-ink-500">
-            Fire a single notification per day summarising tasks due today + anything overdue.
-            ZenNotes still has to be running for the timer to fire.
-          </div>
-        </div>
-        <button
-          type="button"
-          role="switch"
-          aria-checked={enabled}
-          disabled={!loaded || busy}
-          onClick={() => void persist({ enabled: !enabled, timeOfDay })}
-          className={[
-            'relative h-5 w-9 shrink-0 rounded-full transition-colors disabled:opacity-50',
-            enabled ? 'bg-accent' : 'bg-paper-300/80'
-          ].join(' ')}
-        >
-          <span
-            className={[
-              'absolute top-0.5 block h-4 w-4 rounded-full bg-white shadow transition-transform',
-              enabled ? 'translate-x-4' : 'translate-x-0.5'
-            ].join(' ')}
-          />
-        </button>
-      </div>
-
-      <div className="flex items-center justify-between gap-5 px-5 py-4">
-        <div className="min-w-0">
-          <div className="text-sm font-medium text-ink-900">Time of day</div>
-          <div className="mt-1 text-xs leading-5 text-ink-500">
-            24-hour local time. Defaults to 09:00.
-          </div>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <input
-            type="time"
-            value={timeOfDay}
-            disabled={!loaded || !enabled || busy}
-            onChange={(e) => setTimeOfDay(e.target.value)}
-            onBlur={() => {
-              if (timeOfDay && timeOfDay !== '09:00') {
-                void persist({ enabled, timeOfDay })
-              } else {
-                void persist({ enabled, timeOfDay: timeOfDay || '09:00' })
-              }
-            }}
-            className="rounded-xl border border-paper-300/70 bg-paper-100/80 px-3 py-1.5 text-sm tabular-nums text-ink-900 outline-none focus:border-accent/45 disabled:opacity-50"
-          />
-          <button
-            type="button"
-            disabled={!loaded || busy}
-            onClick={() => void sendTest()}
-            className="rounded-xl border border-paper-300/70 bg-paper-100/80 px-3 py-1.5 text-sm text-ink-900 hover:border-paper-300 disabled:opacity-50"
-            title="Fire a digest notification right now"
-          >
-            Test
-          </button>
-        </div>
-      </div>
-
-      {status.kind !== 'idle' && status.message && (
-        <div
-          className={[
-            'px-5 py-3 text-xs leading-5',
-            status.kind === 'err' ? 'text-red-500' : 'text-ink-500'
-          ].join(' ')}
-        >
-          {status.message}
-        </div>
-      )}
-    </div>
-  )
-}
 
 function TextInputRow({
   label,

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   setTaskCheckedAtIndex,
+  setTaskDueAtIndex,
   setTaskPriorityAtIndex,
   setTaskWaitingAtIndex,
   toggleTaskAtIndex
@@ -92,5 +93,29 @@ describe('setTaskPriorityAtIndex', () => {
   it('only touches the indexed task', () => {
     const md = ['- [ ] a !high', '- [ ] b'].join('\n')
     expect(setTaskPriorityAtIndex(md, 1, 'med')).toBe(['- [ ] a !high', '- [ ] b !med'].join('\n'))
+  })
+})
+
+describe('setTaskDueAtIndex', () => {
+  it('adds due dates', () => {
+    expect(setTaskDueAtIndex('- [ ] a', 0, '2026-04-30')).toBe('- [ ] a due:2026-04-30')
+  })
+
+  it('replaces existing due dates', () => {
+    expect(setTaskDueAtIndex('- [ ] a due:2026-04-29', 0, '2026-04-30')).toBe(
+      '- [ ] a due:2026-04-30'
+    )
+  })
+
+  it('replaces malformed due tokens too', () => {
+    expect(setTaskDueAtIndex('- [ ] a due:tomorrow', 0, '2026-04-30')).toBe(
+      '- [ ] a due:2026-04-30'
+    )
+  })
+
+  it('removes existing due dates without disturbing other metadata', () => {
+    expect(setTaskDueAtIndex('- [ ] a due:2026-04-30 !high', 0, null)).toBe(
+      '- [ ] a !high'
+    )
   })
 })

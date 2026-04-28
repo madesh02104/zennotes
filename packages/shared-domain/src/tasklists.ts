@@ -108,6 +108,7 @@ export function setTaskWaitingAtIndex(
 }
 
 const PRIORITY_TOKEN_RE = /(^|\s)!(?:high|med|medium|low|h|m|l)\b/i
+const DUE_TOKEN_RE = /(^|\s)due:\S+/i
 
 /** Replace, insert, or remove the priority token (`!high|!med|!low`)
  *  on the task line at `taskIndex`. Pass `null` to clear. */
@@ -129,6 +130,30 @@ export function setTaskPriorityAtIndex(
       // the metadata token. Trim trailing whitespace so we don't
       // accumulate spaces across repeated mutations.
       nextTail = `${cleaned.replace(/\s+$/u, '')} !${priority}`
+    } else {
+      nextTail = cleaned.replace(/\s+$/u, '')
+    }
+    return `${prefix}${checkChar}]${nextTail}`
+  })
+}
+
+/** Replace, insert, or remove the `due:YYYY-MM-DD` token on the task
+ *  line at `taskIndex`. Pass `null` to clear. */
+export function setTaskDueAtIndex(
+  markdown: string,
+  taskIndex: number,
+  due: string | null
+): string {
+  return editTaskAtIndex(markdown, taskIndex, (match) => {
+    const prefix = match[1]
+    const checkChar = match[2]
+    const tailWithBracket = match[3]
+    if (!tailWithBracket.startsWith(']')) return null
+    const tail = tailWithBracket.slice(1)
+    const cleaned = tail.replace(DUE_TOKEN_RE, '$1').replace(/\s{2,}/g, ' ')
+    let nextTail: string
+    if (due) {
+      nextTail = `${cleaned.replace(/\s+$/u, '')} due:${due}`
     } else {
       nextTail = cleaned.replace(/\s+$/u, '')
     }

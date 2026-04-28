@@ -17,7 +17,6 @@
 import appPackage from '../../package.json'
 import {
   installZenBridge,
-  type TaskNotificationSettings,
   type ZenAppInfo,
   type ZenBridge,
   type ZenCapabilities
@@ -59,7 +58,6 @@ const WEB_CAPABILITIES: ZenCapabilities = {
   supportsNativeMenus: false,
   supportsFloatingWindows: false,
   supportsLocalFilesystemPickers: false,
-  supportsDesktopNotifications: false,
   supportsRemoteWorkspace: false
 }
 
@@ -783,29 +781,6 @@ async function setQuickCaptureHotkey(
   }
 }
 
-async function getTaskNotificationSettings(): Promise<TaskNotificationSettings> {
-  return { enabled: false, timeOfDay: '09:00' }
-}
-
-async function setTaskNotificationSettings(
-  next: TaskNotificationSettings
-): Promise<TaskNotificationSettings> {
-  // Web build doesn't run a background scheduler — return whatever was
-  // passed so the UI doesn't appear to silently drop the user's input.
-  return next
-}
-
-async function testTaskNotification(): Promise<{ ok: boolean; reason?: string }> {
-  return {
-    ok: false,
-    reason: 'Task notifications are only available in the desktop build.'
-  }
-}
-
-function onOpenTasksView(_cb: () => void): () => void {
-  return () => {}
-}
-
 async function renderTikz(_source: string): Promise<TikzRenderResponse> {
   return { ok: false, error: 'TikZ rendering is not available in the web build yet.' }
 }
@@ -949,10 +924,6 @@ export const httpBridge: ZenBridge = {
   toggleQuickCapture,
   getQuickCaptureHotkey,
   setQuickCaptureHotkey,
-  getTaskNotificationSettings,
-  setTaskNotificationSettings,
-  testTaskNotification,
-  onOpenTasksView,
   renderTikz,
 
   mcpGetRuntime,

@@ -7,10 +7,10 @@
  *   - 'folder'  — Inbox / Quick / Archive            (read-only)
  *
  * Drag-and-drop:
- *   - Status: drop changes `[ ]`/`[x]` and the `@waiting` token on the
- *             source line. Dropping on Today/Upcoming clears
- *             `@waiting` and unchecks; Waiting sets `@waiting`; Done
- *             checks the box.
+ *   - Status: drop changes `[ ]`/`[x]`, `@waiting`, and due-date tokens
+ *             on the source line. Dropping on Today sets `due:` to
+ *             today; Upcoming preserves a future due date or sets
+ *             tomorrow; Waiting sets `@waiting`; Done checks the box.
  *   - Priority: drop replaces / inserts / removes the `!high|!med|!low`
  *               token on the source line.
  *   - Folder: DnD is disabled — moving a task between folders means
@@ -24,7 +24,8 @@
  *   Enter — open the card's source note
  *   Space / x — toggle the checkbox on the focused card
  */
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
 import type { NoteFolder } from '@shared/ipc'
 import type { VaultTask } from '@shared/tasks'
 import { groupTasks, isOverdue as isTaskOverdue, toIsoDateLocal } from '@shared/tasks'
@@ -45,18 +46,32 @@ interface Props {
 function dropMutationsFor(
   groupBy: KanbanGroupBy,
   columnId: string,
-  task: VaultTask
+  task: VaultTask,
+  today: Date
 ): TaskMutation[] | null {
   if (groupBy === 'status') {
+    const todayIso = toIsoDateLocal(today)
     switch (columnId) {
       case 'today':
-      case 'upcoming':
         // "Live" columns — make sure neither @waiting nor [x] keep the
         // task glued to a different bucket.
         return [
           { kind: 'set-checked', checked: false },
-          { kind: 'set-waiting', waiting: false }
+          { kind: 'set-waiting', waiting: false },
+          { kind: 'set-due', due: todayIso }
         ]
+      case 'upcoming': {
+        const tomorrow = new Date(today)
+        tomorrow.setDate(tomorrow.getDate() + 1)
+        return [
+          { kind: 'set-checked', checked: false },
+          { kind: 'set-waiting', waiting: false },
+          {
+            kind: 'set-due',
+            due: task.due && task.due > todayIso ? task.due : toIsoDateLocal(tomorrow)
+          }
+        ]
+      }
       case 'waiting':
         return [
           { kind: 'set-checked', checked: false },
@@ -80,22 +95,6 @@ function dropMutationsFor(
   // the sidebar.
   return null
 }
-
-/** Module-scoped state for the active drag. Kept outside React state
- *  because:
- *    - dataTransfer would serialize the task to a string and we'd
- *      have to re-find it on every drop;
- *    - React state queues, so the column's onDragOver closure can lag
- *      behind setState calls fired during dragstart;
- *    - We need a synchronous, always-current "what's being dragged
- *      and over where" so onDragEnd can complete a drop even when
- *      Chromium's `drop` event is eaten by a nested layout.
- *
- *  `lastOverColumn` is updated in onDragEnter/onDragOver and read by
- *  onDragEnd as a fallback when the column-level drop didn't fire. */
-let dragPayload: { task: VaultTask } | null = null
-let lastOverColumn: string | null = null
-let dropAlreadyHandled = false
 
 interface Column {
   id: string
@@ -188,6 +187,106 @@ function buildColumns(
   return statusColumns(tasks, today)
 }
 
+function sameTaskIdentity(a: VaultTask, b: VaultTask): boolean {
+  return a.sourcePath === b.sourcePath && a.taskIndex === b.taskIndex
+}
+
+function taskIdentityKey(task: VaultTask): string {
+  return `${task.sourcePath}\0${task.taskIndex}`
+}
+
+function sameBoardPlacement(a: VaultTask, b: VaultTask): boolean {
+  return (
+    a.checked === b.checked &&
+    a.waiting === b.waiting &&
+    a.priority === b.priority &&
+    a.due === b.due
+  )
+}
+
+function applyTaskMutationsForBoard(task: VaultTask, mutations: TaskMutation[]): VaultTask {
+  let next = task
+  for (const m of mutations) {
+    switch (m.kind) {
+      case 'set-checked':
+        if (next.checked !== m.checked) next = { ...next, checked: m.checked }
+        break
+      case 'set-waiting':
+        if (next.waiting !== m.waiting) next = { ...next, waiting: m.waiting }
+        break
+      case 'set-priority': {
+        const priority = m.priority ?? undefined
+        if (next.priority !== priority) next = { ...next, priority }
+        break
+      }
+      case 'set-due': {
+        const due = m.due ?? undefined
+        if (next.due !== due) next = { ...next, due }
+        break
+      }
+    }
+  }
+  return next
+}
+
+function columnOrderKey(groupBy: KanbanGroupBy, columnId: string): string {
+  return `${groupBy}:${columnId}`
+}
+
+function applyColumnOrder(
+  groupBy: KanbanGroupBy,
+  columns: Column[],
+  orderMap: Map<string, string[]>
+): Column[] {
+  return columns.map((column) => {
+    const order = orderMap.get(columnOrderKey(groupBy, column.id))
+    if (!order?.length) return column
+
+    const rank = new Map(order.map((key, index) => [key, index] as const))
+    const originalIndex = new Map(
+      column.tasks.map((task, index) => [taskIdentityKey(task), index] as const)
+    )
+    const tasks = [...column.tasks].sort((a, b) => {
+      const aKey = taskIdentityKey(a)
+      const bKey = taskIdentityKey(b)
+      const aRank = rank.get(aKey)
+      const bRank = rank.get(bKey)
+      if (aRank != null && bRank != null) return aRank - bRank
+      if (aRank != null) return -1
+      if (bRank != null) return 1
+      return (originalIndex.get(aKey) ?? 0) - (originalIndex.get(bKey) ?? 0)
+    })
+
+    return { ...column, tasks }
+  })
+}
+
+interface ActivePointerDrag {
+  task: VaultTask
+  pointerId: number
+  sourceColumnId: string | null
+  startX: number
+  startY: number
+  offsetX: number
+  offsetY: number
+  width: number
+  height: number
+  dragging: boolean
+  lastColumnId: string | null
+  lastInsertionIndex: number | null
+}
+
+interface DragPreview {
+  task: VaultTask
+  isOverdue: boolean
+  width: number
+  height: number
+  x: number
+  y: number
+}
+
+const POINTER_DRAG_THRESHOLD = 5
+
 export function TasksKanban({ tasks, today, onOpenTask, onToggleTask }: Props): JSX.Element {
   const groupBy = useStore((s) => s.kanbanGroupBy)
   const setGroupBy = useStore((s) => s.setKanbanGroupBy)
@@ -195,12 +294,431 @@ export function TasksKanban({ tasks, today, onOpenTask, onToggleTask }: Props): 
   const [colIdx, setColIdx] = useState(0)
   const [cardIdx, setCardIdx] = useState(0)
   const [draggingId, setDraggingId] = useState<string | null>(null)
-  const [dragOverColumn, setDragOverColumn] = useState<string | null>(null)
+  const [dragPreview, setDragPreview] = useState<DragPreview | null>(null)
+  const [displayTasks, setDisplayTasks] = useState(tasks)
+  const [columnOrderVersion, setColumnOrderVersion] = useState(0)
+  const latestTasksRef = useRef(tasks)
+  const displayTasksRef = useRef(tasks)
+  const pendingTaskMovesRef = useRef(new Map<string, VaultTask>())
+  const columnOrderRef = useRef(new Map<string, string[]>())
+  const columnsRef = useRef<Column[]>([])
+  const boardRef = useRef<HTMLDivElement | null>(null)
+  const pointerDragRef = useRef<ActivePointerDrag | null>(null)
+  const dragPreviewRef = useRef<HTMLDivElement | null>(null)
+  const dragPreviewFrameRef = useRef<number | null>(null)
+  const dragPreviewPointRef = useRef<{ x: number; y: number } | null>(null)
+  const dropIndicatorRef = useRef<HTMLDivElement | null>(null)
+  const dropIndicatorFrameRef = useRef<number | null>(null)
+  const dropIndicatorRectRef = useRef<{ x: number; y: number; width: number } | null>(null)
   const cardRef = useRef<HTMLDivElement | null>(null)
+  const dragOverColumnRef = useRef<string | null>(null)
+  const dragOverElementRef = useRef<HTMLElement | null>(null)
+  const suppressCardClickUntilRef = useRef(0)
 
-  const columns = useMemo(() => buildColumns(groupBy, tasks, today), [groupBy, tasks, today])
+  const mergeTasksWithPendingMoves = useCallback((incomingTasks: VaultTask[]) => {
+    const pending = pendingTaskMovesRef.current
+    if (pending.size === 0) return incomingTasks
+
+    for (const [key, pendingTask] of pending) {
+      const incoming = incomingTasks.find((task) => taskIdentityKey(task) === key)
+      if (incoming && sameBoardPlacement(incoming, pendingTask)) {
+        pending.delete(key)
+      }
+    }
+
+    if (pending.size === 0) return incomingTasks
+    return incomingTasks.map((task) => pending.get(taskIdentityKey(task)) ?? task)
+  }, [])
+
+  useEffect(() => {
+    latestTasksRef.current = tasks
+    const mergedTasks = mergeTasksWithPendingMoves(tasks)
+    displayTasksRef.current = mergedTasks
+    setDisplayTasks(mergedTasks)
+  }, [mergeTasksWithPendingMoves, tasks])
+
+  const columns = useMemo(
+    () =>
+      applyColumnOrder(
+        groupBy,
+        buildColumns(groupBy, displayTasks, today),
+        columnOrderRef.current
+      ),
+    [columnOrderVersion, groupBy, displayTasks, today]
+  )
+  columnsRef.current = columns
 
   const dndEnabled = groupBy !== 'folder'
+
+  const clearDropTarget = useCallback(() => {
+    dragOverElementRef.current?.classList.remove('is-drop-target')
+    dragOverElementRef.current = null
+    dragOverColumnRef.current = null
+  }, [])
+
+  const hideDropIndicator = useCallback(() => {
+    if (dropIndicatorFrameRef.current != null) {
+      window.cancelAnimationFrame(dropIndicatorFrameRef.current)
+      dropIndicatorFrameRef.current = null
+    }
+    dropIndicatorRectRef.current = null
+    const el = dropIndicatorRef.current
+    if (el) {
+      el.style.opacity = '0'
+      el.style.transform = 'translate3d(-9999px, -9999px, 0)'
+      el.style.width = '0px'
+    }
+  }, [])
+
+  const markDropTarget = useCallback(
+    (columnId: string, element: HTMLElement) => {
+      if (
+        dragOverColumnRef.current === columnId &&
+        dragOverElementRef.current === element
+      ) {
+        return
+      }
+      clearDropTarget()
+      dragOverColumnRef.current = columnId
+      dragOverElementRef.current = element
+      element.classList.add('is-drop-target')
+    },
+    [clearDropTarget]
+  )
+
+  const shouldSuppressCardClick = useCallback(
+    () => Date.now() < suppressCardClickUntilRef.current,
+    []
+  )
+
+  const persistTaskMutationAfterPaint = useCallback(
+    (task: VaultTask, mutations: TaskMutation[]) => {
+      const pendingKey = taskIdentityKey(task)
+      const run = (): void => {
+        void applyTaskMutation(task, mutations).finally(() => {
+          window.setTimeout(() => {
+            const pending = pendingTaskMovesRef.current
+            if (pending.has(pendingKey)) {
+              pending.delete(pendingKey)
+              const mergedTasks = mergeTasksWithPendingMoves(latestTasksRef.current)
+              displayTasksRef.current = mergedTasks
+              setDisplayTasks(mergedTasks)
+            }
+          }, 1200)
+        })
+      }
+
+      if (
+        typeof window.requestAnimationFrame === 'function' &&
+        document.visibilityState === 'visible'
+      ) {
+        window.requestAnimationFrame(() => {
+          window.requestAnimationFrame(() => {
+            window.setTimeout(run, 0)
+          })
+        })
+      } else {
+        window.setTimeout(run, 0)
+      }
+    },
+    [applyTaskMutation, mergeTasksWithPendingMoves]
+  )
+
+  const placeTaskInColumnOrder = useCallback(
+    (task: VaultTask, targetColumnId: string, targetIndex: number | null) => {
+      if (targetIndex == null) return
+
+      const movingKey = taskIdentityKey(task)
+      const nextOrderMap = new Map(columnOrderRef.current)
+
+      for (const column of columnsRef.current) {
+        const keys = column.tasks
+          .map((columnTask) => taskIdentityKey(columnTask))
+          .filter((key) => key !== movingKey)
+
+        if (column.id === targetColumnId) {
+          const boundedIndex = Math.max(0, Math.min(targetIndex, keys.length))
+          keys.splice(boundedIndex, 0, movingKey)
+        }
+
+        nextOrderMap.set(columnOrderKey(groupBy, column.id), keys)
+      }
+
+      columnOrderRef.current = nextOrderMap
+      setColumnOrderVersion((version) => version + 1)
+    },
+    [groupBy]
+  )
+
+  const applyTaskToBoard = useCallback(
+    (task: VaultTask, mutations: TaskMutation[]) => {
+      if (mutations.length === 0) return
+      flushSync(() => {
+        setDisplayTasks((current) => {
+          let movedTask: VaultTask | null = null
+          const next = current.map((candidate) => {
+            if (!sameTaskIdentity(candidate, task)) return candidate
+            movedTask = applyTaskMutationsForBoard(candidate, mutations)
+            return movedTask
+          })
+
+          if (movedTask) {
+            pendingTaskMovesRef.current.set(taskIdentityKey(task), movedTask)
+          }
+          displayTasksRef.current = next
+          return next
+        })
+      })
+    },
+    []
+  )
+
+  const moveTaskOnBoard = useCallback(
+    (
+      task: VaultTask,
+      mutations: TaskMutation[],
+      targetColumnId: string | null,
+      targetIndex: number | null
+    ) => {
+      if (targetColumnId) {
+        placeTaskInColumnOrder(task, targetColumnId, targetIndex)
+      }
+      if (mutations.length === 0) return
+      applyTaskToBoard(task, mutations)
+      persistTaskMutationAfterPaint(task, mutations)
+    },
+    [applyTaskToBoard, persistTaskMutationAfterPaint, placeTaskInColumnOrder]
+  )
+
+  const scheduleDropIndicatorPosition = useCallback((x: number, y: number, width: number) => {
+    dropIndicatorRectRef.current = { x, y, width }
+    if (dropIndicatorFrameRef.current != null) return
+    dropIndicatorFrameRef.current = window.requestAnimationFrame(() => {
+      dropIndicatorFrameRef.current = null
+      const rect = dropIndicatorRectRef.current
+      const el = dropIndicatorRef.current
+      if (!rect || !el) return
+      el.style.width = `${Math.max(24, Math.round(rect.width))}px`
+      el.style.opacity = '1'
+      el.style.transform = `translate3d(${Math.round(rect.x)}px, ${Math.round(rect.y)}px, 0)`
+    })
+  }, [])
+
+  const clearDragPreview = useCallback(() => {
+    if (dragPreviewFrameRef.current != null) {
+      window.cancelAnimationFrame(dragPreviewFrameRef.current)
+      dragPreviewFrameRef.current = null
+    }
+    dragPreviewPointRef.current = null
+    setDragPreview(null)
+  }, [])
+
+  const scheduleDragPreviewPosition = useCallback((drag: ActivePointerDrag, e: PointerEvent) => {
+    dragPreviewPointRef.current = {
+      x: e.clientX - drag.offsetX,
+      y: e.clientY - drag.offsetY
+    }
+    if (dragPreviewFrameRef.current != null) return
+    dragPreviewFrameRef.current = window.requestAnimationFrame(() => {
+      dragPreviewFrameRef.current = null
+      const point = dragPreviewPointRef.current
+      const el = dragPreviewRef.current
+      if (!point || !el) return
+      el.style.transform = `translate3d(${Math.round(point.x)}px, ${Math.round(point.y)}px, 0) rotate(0.35deg)`
+    })
+  }, [])
+
+  const columnAtPoint = useCallback((clientX: number, clientY: number) => {
+    const el = document.elementFromPoint(clientX, clientY) as HTMLElement | null
+    const columnEl = el?.closest<HTMLElement>('[data-kanban-column-id]')
+    if (!columnEl || !boardRef.current?.contains(columnEl)) return null
+    return { id: columnEl.dataset.kanbanColumnId ?? null, element: columnEl }
+  }, [])
+
+  const updateDropIndicator = useCallback(
+    (
+      drag: ActivePointerDrag,
+      target: { id: string | null; element: HTMLElement } | null,
+      clientY: number
+    ): number | null => {
+      if (!target?.id) {
+        hideDropIndicator()
+        return null
+      }
+
+      const mutations =
+        target.id === drag.sourceColumnId
+          ? []
+          : dropMutationsFor(groupBy, target.id, drag.task, today)
+      if (!mutations) {
+        hideDropIndicator()
+        return null
+      }
+
+      const bodyEl = target.element.querySelector<HTMLElement>('[data-kanban-column-body]')
+      if (!bodyEl) {
+        hideDropIndicator()
+        return null
+      }
+
+      const bodyRect = bodyEl.getBoundingClientRect()
+      const cards = Array.from(
+        target.element.querySelectorAll<HTMLElement>('[data-kanban-task-id]')
+      ).filter((card) => card.dataset.kanbanTaskId !== drag.task.id)
+      const insertionIndex = cards.findIndex((card) => {
+        const rect = card.getBoundingClientRect()
+        return clientY < rect.top + rect.height / 2
+      })
+      const boundedIndex = insertionIndex === -1 ? cards.length : insertionIndex
+
+      let y: number
+      if (boundedIndex < cards.length) {
+        y = cards[boundedIndex].getBoundingClientRect().top - 4
+      } else if (cards.length > 0) {
+        y = cards[cards.length - 1].getBoundingClientRect().bottom + 5
+      } else {
+        y = bodyRect.top + 14
+      }
+
+      scheduleDropIndicatorPosition(bodyRect.left + 12, y, bodyRect.width - 24)
+      return boundedIndex
+    },
+    [groupBy, hideDropIndicator, scheduleDropIndicatorPosition, today]
+  )
+
+  const finishPointerDrag = useCallback(
+    (drag: ActivePointerDrag): void => {
+      const columnId = drag.lastColumnId
+      if (!columnId || !dndEnabled) return
+      const mutations =
+        columnId === drag.sourceColumnId
+          ? []
+          : dropMutationsFor(groupBy, columnId, drag.task, today)
+      if (mutations) {
+        moveTaskOnBoard(drag.task, mutations, columnId, drag.lastInsertionIndex)
+      }
+    },
+    [dndEnabled, groupBy, moveTaskOnBoard, today]
+  )
+
+  const beginPointerDrag = useCallback(
+    (task: VaultTask, e: React.PointerEvent<HTMLDivElement>): void => {
+      if (!dndEnabled || e.button !== 0) return
+      const rect = e.currentTarget.getBoundingClientRect()
+      const sourceColumnId =
+        columnsRef.current.find((column) =>
+          column.tasks.some((candidate) => sameTaskIdentity(candidate, task))
+        )?.id ?? null
+      pointerDragRef.current = {
+        task,
+        pointerId: e.pointerId,
+        sourceColumnId,
+        startX: e.clientX,
+        startY: e.clientY,
+        offsetX: e.clientX - rect.left,
+        offsetY: e.clientY - rect.top,
+        width: rect.width,
+        height: rect.height,
+        dragging: false,
+        lastColumnId: null,
+        lastInsertionIndex: null
+      }
+    },
+    [dndEnabled]
+  )
+
+  useEffect(() => {
+    const handlePointerMove = (e: PointerEvent): void => {
+      const drag = pointerDragRef.current
+      if (!drag || drag.pointerId !== e.pointerId) return
+
+      const dx = e.clientX - drag.startX
+      const dy = e.clientY - drag.startY
+      if (!drag.dragging && Math.hypot(dx, dy) < POINTER_DRAG_THRESHOLD) return
+
+      if (!drag.dragging) {
+        drag.dragging = true
+        suppressCardClickUntilRef.current = Number.POSITIVE_INFINITY
+        setDraggingId(drag.task.id)
+        setDragPreview({
+          task: drag.task,
+          isOverdue: isTaskOverdue(drag.task, today),
+          width: drag.width,
+          height: drag.height,
+          x: e.clientX - drag.offsetX,
+          y: e.clientY - drag.offsetY
+        })
+        document.body.style.userSelect = 'none'
+      }
+
+      e.preventDefault()
+      scheduleDragPreviewPosition(drag, e)
+      const target = columnAtPoint(e.clientX, e.clientY)
+      if (target?.id && dndEnabled) {
+        drag.lastColumnId = target.id
+        markDropTarget(target.id, target.element)
+        drag.lastInsertionIndex = updateDropIndicator(drag, target, e.clientY)
+      } else {
+        drag.lastColumnId = null
+        drag.lastInsertionIndex = null
+        clearDropTarget()
+        hideDropIndicator()
+      }
+    }
+
+    const handlePointerUp = (e: PointerEvent): void => {
+      const drag = pointerDragRef.current
+      if (!drag || drag.pointerId !== e.pointerId) return
+
+      pointerDragRef.current = null
+      if (drag.dragging) {
+        e.preventDefault()
+        setDraggingId(null)
+        finishPointerDrag(drag)
+        suppressCardClickUntilRef.current = Date.now() + 140
+      } else {
+        setDraggingId(null)
+      }
+      document.body.style.userSelect = ''
+      clearDropTarget()
+      hideDropIndicator()
+      clearDragPreview()
+    }
+
+    const handlePointerCancel = (e: PointerEvent): void => {
+      const drag = pointerDragRef.current
+      if (!drag || drag.pointerId !== e.pointerId) return
+      pointerDragRef.current = null
+      setDraggingId(null)
+      document.body.style.userSelect = ''
+      clearDropTarget()
+      hideDropIndicator()
+      clearDragPreview()
+    }
+
+    window.addEventListener('pointermove', handlePointerMove, { passive: false })
+    window.addEventListener('pointerup', handlePointerUp, { passive: false })
+    window.addEventListener('pointercancel', handlePointerCancel, { passive: false })
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove)
+      window.removeEventListener('pointerup', handlePointerUp)
+      window.removeEventListener('pointercancel', handlePointerCancel)
+      document.body.style.userSelect = ''
+      hideDropIndicator()
+      clearDragPreview()
+    }
+  }, [
+    clearDragPreview,
+    clearDropTarget,
+    columnAtPoint,
+    dndEnabled,
+    finishPointerDrag,
+    hideDropIndicator,
+    markDropTarget,
+    scheduleDragPreviewPosition,
+    today,
+    updateDropIndicator
+  ])
 
   // Clamp focus on column/card if the data shifts under us.
   const safeColIdx = Math.min(colIdx, Math.max(0, columns.length - 1))
@@ -213,6 +731,8 @@ export function TasksKanban({ tasks, today, onOpenTask, onToggleTask }: Props): 
   useEffect(() => {
     cardRef.current?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
   }, [safeColIdx, safeCardIdx, focusedTask?.id])
+
+  useEffect(() => clearDropTarget, [clearDropTarget])
 
   // Local key handler — capture phase + stopImmediatePropagation so we
   // beat VimNav's global handler (which otherwise hijacks h/j/k/l).
@@ -298,62 +818,17 @@ export function TasksKanban({ tasks, today, onOpenTask, onToggleTask }: Props): 
         </div>
       </div>
 
-      <div className="flex min-h-0 flex-1 gap-2 overflow-x-auto px-3 py-3">
+      <div ref={boardRef} className="flex min-h-0 flex-1 gap-2 overflow-x-auto px-3 py-3">
         {columns.map((column, ci) => {
           const isColumnFocused = ci === safeColIdx
-          const isDropTarget = dndEnabled && dragOverColumn === column.id
           return (
             <div
               key={column.id}
+              data-kanban-column-id={column.id}
               className={[
-                'flex w-72 shrink-0 flex-col rounded-lg border bg-paper-100/60',
-                isDropTarget
-                  ? 'border-accent/60 ring-1 ring-accent/30'
-                  : isColumnFocused
-                    ? 'border-paper-400/70'
-                    : 'border-paper-300/60'
+                'task-kanban-column flex w-72 shrink-0 flex-col rounded-lg border bg-paper-100/60',
+                isColumnFocused ? 'border-paper-400/70' : 'border-paper-300/60'
               ].join(' ')}
-              onDragEnter={(e) => {
-                // Always preventDefault on dragenter / dragover when
-                // DnD is enabled: HTML5 requires it to mark the
-                // element as a valid drop target. We can't gate on
-                // React state here (setDraggingId is queued and the
-                // handler closure may still see the old value before
-                // the next render), so we let the browser take care
-                // of the "is there actually a drag?" check. A spurious
-                // preventDefault outside a drag is harmless.
-                if (!dndEnabled) return
-                e.preventDefault()
-                lastOverColumn = column.id
-                if (dragOverColumn !== column.id) setDragOverColumn(column.id)
-              }}
-              onDragOver={(e) => {
-                if (!dndEnabled) return
-                e.preventDefault()
-                e.dataTransfer.dropEffect = 'move'
-                lastOverColumn = column.id
-                if (dragOverColumn !== column.id) setDragOverColumn(column.id)
-              }}
-              onDragLeave={(e) => {
-                // Avoid dragleave→dragenter flicker when crossing
-                // child elements: only clear if we're leaving the
-                // column itself, not entering one of its children.
-                if (e.currentTarget.contains(e.relatedTarget as Node | null)) return
-                if (dragOverColumn === column.id) setDragOverColumn(null)
-              }}
-              onDrop={(e) => {
-                e.preventDefault()
-                e.stopPropagation()
-                setDragOverColumn(null)
-                if (!dndEnabled) return
-                const payload = dragPayload
-                if (!payload) return
-                dropAlreadyHandled = true
-                const mutations = dropMutationsFor(groupBy, column.id, payload.task)
-                if (mutations && mutations.length > 0) {
-                  void applyTaskMutation(payload.task, mutations)
-                }
-              }}
             >
               <div className="flex shrink-0 items-center justify-between gap-2 border-b border-paper-300/45 px-3 py-2">
                 <span className="text-xs font-semibold uppercase tracking-wide text-current/70">
@@ -370,11 +845,12 @@ export function TasksKanban({ tasks, today, onOpenTask, onToggleTask }: Props): 
               </div>
               <div
                 onClick={() => setColIdx(ci)}
+                data-kanban-column-body
                 className="min-h-0 flex-1 overflow-y-auto p-2"
               >
                 {column.tasks.length === 0 ? (
                   <div className="rounded-md border border-dashed border-paper-300/60 px-2 py-3 text-center text-[11px] text-current/40">
-                    {isDropTarget ? 'drop to apply' : 'nothing here'}
+                    nothing here
                   </div>
                 ) : (
                   <div className="space-y-1.5">
@@ -384,6 +860,7 @@ export function TasksKanban({ tasks, today, onOpenTask, onToggleTask }: Props): 
                       return (
                         <TaskCard
                           key={task.id}
+                          taskDomId={task.id}
                           task={task}
                           isOverdue={isTaskOverdue(task, today)}
                           isFocused={isFocused}
@@ -395,52 +872,9 @@ export function TasksKanban({ tasks, today, onOpenTask, onToggleTask }: Props): 
                             setCardIdx(ti)
                           }}
                           onOpen={() => onOpenTask(task)}
+                          shouldSuppressClick={shouldSuppressCardClick}
                           onToggle={() => onToggleTask(task)}
-                          onDragStart={(e) => {
-                            dragPayload = { task }
-                            lastOverColumn = null
-                            dropAlreadyHandled = false
-                            setDraggingId(task.id)
-                            e.dataTransfer.effectAllowed = 'move'
-                            // Some renderers refuse to start a drag
-                            // without setData; use a stable but
-                            // ignorable payload.
-                            try {
-                              e.dataTransfer.setData('text/plain', task.id)
-                            } catch {
-                              // ignore — Electron sometimes throws on
-                              // setData during synthetic events
-                            }
-                          }}
-                          onDragEnd={() => {
-                            // Fallback path: Chromium will sometimes
-                            // skip the column-level `drop` event in
-                            // nested-flex layouts even when
-                            // preventDefault was called on dragover.
-                            // dragend always fires, so use it to
-                            // complete the drop using the column we
-                            // last tracked under the cursor.
-                            if (
-                              !dropAlreadyHandled &&
-                              dragPayload &&
-                              lastOverColumn &&
-                              dndEnabled
-                            ) {
-                              const mutations = dropMutationsFor(
-                                groupBy,
-                                lastOverColumn,
-                                dragPayload.task
-                              )
-                              if (mutations && mutations.length > 0) {
-                                void applyTaskMutation(dragPayload.task, mutations)
-                              }
-                            }
-                            dragPayload = null
-                            lastOverColumn = null
-                            dropAlreadyHandled = false
-                            setDraggingId(null)
-                            setDragOverColumn(null)
-                          }}
+                          onPointerDown={(e) => beginPointerDrag(task, e)}
                         />
                       )
                     })}
@@ -457,11 +891,43 @@ export function TasksKanban({ tasks, today, onOpenTask, onToggleTask }: Props): 
           the sidebar.
         </div>
       )}
+      {dragPreview && (
+        <div
+          ref={dragPreviewRef}
+          className="task-kanban-drag-preview pointer-events-none fixed left-0 top-0 z-[1000]"
+          style={{
+            width: dragPreview.width,
+            minHeight: dragPreview.height,
+            transform: `translate3d(${Math.round(dragPreview.x)}px, ${Math.round(dragPreview.y)}px, 0) rotate(0.35deg)`
+          }}
+        >
+          <TaskCard
+            taskDomId={dragPreview.task.id}
+            task={dragPreview.task}
+            isOverdue={dragPreview.isOverdue}
+            isFocused={false}
+            isDragging={false}
+            draggable={false}
+            cardRef={null}
+            onClickRow={() => {}}
+            onOpen={() => {}}
+            shouldSuppressClick={() => true}
+            onToggle={() => {}}
+            onPointerDown={() => {}}
+          />
+        </div>
+      )}
+      <div
+        ref={dropIndicatorRef}
+        className="task-kanban-drop-indicator pointer-events-none fixed left-0 top-0 z-[999]"
+        aria-hidden="true"
+      />
     </div>
   )
 }
 
 interface CardProps {
+  taskDomId: string
   task: VaultTask
   isOverdue: boolean
   isFocused: boolean
@@ -470,9 +936,9 @@ interface CardProps {
   cardRef?: React.RefObject<HTMLDivElement> | null
   onClickRow: () => void
   onOpen: () => void
+  shouldSuppressClick: () => boolean
   onToggle: () => void
-  onDragStart: (e: React.DragEvent<HTMLDivElement>) => void
-  onDragEnd: () => void
+  onPointerDown: (e: React.PointerEvent<HTMLDivElement>) => void
 }
 
 function formatDue(iso: string | undefined): string {
@@ -483,6 +949,7 @@ function formatDue(iso: string | undefined): string {
 }
 
 function TaskCard({
+  taskDomId,
   task,
   isOverdue,
   isFocused,
@@ -491,44 +958,39 @@ function TaskCard({
   cardRef,
   onClickRow,
   onOpen,
+  shouldSuppressClick,
   onToggle,
-  onDragStart,
-  onDragEnd
+  onPointerDown
 }: CardProps): JSX.Element {
   return (
     <div
       ref={cardRef ?? undefined}
-      onClick={onClickRow}
-      draggable={draggable}
-      onDragStart={(e) => {
-        if (!draggable) {
-          e.preventDefault()
-          return
-        }
-        onDragStart(e)
+      hidden={isDragging}
+      data-kanban-task-id={taskDomId}
+      onClick={() => {
+        if (shouldSuppressClick()) return
+        onClickRow()
+        onOpen()
       }}
-      onDragEnd={onDragEnd}
+      onPointerDown={(e) => {
+        if (!draggable) return
+        onPointerDown(e)
+      }}
       className={[
-        'group rounded-md border-l-2 bg-paper-100/85 px-2.5 py-1.5 transition-colors',
+        'group rounded-md border-l-2 bg-paper-100/85 px-2.5 py-1.5 transition-colors select-none',
         isOverdue ? 'border-rose-500/70' : 'border-paper-300/60',
         isFocused ? 'ring-1 ring-accent/60' : 'hover:bg-paper-200/60',
-        isDragging ? 'opacity-40' : '',
         draggable ? 'cursor-grab active:cursor-grabbing' : ''
       ].join(' ')}
     >
       <div className="flex items-start gap-2">
-        {/* The interactive controls (checkbox, open arrow) are nested
-            inside the draggable card. Chromium absorbs mousedown on
-            <button> children and refuses to start the parent's drag,
-            so the buttons explicitly opt out of being drag sources
-            (`draggable={false}`) AND swallow mousedown when the user
-            actually wants a drag. The drag is then initiated from the
-            non-button content area below. */}
+        {/* Interactive controls stop pointerdown so they do not start a card drag. */}
         <button
           type="button"
           role="checkbox"
           aria-checked={task.checked}
           draggable={false}
+          onPointerDown={(e) => e.stopPropagation()}
           onMouseDown={(e) => e.stopPropagation()}
           onClick={(e) => {
             e.stopPropagation()
@@ -556,14 +1018,13 @@ function TaskCard({
             </svg>
           )}
         </button>
-        {/* The card body. Was a <button> — switched to a div with
-            role/tabIndex so the parent's `draggable=true` works
-            reliably from the bulk of the card. */}
+        {/* The card body stays focusable so clicks open the note and drags move it. */}
         <div
           role="button"
           tabIndex={0}
           onClick={(e) => {
             e.stopPropagation()
+            if (shouldSuppressClick()) return
             onOpen()
           }}
           onKeyDown={(e) => {
@@ -585,6 +1046,7 @@ function TaskCard({
           aria-label={`Open ${task.noteTitle}`}
           title="Open note (Enter)"
           draggable={false}
+          onPointerDown={(e) => e.stopPropagation()}
           onMouseDown={(e) => e.stopPropagation()}
           onClick={(e) => {
             e.stopPropagation()
@@ -636,7 +1098,3 @@ function TaskCard({
     </div>
   )
 }
-
-// Suppress an unused-import lint when the file's used in a preview-less
-// build. The constant is referenced via templated routes elsewhere.
-void toIsoDateLocal

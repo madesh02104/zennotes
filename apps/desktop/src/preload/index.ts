@@ -2,7 +2,6 @@ import { clipboard, contextBridge, ipcRenderer, webUtils } from 'electron'
 import path from 'node:path'
 import appPackage from '../../package.json'
 import type {
-  TaskNotificationSettings,
   ZenAppInfo,
   ZenBridge,
   ZenCapabilities
@@ -44,7 +43,6 @@ const DESKTOP_CAPABILITIES: ZenCapabilities = {
   supportsNativeMenus: true,
   supportsFloatingWindows: true,
   supportsLocalFilesystemPickers: true,
-  supportsDesktopNotifications: true,
   supportsRemoteWorkspace: true
 }
 
@@ -334,19 +332,6 @@ const api: ZenBridge = {
     hotkey: string
   ): Promise<{ ok: boolean; hotkey: string; error?: string }> =>
     ipcRenderer.invoke(IPC.APP_SET_QUICK_CAPTURE_HOTKEY, hotkey),
-  getTaskNotificationSettings: (): Promise<TaskNotificationSettings> =>
-    ipcRenderer.invoke(IPC.APP_GET_TASK_NOTIFICATIONS),
-  setTaskNotificationSettings: (
-    next: TaskNotificationSettings
-  ): Promise<TaskNotificationSettings> =>
-    ipcRenderer.invoke(IPC.APP_SET_TASK_NOTIFICATIONS, next),
-  testTaskNotification: (): Promise<{ ok: boolean; reason?: string }> =>
-    ipcRenderer.invoke(IPC.APP_TEST_TASK_NOTIFICATION),
-  onOpenTasksView: (cb: () => void): (() => void) => {
-    const listener = (): void => cb()
-    ipcRenderer.on(IPC.TASKS_OPEN_VIEW, listener)
-    return () => ipcRenderer.removeListener(IPC.TASKS_OPEN_VIEW, listener)
-  },
   renderTikz: (source: string): Promise<{ ok: boolean; svg?: string; error?: string }> =>
     ipcRenderer.invoke(IPC.TIKZ_RENDER, source),
 

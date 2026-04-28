@@ -79,15 +79,6 @@ function App(): JSX.Element {
     })
   }, [setSettingsOpen])
 
-  // The main process broadcasts this when the user clicks a daily task
-  // digest notification. We open the Tasks view so the click takes them
-  // straight where they want to go.
-  useEffect(() => {
-    return window.zen.onOpenTasksView(() => {
-      void useStore.getState().openTasksView()
-    })
-  }, [])
-
   useEffect(() => {
     if (!vault || !workspaceRestored) return
     if (!workspaceReadyLoggedRef.current) {

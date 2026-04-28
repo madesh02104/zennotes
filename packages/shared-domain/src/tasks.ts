@@ -371,21 +371,3 @@ export function bucketTasksByDueDate(
   }
   return map
 }
-
-/** Build the calendar digest for the morning notification. Returns the
- *  count of tasks due today + count of overdue (unchecked, not waiting,
- *  due strictly before today). */
-export function buildTaskDigest(
-  tasks: VaultTask[],
-  today: Date
-): { dueToday: number; overdue: number; total: number } {
-  const todayIso = toIsoDate(today)
-  let dueToday = 0
-  let overdue = 0
-  for (const task of tasks) {
-    if (task.checked || task.waiting || !task.due) continue
-    if (task.due === todayIso) dueToday += 1
-    else if (task.due < todayIso) overdue += 1
-  }
-  return { dueToday, overdue, total: dueToday + overdue }
-}
