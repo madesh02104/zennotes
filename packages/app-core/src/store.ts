@@ -24,7 +24,13 @@ import { HELP_TAB_PATH, isHelpTabPath } from '@shared/help'
 import { ARCHIVE_TAB_PATH, isArchiveTabPath } from '@shared/archive'
 import { TRASH_TAB_PATH, isTrashTabPath } from '@shared/trash'
 import { QUICK_NOTES_TAB_PATH, isQuickNotesTabPath } from '@shared/quick-notes'
-import { toggleTaskAtIndex } from '@shared/tasklists'
+import {
+  setTaskCheckedAtIndex,
+  setTaskPriorityAtIndex,
+  setTaskWaitingAtIndex,
+  toggleTaskAtIndex,
+  type TaskPriority as TaskLinePriority
+} from '@shared/tasklists'
 import { DEFAULT_THEME_ID, THEMES, type ThemeFamily, type ThemeMode } from './lib/themes'
 import { formatMarkdown } from './lib/format-markdown'
 import { confirmMoveToTrash } from './lib/confirm-trash'
@@ -214,6 +220,11 @@ interface Prefs {
 
 export type TasksViewMode = 'list' | 'calendar' | 'kanban'
 export type KanbanGroupBy = 'status' | 'priority' | 'folder'
+
+export type TaskMutation =
+  | { kind: 'set-checked'; checked: boolean }
+  | { kind: 'set-waiting'; waiting: boolean }
+  | { kind: 'set-priority'; priority: TaskLinePriority | null }
 
 const VALID_TASKS_VIEW_MODES: TasksViewMode[] = ['list', 'calendar', 'kanban']
 const VALID_KANBAN_GROUP_BYS: KanbanGroupBy[] = ['status', 'priority', 'folder']
@@ -1268,6 +1279,16 @@ interface Store {
   /** Flip a task's checkbox. Reuses `toggleTaskAtIndex` so the file round-
    *  trips exactly — works whether or not the note is currently open. */
   toggleTaskFromList: (task: VaultTask) => Promise<void>
+  /** Apply one or more structured mutations to the task line on disk
+   *  and reflect them locally. Used by the Kanban DnD pipeline to
+   *  flip checked / waiting / priority without forcing the user to
+   *  drop into the editor. Multiple mutations are coalesced into a
+   *  single buffer update so a status change ("uncheck + clear
+   *  waiting") never sees a half-applied intermediate state. */
+  applyTaskMutation: (
+    task: VaultTask,
+    mutation: TaskMutation | TaskMutation[]
+  ) => Promise<void>
   setTasksFilter: (q: string) => void
   setTasksViewMode: (mode: TasksViewMode) => void
   setKanbanGroupBy: (group: KanbanGroupBy) => void
@@ -2227,6 +2248,71 @@ export const useStore = create<Store>((set, get) => {
           ? { ...t, checked: !task.checked }
           : t
       )
+    }))
+  },
+
+  applyTaskMutation: async (task, mutation) => {
+    const mutations: TaskMutation[] = Array.isArray(mutation) ? mutation : [mutation]
+    if (mutations.length === 0) return
+
+    const state = get()
+    const path = task.sourcePath
+    const openBuffer = state.noteContents[path]
+    const body = openBuffer?.body ?? (await window.zen.readNote(path)).body
+
+    let nextBody = body
+    for (const m of mutations) {
+      switch (m.kind) {
+        case 'set-checked':
+          nextBody = setTaskCheckedAtIndex(nextBody, task.taskIndex, m.checked)
+          break
+        case 'set-waiting':
+          nextBody = setTaskWaitingAtIndex(nextBody, task.taskIndex, m.waiting)
+          break
+        case 'set-priority':
+          nextBody = setTaskPriorityAtIndex(nextBody, task.taskIndex, m.priority)
+          break
+      }
+    }
+    if (nextBody === body) return
+
+    if (openBuffer) {
+      get().updateNoteBody(path, nextBody)
+    } else {
+      try {
+        await window.zen.writeNote(path, nextBody)
+      } catch (err) {
+        console.error('writeNote (mutate) failed', err)
+        return
+      }
+    }
+
+    // Optimistic local reflection; the vault watcher rescan will
+    // confirm shortly. Keeping this in sync with the on-disk state
+    // means the Kanban card visibly hops columns the instant the user
+    // releases the drop.
+    set((s) => ({
+      vaultTasks: s.vaultTasks.map((t) => {
+        if (t.sourcePath !== path || t.taskIndex !== task.taskIndex) return t
+        let next = t
+        for (const m of mutations) {
+          switch (m.kind) {
+            case 'set-checked':
+              next = { ...next, checked: m.checked }
+              break
+            case 'set-waiting':
+              next = { ...next, waiting: m.waiting }
+              break
+            case 'set-priority':
+              next =
+                m.priority === null
+                  ? { ...next, priority: undefined }
+                  : { ...next, priority: m.priority }
+              break
+          }
+        }
+        return next
+      })
     }))
   },
 
