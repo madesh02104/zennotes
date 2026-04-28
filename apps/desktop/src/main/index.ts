@@ -2,6 +2,7 @@ import {
   app,
   BrowserWindow,
   dialog,
+  globalShortcut,
   ipcMain,
   Menu,
   protocol,
@@ -32,9 +33,11 @@ import type {
 } from '@shared/ipc'
 import {
   absolutePath,
+  appendToNote,
   archiveNote,
   createFolder,
   createNote,
+  DEFAULT_QUICK_CAPTURE_HOTKEY,
   deleteFolder,
   deleteNote,
   duplicateFolder,
@@ -1392,6 +1395,28 @@ function registerIpc(): void {
   })
 
   handle(
+    IPC.VAULT_APPEND_NOTE,
+    async (_e, relPath: string, body: string, position: 'start' | 'end') => {
+      const safePosition = position === 'start' ? 'start' : 'end'
+      if (isRemoteWorkspaceActive()) {
+        // Remote vaults don't expose appendToNote yet — compose with read+write
+        // so the call works uniformly across local + remote workspaces.
+        const client = requireRemoteWorkspaceClient()
+        const current = await client.readNote(relPath)
+        const trimmed = body.replace(/\s+$/u, '')
+        if (!trimmed) return current
+        const next =
+          safePosition === 'end'
+            ? `${current.body}${current.body.endsWith('\n') ? '' : '\n'}\n${trimmed}\n`
+            : `${trimmed}\n\n${current.body}`
+        return await client.writeNote(relPath, next)
+      }
+      const v = requireVault()
+      return await appendToNote(v.root, relPath, body, safePosition)
+    }
+  )
+
+  handle(
     IPC.VAULT_CREATE_NOTE,
     async (_e, folder: NoteFolder, title: string | undefined, subpath: string = '') => {
       if (isRemoteWorkspaceActive()) {
@@ -1589,6 +1614,24 @@ function registerIpc(): void {
     openFloatingNoteWindow(relPath)
   })
 
+  handle(IPC.WINDOW_TOGGLE_QUICK_CAPTURE, async () => {
+    toggleQuickCaptureWindow()
+  })
+
+  handle(IPC.APP_GET_QUICK_CAPTURE_HOTKEY, async () => {
+    const cfg = await loadConfig()
+    return cfg.quickCaptureHotkey
+  })
+
+  handle(IPC.APP_SET_QUICK_CAPTURE_HOTKEY, async (_e, hotkey: string) => {
+    const trimmed = typeof hotkey === 'string' ? hotkey.trim() : ''
+    const result = registerQuickCaptureHotkey(trimmed)
+    if (result.ok) {
+      await updateConfig((cfg) => ({ ...cfg, quickCaptureHotkey: trimmed }))
+    }
+    return { ok: result.ok, hotkey: trimmed, error: result.error }
+  })
+
   handle(IPC.TIKZ_RENDER, async (_e, source: string) => {
     const result = await renderTikz(source)
     if (result.ok) return { ok: true, svg: result.svg }
@@ -1695,6 +1738,123 @@ function openFloatingNoteWindow(relPath: string): void {
     void win.loadFile(path.join(__dirname, '../renderer/index.html'), {
       search: params.slice(1)
     })
+  }
+}
+
+/**
+ * Quick capture window — a small always-on-top floating panel that
+ * appears anywhere via a system-wide hotkey. Singleton, hide-on-close
+ * (so the second invocation is instant), and lets the user dump text
+ * into a brand-new note or append to an existing one.
+ */
+let quickCaptureWindow: BrowserWindow | null = null
+let quickCaptureQuitting = false
+let registeredQuickCaptureHotkey: string | null = null
+
+function ensureQuickCaptureWindow(): BrowserWindow {
+  if (quickCaptureWindow && !quickCaptureWindow.isDestroyed()) return quickCaptureWindow
+  const mac = isMac()
+  const win = new BrowserWindow({
+    width: 620,
+    height: 340,
+    minWidth: 460,
+    minHeight: 260,
+    show: false,
+    frame: false,
+    titleBarStyle: mac ? 'hiddenInset' : 'hidden',
+    trafficLightPosition: { x: 12, y: 12 },
+    autoHideMenuBar: true,
+    alwaysOnTop: true,
+    skipTaskbar: !mac,
+    resizable: true,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    backgroundColor: mac ? MAC_WINDOW_BACKGROUND_COLOR : '#faf7f0',
+    ...(mac ? {} : { icon: windowIconPath() }),
+    webPreferences: {
+      preload: path.join(__dirname, '../preload/index.js'),
+      sandbox: false,
+      contextIsolation: true,
+      nodeIntegration: false
+    }
+  })
+
+  if (mac) {
+    win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
+  }
+
+  win.on('close', (event) => {
+    if (quickCaptureQuitting) return
+    event.preventDefault()
+    win.hide()
+  })
+  win.on('closed', () => {
+    if (quickCaptureWindow === win) quickCaptureWindow = null
+  })
+  win.on('blur', () => {
+    // Focus-out hides the panel so the user's flow snaps back to whatever
+    // they were doing — same UX as Spotlight / Raycast.
+    if (!win.isDestroyed() && win.isVisible()) win.hide()
+  })
+
+  installNavigationGuards(win)
+  installZoomControls(win)
+  applyZoomFactor(win, currentZoomFactor)
+
+  const params = '?quickCapture=1'
+  const devServerUrl = process.env['ELECTRON_RENDERER_URL']
+  if (devServerUrl) {
+    void win.loadURL(`${devServerUrl}${params}`)
+  } else {
+    void win.loadFile(path.join(__dirname, '../renderer/index.html'), {
+      search: params.slice(1)
+    })
+  }
+
+  quickCaptureWindow = win
+  return win
+}
+
+function showQuickCaptureWindow(): void {
+  const win = ensureQuickCaptureWindow()
+  win.show()
+  win.focus()
+}
+
+function toggleQuickCaptureWindow(): void {
+  const win = quickCaptureWindow
+  if (win && !win.isDestroyed() && win.isVisible() && win.isFocused()) {
+    win.hide()
+    return
+  }
+  showQuickCaptureWindow()
+}
+
+function unregisterQuickCaptureHotkey(): void {
+  if (!registeredQuickCaptureHotkey) return
+  try {
+    globalShortcut.unregister(registeredQuickCaptureHotkey)
+  } catch {
+    // Ignore — Electron throws if the binding wasn't registered cleanly.
+  }
+  registeredQuickCaptureHotkey = null
+}
+
+function registerQuickCaptureHotkey(hotkey: string): { ok: boolean; error?: string } {
+  unregisterQuickCaptureHotkey()
+  const trimmed = hotkey.trim()
+  if (!trimmed) return { ok: true }
+  try {
+    const ok = globalShortcut.register(trimmed, toggleQuickCaptureWindow)
+    if (!ok) {
+      return { ok: false, error: `Failed to register quick capture hotkey: ${trimmed}` }
+    }
+    registeredQuickCaptureHotkey = trimmed
+    return { ok: true }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    return { ok: false, error: message }
   }
 }
 
@@ -1977,6 +2137,15 @@ app.whenReady().then(async () => {
   await createWindow()
   scheduleBackgroundAppUpdateCheck()
 
+  try {
+    const cfg = await loadConfig()
+    const desired = cfg.quickCaptureHotkey || DEFAULT_QUICK_CAPTURE_HOTKEY
+    const result = registerQuickCaptureHotkey(desired)
+    if (!result.ok) console.warn(result.error ?? `Failed to bind ${desired}`)
+  } catch (err) {
+    console.warn('Quick capture hotkey registration failed', err)
+  }
+
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) void createWindow()
   })
@@ -1989,4 +2158,6 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
   watcher.stop()
+  quickCaptureQuitting = true
+  unregisterQuickCaptureHotkey()
 })

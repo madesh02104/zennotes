@@ -167,6 +167,11 @@ export function VimNav(): JSX.Element | null {
         keyLabel: getKeymapDisplay(keymapOverrides, 'vim.leaderNoteOutline'),
         label: 'Note outline',
         detail: 'Jump to any heading in the active note.'
+      },
+      {
+        keyLabel: getKeymapDisplay(keymapOverrides, 'vim.leaderQuickCapture'),
+        label: 'Quick capture',
+        detail: 'Open the floating capture window.'
       }
     ]
     if (whichKeyState.allowEditorActions) {
@@ -494,6 +499,13 @@ export function VimNav(): JSX.Element | null {
           e.preventDefault()
           e.stopImmediatePropagation()
           armLeader('leader-l', true)
+          return
+        }
+        if (matchesSequenceToken(e, overrides, 'vim.leaderQuickCapture')) {
+          e.preventDefault()
+          e.stopImmediatePropagation()
+          resetLeader()
+          void window.zen.toggleQuickCapture()
           return
         }
         // Any other key cancels leader and falls through to normal routing.

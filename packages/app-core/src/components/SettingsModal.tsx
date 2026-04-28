@@ -638,7 +638,7 @@ export function SettingsModal(): JSX.Element {
       id: 'editor',
       title: 'Editor',
       description: 'Vim, leader hints, live preview, tabs, and writing behavior.',
-      keywords: ['vim', 'leader', 'preview', 'tabs', 'wrap', 'pdf', 'quick note'],
+      keywords: ['vim', 'leader', 'preview', 'tabs', 'wrap', 'pdf', 'quick note', 'quick capture', 'hotkey', 'shortcut'],
       content: (
         <div className="space-y-6">
           <Section
@@ -789,6 +789,13 @@ export function SettingsModal(): JSX.Element {
               placeholder="Quick Note"
               onChange={setQuickNoteTitlePrefix}
             />
+          </Section>
+
+          <Section
+            title="Quick capture"
+            description="Floating capture window for thoughts you want in the vault without leaving whatever you're doing."
+          >
+            <QuickCaptureHotkeyRow />
           </Section>
         </div>
       )
@@ -1820,6 +1827,170 @@ function Section({
 
 function InlineNote({ children }: { children: React.ReactNode }): JSX.Element {
   return <div className="px-5 py-4 text-xs leading-5 text-ink-500">{children}</div>
+}
+
+const DEFAULT_QUICK_CAPTURE_HOTKEY = 'CommandOrControl+Shift+Space'
+
+function toElectronAccelerator(binding: string): string {
+  return binding
+    .split('+')
+    .map((part) => (part === 'Mod' ? 'CommandOrControl' : part))
+    .join('+')
+}
+
+function formatAcceleratorForDisplay(accelerator: string): string {
+  if (!accelerator) return 'Disabled'
+  const mac = isMacPlatform()
+  return accelerator
+    .split('+')
+    .map((part) => {
+      if (part === 'CommandOrControl' || part === 'CmdOrCtrl') return mac ? '⌘' : 'Ctrl'
+      if (part === 'Command' || part === 'Cmd' || part === 'Meta') return mac ? '⌘' : 'Meta'
+      if (part === 'Control' || part === 'Ctrl') return mac ? '⌃' : 'Ctrl'
+      if (part === 'Alt' || part === 'Option') return mac ? '⌥' : 'Alt'
+      if (part === 'Shift') return mac ? '⇧' : 'Shift'
+      if (part === 'Space') return 'Space'
+      return part
+    })
+    .join(mac ? '' : '+')
+}
+
+function QuickCaptureHotkeyRow(): JSX.Element {
+  const [current, setCurrent] = useState<string>('')
+  const [recording, setRecording] = useState(false)
+  const [draft, setDraft] = useState<string>('')
+  const [error, setError] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    void window.zen.getQuickCaptureHotkey().then((next) => setCurrent(next))
+  }, [])
+
+  // Capture the next chord while recording. We swallow the keystroke
+  // rather than letting it bubble so e.g. Cmd+W doesn't close the modal
+  // while the user is binding their hotkey.
+  useEffect(() => {
+    if (!recording) return
+    const onKey = (event: KeyboardEvent): void => {
+      event.preventDefault()
+      event.stopPropagation()
+      if (event.key === 'Escape') {
+        setRecording(false)
+        setDraft('')
+        return
+      }
+      const captured = shortcutBindingFromEvent(event)
+      if (!captured) return
+      // Drop bindings without any modifier. globalShortcut will register
+      // them but they hijack the literal key system-wide, which is rarely
+      // what the user wants.
+      if (!/[+]/.test(captured)) return
+      setDraft(toElectronAccelerator(captured))
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [recording])
+
+  const apply = async (next: string): Promise<void> => {
+    setSaving(true)
+    setError(null)
+    try {
+      const result = await window.zen.setQuickCaptureHotkey(next)
+      if (result.ok) {
+        setCurrent(result.hotkey)
+        setDraft('')
+        setRecording(false)
+      } else {
+        setError(result.error ?? `Could not register "${next}"`)
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const display = draft || current
+  return (
+    <div className="flex flex-col gap-2 px-5 py-4">
+      <div className="flex items-center justify-between gap-5">
+        <div className="min-w-0">
+          <div className="text-sm font-medium text-ink-900">Quick capture hotkey</div>
+          <div className="mt-1 text-xs leading-5 text-ink-500">
+            System-wide shortcut to open the floating capture window. Works even when
+            ZenNotes is hidden or another app is focused. Click Record, then press the
+            chord; Esc cancels.
+          </div>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setRecording(true)
+              setDraft('')
+              setError(null)
+            }}
+            className={[
+              'rounded-xl border px-3 py-1.5 text-sm tabular-nums',
+              recording
+                ? 'border-accent/60 bg-accent/10 text-accent'
+                : 'border-paper-300/70 bg-paper-100/80 text-ink-900 hover:border-paper-300'
+            ].join(' ')}
+          >
+            {recording
+              ? draft
+                ? formatAcceleratorForDisplay(draft)
+                : 'Press a chord…'
+              : formatAcceleratorForDisplay(display)}
+          </button>
+          {recording ? (
+            <>
+              <button
+                type="button"
+                disabled={!draft || saving}
+                onClick={() => void apply(draft)}
+                className="rounded-xl border border-paper-300/70 bg-paper-100/80 px-3 py-1.5 text-sm text-ink-900 hover:border-paper-300 disabled:opacity-50"
+              >
+                Save
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setRecording(false)
+                  setDraft('')
+                }}
+                className="rounded-xl border border-paper-300/70 bg-paper-100/80 px-3 py-1.5 text-sm text-ink-900 hover:border-paper-300"
+              >
+                Cancel
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                disabled={current === '' || saving}
+                onClick={() => void apply('')}
+                className="rounded-xl border border-paper-300/70 bg-paper-100/80 px-3 py-1.5 text-sm text-ink-900 hover:border-paper-300 disabled:opacity-50"
+              >
+                Disable
+              </button>
+              <button
+                type="button"
+                disabled={current === DEFAULT_QUICK_CAPTURE_HOTKEY || saving}
+                onClick={() => void apply(DEFAULT_QUICK_CAPTURE_HOTKEY)}
+                className="rounded-xl border border-paper-300/70 bg-paper-100/80 px-3 py-1.5 text-sm text-ink-900 hover:border-paper-300 disabled:opacity-50"
+              >
+                Reset
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+      {error && (
+        <div className="text-xs text-red-500">{error}</div>
+      )}
+    </div>
+  )
 }
 
 function TextInputRow({

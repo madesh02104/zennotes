@@ -310,6 +310,21 @@ function writeNote(relPath: string, body: string): Promise<NoteMeta> {
   })
 }
 
+async function appendToNote(
+  relPath: string,
+  body: string,
+  position: 'start' | 'end'
+): Promise<NoteMeta> {
+  const current = await readNote(relPath)
+  const trimmed = body.replace(/\s+$/u, '')
+  if (!trimmed) return current
+  const next =
+    position === 'end'
+      ? `${current.body}${current.body.endsWith('\n') ? '' : '\n'}\n${trimmed}\n`
+      : `${trimmed}\n\n${current.body}`
+  return await writeNote(relPath, next)
+}
+
 function createNote(
   folder: NoteFolder,
   title?: string,
@@ -748,6 +763,25 @@ async function openNoteWindow(relPath: string): Promise<void> {
   window.open(url, '_blank', 'noopener')
 }
 
+async function toggleQuickCapture(): Promise<void> {
+  // Web build can't bind a system-wide shortcut; the quick capture
+  // window is desktop-only.
+}
+
+async function getQuickCaptureHotkey(): Promise<string> {
+  return ''
+}
+
+async function setQuickCaptureHotkey(
+  _hotkey: string
+): Promise<{ ok: boolean; hotkey: string; error?: string }> {
+  return {
+    ok: false,
+    hotkey: '',
+    error: 'Quick capture is only available in the desktop build.'
+  }
+}
+
 async function renderTikz(_source: string): Promise<TikzRenderResponse> {
   return { ok: false, error: 'TikZ rendering is not available in the web build yet.' }
 }
@@ -856,6 +890,7 @@ export const httpBridge: ZenBridge = {
   scanTasks,
   scanTasksForPath,
   writeNote,
+  appendToNote,
   createNote,
   renameNote,
   deleteNote,
@@ -887,6 +922,9 @@ export const httpBridge: ZenBridge = {
   windowToggleMaximize,
   windowClose,
   openNoteWindow,
+  toggleQuickCapture,
+  getQuickCaptureHotkey,
+  setQuickCaptureHotkey,
   renderTikz,
 
   mcpGetRuntime,

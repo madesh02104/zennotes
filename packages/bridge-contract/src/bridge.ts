@@ -106,6 +106,7 @@ export interface ZenBridge {
   scanTasks(): Promise<VaultTask[]>
   scanTasksForPath(relPath: string): Promise<VaultTask[]>
   writeNote(relPath: string, body: string): Promise<NoteMeta>
+  appendToNote(relPath: string, body: string, position: 'start' | 'end'): Promise<NoteMeta>
   createNote(folder: NoteFolder, title?: string, subpath?: string): Promise<NoteMeta>
   renameNote(relPath: string, nextTitle: string): Promise<NoteMeta>
   deleteNote(relPath: string): Promise<void>
@@ -137,6 +138,9 @@ export interface ZenBridge {
   windowToggleMaximize(): void
   windowClose(): void
   openNoteWindow(relPath: string): Promise<void>
+  toggleQuickCapture(): Promise<void>
+  getQuickCaptureHotkey(): Promise<string>
+  setQuickCaptureHotkey(hotkey: string): Promise<{ ok: boolean; hotkey: string; error?: string }>
   renderTikz(source: string): Promise<TikzRenderResponse>
 
   mcpGetRuntime(): Promise<McpServerRuntime>

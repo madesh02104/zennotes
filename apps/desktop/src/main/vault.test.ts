@@ -1,8 +1,8 @@
-import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
+import { mkdtemp, mkdir, readFile, writeFile, rm } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { absolutePath, searchVaultTextCapabilities } from './vault'
+import { absolutePath, appendToNote, ensureVaultLayout, searchVaultTextCapabilities } from './vault'
 
 const tempDirs: string[] = []
 
@@ -33,6 +33,45 @@ describe('absolutePath', () => {
     await mkdir(path.join(root, 'inbox'), { recursive: true })
 
     expect(absolutePath(root, 'inbox/note.md')).toBe(path.join(root, 'inbox', 'note.md'))
+  })
+})
+
+describe('appendToNote', () => {
+  it('appends to the end with a separating blank line when target lacks trailing newline', async () => {
+    const root = await makeTempDir('zennotes-append-end-')
+    await ensureVaultLayout(root)
+    const rel = 'inbox/quick.md'
+    await writeFile(path.join(root, rel), '# Quick\n\nfirst line', 'utf8')
+
+    await appendToNote(root, rel, 'second thought', 'end')
+
+    const next = await readFile(path.join(root, rel), 'utf8')
+    expect(next).toBe('# Quick\n\nfirst line\n\nsecond thought\n')
+  })
+
+  it('prepends to the start with a separating blank line', async () => {
+    const root = await makeTempDir('zennotes-append-start-')
+    await ensureVaultLayout(root)
+    const rel = 'inbox/quick.md'
+    await writeFile(path.join(root, rel), '# Quick\n\noriginal\n', 'utf8')
+
+    await appendToNote(root, rel, 'breaking news', 'start')
+
+    const next = await readFile(path.join(root, rel), 'utf8')
+    expect(next).toBe('breaking news\n\n# Quick\n\noriginal\n')
+  })
+
+  it('is a no-op when the addition is whitespace-only', async () => {
+    const root = await makeTempDir('zennotes-append-empty-')
+    await ensureVaultLayout(root)
+    const rel = 'inbox/quick.md'
+    const original = '# Quick\n\nbody\n'
+    await writeFile(path.join(root, rel), original, 'utf8')
+
+    await appendToNote(root, rel, '   \n  ', 'end')
+
+    const next = await readFile(path.join(root, rel), 'utf8')
+    expect(next).toBe(original)
   })
 })
 

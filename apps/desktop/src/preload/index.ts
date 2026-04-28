@@ -225,6 +225,8 @@ const api: ZenBridge = {
     ipcRenderer.invoke(IPC.VAULT_SCAN_TASKS_FOR, relPath),
   writeNote: (relPath: string, body: string): Promise<NoteMeta> =>
     ipcRenderer.invoke(IPC.VAULT_WRITE_NOTE, relPath, body),
+  appendToNote: (relPath: string, body: string, position: 'start' | 'end'): Promise<NoteMeta> =>
+    ipcRenderer.invoke(IPC.VAULT_APPEND_NOTE, relPath, body, position),
   createNote: (folder: NoteFolder, title?: string, subpath?: string): Promise<NoteMeta> =>
     ipcRenderer.invoke(IPC.VAULT_CREATE_NOTE, folder, title, subpath),
   renameNote: (relPath: string, nextTitle: string): Promise<NoteMeta> =>
@@ -319,6 +321,14 @@ const api: ZenBridge = {
   windowToggleMaximize: (): void => ipcRenderer.send(IPC.WINDOW_TOGGLE_MAXIMIZE),
   windowClose: (): void => ipcRenderer.send(IPC.WINDOW_CLOSE),
   openNoteWindow: (relPath: string): Promise<void> => ipcRenderer.invoke(IPC.WINDOW_OPEN_NOTE, relPath),
+  toggleQuickCapture: (): Promise<void> =>
+    ipcRenderer.invoke(IPC.WINDOW_TOGGLE_QUICK_CAPTURE),
+  getQuickCaptureHotkey: (): Promise<string> =>
+    ipcRenderer.invoke(IPC.APP_GET_QUICK_CAPTURE_HOTKEY),
+  setQuickCaptureHotkey: (
+    hotkey: string
+  ): Promise<{ ok: boolean; hotkey: string; error?: string }> =>
+    ipcRenderer.invoke(IPC.APP_SET_QUICK_CAPTURE_HOTKEY, hotkey),
   renderTikz: (source: string): Promise<{ ok: boolean; svg?: string; error?: string }> =>
     ipcRenderer.invoke(IPC.TIKZ_RENDER, source),
 

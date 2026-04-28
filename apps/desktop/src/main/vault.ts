@@ -155,7 +155,12 @@ export interface PersistedConfig {
   remoteWorkspaceProfiles: PersistedRemoteWorkspaceProfile[]
   windowState: PersistedWindowState | null
   zoomFactor: number
+  /** Electron accelerator string for the system-wide quick capture hotkey.
+   *  Empty string disables the global shortcut. */
+  quickCaptureHotkey: string
 }
+
+export const DEFAULT_QUICK_CAPTURE_HOTKEY = 'CommandOrControl+Shift+Space'
 
 const DEFAULT_CONFIG: PersistedConfig = {
   workspaceMode: 'local',
@@ -164,7 +169,8 @@ const DEFAULT_CONFIG: PersistedConfig = {
   remoteWorkspaceProfileId: null,
   remoteWorkspaceProfiles: [],
   windowState: null,
-  zoomFactor: 1
+  zoomFactor: 1,
+  quickCaptureHotkey: DEFAULT_QUICK_CAPTURE_HOTKEY
 }
 
 let configWriteQueue = Promise.resolve()
@@ -253,6 +259,10 @@ function normalizePersistedConfig(value: unknown): PersistedConfig {
       lastConnectedAt: null
     })
   }
+  const quickCaptureHotkey =
+    typeof candidate.quickCaptureHotkey === 'string'
+      ? candidate.quickCaptureHotkey.trim()
+      : DEFAULT_QUICK_CAPTURE_HOTKEY
   return {
     workspaceMode: candidate.workspaceMode === 'remote' ? 'remote' : 'local',
     vaultRoot: typeof candidate.vaultRoot === 'string' ? candidate.vaultRoot : null,
@@ -264,7 +274,8 @@ function normalizePersistedConfig(value: unknown): PersistedConfig {
         : null,
     remoteWorkspaceProfiles,
     windowState: normalizeWindowState(candidate.windowState),
-    zoomFactor
+    zoomFactor,
+    quickCaptureHotkey
   }
 }
 
@@ -1230,6 +1241,26 @@ export async function writeNote(root: string, rel: string, body: string): Promis
   await fs.writeFile(abs, body, 'utf8')
   const folder = folderOf(root, abs)
   if (!folder) throw new Error(`Note not in a known folder: ${rel}`)
+  return await readMeta(root, abs, folder)
+}
+
+export async function appendToNote(
+  root: string,
+  rel: string,
+  body: string,
+  position: 'start' | 'end'
+): Promise<NoteMeta> {
+  const abs = resolveSafe(root, rel)
+  const folder = folderOf(root, abs)
+  if (!folder) throw new Error(`Note not in a known folder: ${rel}`)
+  const existing = await fs.readFile(abs, 'utf8')
+  const trimmedAddition = body.replace(/\s+$/u, '')
+  if (!trimmedAddition) return await readMeta(root, abs, folder)
+  const next =
+    position === 'end'
+      ? `${existing}${existing.endsWith('\n') ? '' : '\n'}\n${trimmedAddition}\n`
+      : `${trimmedAddition}\n\n${existing}`
+  await fs.writeFile(abs, next, 'utf8')
   return await readMeta(root, abs, folder)
 }
 
