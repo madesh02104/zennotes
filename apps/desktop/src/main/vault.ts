@@ -158,9 +158,25 @@ export interface PersistedConfig {
   /** Electron accelerator string for the system-wide quick capture hotkey.
    *  Empty string disables the global shortcut. */
   quickCaptureHotkey: string
+  /** Daily morning task digest preferences. */
+  taskNotifications: PersistedTaskNotifications
+  /** ISO YYYY-MM-DD of the most recent local date the digest fired.
+   *  Tracked so the same day's digest doesn't fire twice — for instance
+   *  if the user changes the time-of-day mid-day. */
+  taskNotificationsLastFired: string | null
+}
+
+export interface PersistedTaskNotifications {
+  enabled: boolean
+  /** 24-hour `HH:MM` in local time. */
+  timeOfDay: string
 }
 
 export const DEFAULT_QUICK_CAPTURE_HOTKEY = 'CommandOrControl+Shift+Space'
+export const DEFAULT_TASK_NOTIFICATIONS: PersistedTaskNotifications = {
+  enabled: false,
+  timeOfDay: '09:00'
+}
 
 const DEFAULT_CONFIG: PersistedConfig = {
   workspaceMode: 'local',
@@ -170,7 +186,9 @@ const DEFAULT_CONFIG: PersistedConfig = {
   remoteWorkspaceProfiles: [],
   windowState: null,
   zoomFactor: 1,
-  quickCaptureHotkey: DEFAULT_QUICK_CAPTURE_HOTKEY
+  quickCaptureHotkey: DEFAULT_QUICK_CAPTURE_HOTKEY,
+  taskNotifications: { ...DEFAULT_TASK_NOTIFICATIONS },
+  taskNotificationsLastFired: null
 }
 
 let configWriteQueue = Promise.resolve()
@@ -263,6 +281,12 @@ function normalizePersistedConfig(value: unknown): PersistedConfig {
     typeof candidate.quickCaptureHotkey === 'string'
       ? candidate.quickCaptureHotkey.trim()
       : DEFAULT_QUICK_CAPTURE_HOTKEY
+  const taskNotifications = normalizeTaskNotifications(candidate.taskNotifications)
+  const taskNotificationsLastFired =
+    typeof candidate.taskNotificationsLastFired === 'string' &&
+    /^\d{4}-\d{2}-\d{2}$/.test(candidate.taskNotificationsLastFired)
+      ? candidate.taskNotificationsLastFired
+      : null
   return {
     workspaceMode: candidate.workspaceMode === 'remote' ? 'remote' : 'local',
     vaultRoot: typeof candidate.vaultRoot === 'string' ? candidate.vaultRoot : null,
@@ -275,8 +299,25 @@ function normalizePersistedConfig(value: unknown): PersistedConfig {
     remoteWorkspaceProfiles,
     windowState: normalizeWindowState(candidate.windowState),
     zoomFactor,
-    quickCaptureHotkey
+    quickCaptureHotkey,
+    taskNotifications,
+    taskNotificationsLastFired
   }
+}
+
+const TIME_OF_DAY_RE = /^([01]\d|2[0-3]):[0-5]\d$/
+
+export function normalizeTaskNotifications(
+  value: unknown
+): PersistedTaskNotifications {
+  if (!value || typeof value !== 'object') return { ...DEFAULT_TASK_NOTIFICATIONS }
+  const raw = value as Partial<PersistedTaskNotifications>
+  const enabled = typeof raw.enabled === 'boolean' ? raw.enabled : DEFAULT_TASK_NOTIFICATIONS.enabled
+  const timeOfDay =
+    typeof raw.timeOfDay === 'string' && TIME_OF_DAY_RE.test(raw.timeOfDay.trim())
+      ? raw.timeOfDay.trim()
+      : DEFAULT_TASK_NOTIFICATIONS.timeOfDay
+  return { enabled, timeOfDay }
 }
 
 export async function loadConfig(): Promise<PersistedConfig> {

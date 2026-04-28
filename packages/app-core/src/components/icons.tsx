@@ -120,6 +120,40 @@ export const ChevronRightIcon = (p: IconProps): JSX.Element => (
   </I>
 )
 
+export const ChevronLeftIcon = (p: IconProps): JSX.Element => (
+  <I {...p}>
+    <path d="m15 6-6 6 6 6" />
+  </I>
+)
+
+export const CalendarIcon = (p: IconProps): JSX.Element => (
+  <I {...p}>
+    <rect x="3" y="5" width="18" height="16" rx="2" />
+    <path d="M16 3v4" />
+    <path d="M8 3v4" />
+    <path d="M3 11h18" />
+  </I>
+)
+
+export const KanbanIcon = (p: IconProps): JSX.Element => (
+  <I {...p}>
+    <rect x="3" y="4" width="5" height="16" rx="1" />
+    <rect x="10" y="4" width="5" height="16" rx="1" />
+    <rect x="17" y="4" width="4" height="16" rx="1" />
+  </I>
+)
+
+export const ListIcon = (p: IconProps): JSX.Element => (
+  <I {...p}>
+    <path d="M8 6h13" />
+    <path d="M8 12h13" />
+    <path d="M8 18h13" />
+    <path d="M3 6h.01" />
+    <path d="M3 12h.01" />
+    <path d="M3 18h.01" />
+  </I>
+)
+
 export const MoreIcon = (p: IconProps): JSX.Element => (
   <I {...p}>
     <circle cx="5" cy="12" r="1" />

@@ -38,6 +38,7 @@ import {
   createFolder,
   createNote,
   DEFAULT_QUICK_CAPTURE_HOTKEY,
+  DEFAULT_TASK_NOTIFICATIONS,
   deleteFolder,
   deleteNote,
   duplicateFolder,
@@ -55,6 +56,7 @@ import {
   loadConfig,
   moveNote,
   moveToTrash,
+  normalizeTaskNotifications,
   readNote,
   renameFolder,
   renameNote,
@@ -65,12 +67,19 @@ import {
   setVaultSettings,
   type PersistedRemoteWorkspaceConfig,
   type PersistedRemoteWorkspaceProfile,
+  type PersistedTaskNotifications,
   type PersistedWindowState,
   updateConfig,
   unarchiveNote,
   vaultInfo,
   writeNote
 } from './vault'
+import {
+  fireTaskDigestNow,
+  rescheduleTaskDigest,
+  startTaskNotifications,
+  stopTaskNotifications
+} from './task-notifications'
 import {
   deleteRemoteWorkspaceSecret,
   getRemoteWorkspaceSecret,
@@ -1632,6 +1641,39 @@ function registerIpc(): void {
     return { ok: result.ok, hotkey: trimmed, error: result.error }
   })
 
+  handle(IPC.APP_GET_TASK_NOTIFICATIONS, async () => {
+    const cfg = await loadConfig()
+    return cfg.taskNotifications
+  })
+
+  handle(
+    IPC.APP_SET_TASK_NOTIFICATIONS,
+    async (_e, next: PersistedTaskNotifications) => {
+      const normalized = normalizeTaskNotifications(next)
+      const prev = await loadConfig()
+      // Reset the last-fired marker whenever the user toggles enabled
+      // off→on, so flipping it back on after a missed day fires a
+      // catch-up digest right away instead of waiting until tomorrow.
+      const taskNotificationsLastFired =
+        !prev.taskNotifications.enabled && normalized.enabled
+          ? null
+          : prev.taskNotificationsLastFired
+      await updateConfig((cfg) => ({
+        ...cfg,
+        taskNotifications: normalized,
+        taskNotificationsLastFired
+      }))
+      // Re-arm the timer with the new settings; if disabled this just
+      // tears down the existing one.
+      void rescheduleTaskDigest()
+      return normalized
+    }
+  )
+
+  handle(IPC.APP_TEST_TASK_NOTIFICATION, async () => {
+    return await fireTaskDigestNow()
+  })
+
   handle(IPC.TIKZ_RENDER, async (_e, source: string) => {
     const result = await renderTikz(source)
     if (result.ok) return { ok: true, svg: result.svg }
@@ -2146,6 +2188,26 @@ app.whenReady().then(async () => {
     console.warn('Quick capture hotkey registration failed', err)
   }
 
+  // Daily task digest. Background timer in main fires at the user's
+  // configured time (default 09:00) and shows a native notification
+  // when there are tasks due today / overdue.
+  void startTaskNotifications({
+    getTasks: async () => {
+      if (currentVault) {
+        try {
+          return await scanAllTasks(currentVault.root)
+        } catch (err) {
+          console.warn('scanAllTasks for digest failed', err)
+        }
+      }
+      // Remote workspaces fall back to an empty digest — surfacing
+      // remote tasks via background scan would mean keeping a remote
+      // session warm even when no window is up, which is not free.
+      return []
+    }
+  }).catch((err) => console.warn('startTaskNotifications failed', err))
+  void DEFAULT_TASK_NOTIFICATIONS // suppress unused-import lint when only the type is used
+
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) void createWindow()
   })
@@ -2160,4 +2222,5 @@ app.on('before-quit', () => {
   watcher.stop()
   quickCaptureQuitting = true
   unregisterQuickCaptureHotkey()
+  stopTaskNotifications()
 })

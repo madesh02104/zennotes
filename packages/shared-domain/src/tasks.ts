@@ -340,3 +340,52 @@ export function isOverdue(task: VaultTask, today: Date): boolean {
   if (task.checked || task.waiting || !task.due) return false
   return task.due < toIsoDate(today)
 }
+
+/** Convert a Date to its `YYYY-MM-DD` representation in the user's local
+ *  timezone — same encoding the parser produces for `due:`. Re-exported
+ *  for UIs that need to align with task `due` strings. */
+export function toIsoDateLocal(d: Date): string {
+  return toIsoDate(d)
+}
+
+/** Tasks scheduled for the given local date (ISO YYYY-MM-DD). Excludes
+ *  done and waiting tasks. */
+export function tasksDueOn(tasks: VaultTask[], iso: string): VaultTask[] {
+  return tasks.filter(
+    (t) => !t.checked && !t.waiting && t.due === iso
+  )
+}
+
+/** Bucket tasks by `due` ISO date. Done and waiting tasks are skipped.
+ *  Tasks without a due date land in the special `'unscheduled'` key. */
+export function bucketTasksByDueDate(
+  tasks: VaultTask[]
+): Map<string, VaultTask[]> {
+  const map = new Map<string, VaultTask[]>()
+  for (const task of tasks) {
+    if (task.checked || task.waiting) continue
+    const key = task.due ?? 'unscheduled'
+    const list = map.get(key)
+    if (list) list.push(task)
+    else map.set(key, [task])
+  }
+  return map
+}
+
+/** Build the calendar digest for the morning notification. Returns the
+ *  count of tasks due today + count of overdue (unchecked, not waiting,
+ *  due strictly before today). */
+export function buildTaskDigest(
+  tasks: VaultTask[],
+  today: Date
+): { dueToday: number; overdue: number; total: number } {
+  const todayIso = toIsoDate(today)
+  let dueToday = 0
+  let overdue = 0
+  for (const task of tasks) {
+    if (task.checked || task.waiting || !task.due) continue
+    if (task.due === todayIso) dueToday += 1
+    else if (task.due < todayIso) overdue += 1
+  }
+  return { dueToday, overdue, total: dueToday + overdue }
+}

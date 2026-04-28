@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { isTasksViewActive, useStore } from '../store'
+import { isTasksViewActive, useStore, type TasksViewMode } from '../store'
 import type { VaultTask } from '@shared/tasks'
 import { computeTasksRender, isOverdue } from '../lib/tasks-filter'
 import { TasksRow } from './TasksRow'
-import { CheckSquareIcon } from './icons'
+import { TasksCalendar } from './TasksCalendar'
+import { TasksKanban } from './TasksKanban'
+import { CalendarIcon, CheckSquareIcon, KanbanIcon, ListIcon } from './icons'
 import { advanceSequence, getKeymapBinding, matchesSequenceToken } from '../lib/keymaps'
 
 type GroupKey = 'today' | 'upcoming' | 'waiting' | 'done'
@@ -14,6 +16,17 @@ const GROUP_LABELS: Record<GroupKey, string> = {
   waiting: 'Waiting',
   done: 'Done'
 }
+
+const VIEW_BUTTONS: Array<{
+  id: TasksViewMode
+  label: string
+  shortcut: string
+  Icon: typeof ListIcon
+}> = [
+  { id: 'list', label: 'List', shortcut: '1', Icon: ListIcon },
+  { id: 'calendar', label: 'Calendar', shortcut: '2', Icon: CalendarIcon },
+  { id: 'kanban', label: 'Kanban', shortcut: '3', Icon: KanbanIcon }
+]
 
 export function TasksView(): JSX.Element {
   const tasks = useStore((s) => s.vaultTasks)
@@ -27,6 +40,8 @@ export function TasksView(): JSX.Element {
   const toggleTaskFromList = useStore((s) => s.toggleTaskFromList)
   const closeTasksView = useStore((s) => s.closeTasksView)
   const keymapOverrides = useStore((s) => s.keymapOverrides)
+  const viewMode = useStore((s) => s.tasksViewMode)
+  const setViewMode = useStore((s) => s.setTasksViewMode)
   // Only the Tasks panel in the *active* pane should listen for j/k/etc.
   // Splits can show Tasks in multiple panes simultaneously; without this
   // gate every keypress would fire once per mounted panel.
@@ -84,14 +99,15 @@ export function TasksView(): JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Scroll the cursor row into view when it moves.
+  // Scroll the cursor row into view when it moves (list mode only).
   useEffect(() => {
+    if (viewMode !== 'list') return
     if (!currentTask) return
     const el = rootRef.current?.querySelector<HTMLElement>(
       `[data-task-row="${cssEscape(currentTask.id)}"]`
     )
     if (el) el.scrollIntoView({ block: 'nearest' })
-  }, [currentTask])
+  }, [currentTask, viewMode])
 
   const moveCursor = useCallback(
     (delta: number) => {
@@ -134,6 +150,19 @@ export function TasksView(): JSX.Element {
         case 'r':
           void refreshTasks()
           return
+        case 'list':
+        case 'ls':
+          setViewMode('list')
+          return
+        case 'cal':
+        case 'calendar':
+          setViewMode('calendar')
+          return
+        case 'kan':
+        case 'kanban':
+        case 'board':
+          setViewMode('kanban')
+          return
         case 'sp':
         case 'split':
           if (path) {
@@ -160,14 +189,16 @@ export function TasksView(): JSX.Element {
           return
       }
     },
-    [closeTasksView, refreshTasks]
+    [closeTasksView, refreshTasks, setViewMode]
   )
 
-  // Local keyboard handler — fires only while this Tasks panel is the
-  // *active* one (relevant when split into multiple panes). Registered in
-  // the CAPTURE phase and uses `stopImmediatePropagation` so it beats
-  // VimNav's global handler (which also listens in capture and otherwise
-  // hijacks `j`/`k`/`gg`/`G` for sidebar navigation).
+  // Window-level handler with two responsibilities:
+  //   1. View-switcher shortcuts (1/2/3) — work in every sub-view.
+  //   2. List-mode navigation (j/k/Enter/Space/g/G etc.) — only when
+  //      the List sub-view is active. Calendar and Kanban have their
+  //      own keyboard handlers in those components.
+  // Registered in CAPTURE phase + uses `stopImmediatePropagation` so it
+  // beats VimNav's global handler.
   useEffect(() => {
     if (!isActivePanel) return
     const handler = (e: KeyboardEvent): void => {
@@ -196,6 +227,23 @@ export function TasksView(): JSX.Element {
         return
       }
 
+      // View switcher works regardless of sub-view.
+      if (key === '1') {
+        consume()
+        setViewMode('list')
+        return
+      }
+      if (key === '2') {
+        consume()
+        setViewMode('calendar')
+        return
+      }
+      if (key === '3') {
+        consume()
+        setViewMode('kanban')
+        return
+      }
+
       if (matchesSequenceToken(e, overrides, 'nav.filter')) {
         consume()
         filterRef.current?.focus()
@@ -211,6 +259,9 @@ export function TasksView(): JSX.Element {
         requestAnimationFrame(() => exRef.current?.focus())
         return
       }
+
+      // List-mode-only navigation. Calendar and Kanban have their own.
+      if (viewMode !== 'list') return
 
       if (matchesSequenceToken(e, overrides, 'nav.moveDown') || key === 'ArrowDown') {
         consume()
@@ -265,7 +316,9 @@ export function TasksView(): JSX.Element {
     openTaskAt,
     toggleTaskFromList,
     closeTasksView,
-    setFilter
+    setFilter,
+    viewMode,
+    setViewMode
   ])
 
   return (
@@ -280,25 +333,51 @@ export function TasksView(): JSX.Element {
           {tasks.length} total
         </span>
         {loading && <span className="text-[11px] text-current/50">scanning…</span>}
+
+        <div className="ml-2 flex items-center gap-0.5 rounded-md bg-current/5 p-0.5">
+          {VIEW_BUTTONS.map(({ id, label, shortcut, Icon }) => {
+            const isActive = viewMode === id
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setViewMode(id)}
+                title={`${label} (${shortcut})`}
+                className={[
+                  'flex items-center gap-1 rounded px-2 py-1 text-[11px] transition-colors',
+                  isActive
+                    ? 'bg-paper-50 text-current/90 shadow-sm'
+                    : 'text-current/55 hover:bg-current/5 hover:text-current/85'
+                ].join(' ')}
+              >
+                <Icon width={13} height={13} />
+                <span className="hidden sm:inline">{label}</span>
+              </button>
+            )
+          })}
+        </div>
+
         <div className="ml-auto flex items-center gap-2">
-          <input
-            ref={filterRef}
-            type="text"
-            placeholder="Filter…  /  to focus"
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') {
-                e.stopPropagation()
-                if (filter) setFilter('')
-                else e.currentTarget.blur()
-              }
-              if (e.key === 'Enter') {
-                e.currentTarget.blur()
-              }
-            }}
-            className="w-56 rounded-md border border-current/15 bg-current/5 px-2 py-1 text-xs outline-none focus:border-current/30"
-          />
+          {viewMode === 'list' && (
+            <input
+              ref={filterRef}
+              type="text"
+              placeholder="Filter…  /  to focus"
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                  e.stopPropagation()
+                  if (filter) setFilter('')
+                  else e.currentTarget.blur()
+                }
+                if (e.key === 'Enter') {
+                  e.currentTarget.blur()
+                }
+              }}
+              className="w-56 rounded-md border border-current/15 bg-current/5 px-2 py-1 text-xs outline-none focus:border-current/30"
+            />
+          )}
           <button
             type="button"
             onClick={() => void refreshTasks()}
@@ -318,53 +397,73 @@ export function TasksView(): JSX.Element {
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
-        {render.rows.length === 0 && !loading && (
-          <div className="px-6 py-10 text-center text-sm text-current/50">
-            No tasks found. Add <code className="rounded bg-current/10 px-1">- [ ] …</code> lines in any note to see them here.
-          </div>
-        )}
-        {render.rows.map((row, idx) => {
-          if (row.kind === 'header') {
-            const key = row.group
-            const isCollapsed = collapsed[key]
+      {viewMode === 'list' && (
+        <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
+          {render.rows.length === 0 && !loading && (
+            <div className="px-6 py-10 text-center text-sm text-current/50">
+              No tasks found. Add <code className="rounded bg-current/10 px-1">- [ ] …</code> lines in any note to see them here.
+            </div>
+          )}
+          {render.rows.map((row, idx) => {
+            if (row.kind === 'header') {
+              const key = row.group
+              const isCollapsed = collapsed[key]
+              return (
+                <div key={`hdr-${key}`} className="mt-3 first:mt-1">
+                  <button
+                    type="button"
+                    onClick={() => toggleGroup(key)}
+                    className="flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-xs font-semibold uppercase tracking-wide text-current/60 hover:bg-current/5"
+                  >
+                    <span className="w-3">{isCollapsed ? '▸' : '▾'}</span>
+                    <span>{GROUP_LABELS[key]}</span>
+                    <span className="text-current/40">{row.count ?? 0}</span>
+                    {key === 'today' && row.overdueCount ? (
+                      <span className="ml-1 rounded bg-rose-500/15 px-1.5 py-0.5 text-[10px] font-medium text-rose-300">
+                        {row.overdueCount} overdue
+                      </span>
+                    ) : null}
+                  </button>
+                </div>
+              )
+            }
+            const task = row.task!
+            const overdue = isOverdue(task, today)
             return (
-              <div key={`hdr-${key}`} className="mt-3 first:mt-1">
-                <button
-                  type="button"
-                  onClick={() => toggleGroup(key)}
-                  className="flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-xs font-semibold uppercase tracking-wide text-current/60 hover:bg-current/5"
-                >
-                  <span className="w-3">{isCollapsed ? '▸' : '▾'}</span>
-                  <span>{GROUP_LABELS[key]}</span>
-                  <span className="text-current/40">{row.count ?? 0}</span>
-                  {key === 'today' && row.overdueCount ? (
-                    <span className="ml-1 rounded bg-rose-500/15 px-1.5 py-0.5 text-[10px] font-medium text-rose-300">
-                      {row.overdueCount} overdue
-                    </span>
-                  ) : null}
-                </button>
-              </div>
+              <TasksRow
+                key={task.id}
+                task={task}
+                isOverdue={overdue}
+                isCursor={idx === currentRowIdx}
+                onToggle={() => void toggleTaskFromList(task)}
+                onOpen={() => void openTaskAt(task)}
+                onFocusRow={() => {
+                  const ti = taskRowIndices.indexOf(idx)
+                  if (ti >= 0) setCursorIndex(ti)
+                }}
+              />
             )
-          }
-          const task = row.task!
-          const overdue = isOverdue(task, today)
-          return (
-            <TasksRow
-              key={task.id}
-              task={task}
-              isOverdue={overdue}
-              isCursor={idx === currentRowIdx}
-              onToggle={() => void toggleTaskFromList(task)}
-              onOpen={() => void openTaskAt(task)}
-              onFocusRow={() => {
-                const ti = taskRowIndices.indexOf(idx)
-                if (ti >= 0) setCursorIndex(ti)
-              }}
-            />
-          )
-        })}
-      </div>
+          })}
+        </div>
+      )}
+
+      {viewMode === 'calendar' && (
+        <TasksCalendar
+          tasks={tasks}
+          today={today}
+          onOpenTask={(task) => void openTaskAt(task)}
+          onToggleTask={(task) => void toggleTaskFromList(task)}
+        />
+      )}
+
+      {viewMode === 'kanban' && (
+        <TasksKanban
+          tasks={tasks}
+          today={today}
+          onOpenTask={(task) => void openTaskAt(task)}
+          onToggleTask={(task) => void toggleTaskFromList(task)}
+        />
+      )}
 
       {exOpen ? (
         <form
@@ -401,7 +500,11 @@ export function TasksView(): JSX.Element {
         </form>
       ) : (
         <div className="border-t border-current/10 px-4 py-1.5 text-[11px] text-current/40">
-          j/k move · Enter/o open · Space/x toggle · / filter · : command · Esc close
+          {viewMode === 'list'
+            ? 'j/k move · Enter/o open · Space/x toggle · / filter · 1/2/3 view · : command · Esc close'
+            : viewMode === 'calendar'
+              ? 'h/j/k/l day · [ ] month · gt today · Enter open · 1/2/3 view · : command · Esc close'
+              : 'h/l column · j/k card · Space toggle · Enter open · 1/2/3 view · : command · Esc close'}
         </div>
       )}
     </div>

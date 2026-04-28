@@ -206,7 +206,17 @@ interface Prefs {
   /** Sidebar Tags section collapsed — keeps the tag pills hidden
    *  without removing the section entirely. */
   tagsCollapsed: boolean
+  /** Last selected view inside the Tasks tab. List is the v1 default. */
+  tasksViewMode: TasksViewMode
+  /** Column source used when the Tasks Kanban view is active. */
+  kanbanGroupBy: KanbanGroupBy
 }
+
+export type TasksViewMode = 'list' | 'calendar' | 'kanban'
+export type KanbanGroupBy = 'status' | 'priority' | 'folder'
+
+const VALID_TASKS_VIEW_MODES: TasksViewMode[] = ['list', 'calendar', 'kanban']
+const VALID_KANBAN_GROUP_BYS: KanbanGroupBy[] = ['status', 'priority', 'folder']
 const DEFAULT_PREFS: Prefs = {
   vimMode: true,
   keymapOverrides: {},
@@ -254,7 +264,9 @@ const DEFAULT_PREFS: Prefs = {
   pinnedRefKind: 'note',
   noteRefs: {},
   contentAlign: 'center',
-  tagsCollapsed: false
+  tagsCollapsed: false,
+  tasksViewMode: 'list',
+  kanbanGroupBy: 'status'
 }
 /** Coerce any loaded prefs blob into a valid Prefs object, dropping
  *  anything unknown (e.g. tokyo-night left over from earlier versions). */
@@ -429,7 +441,15 @@ function normalizePrefs(p: Partial<Prefs>): Prefs {
         ? p.contentAlign
         : DEFAULT_PREFS.contentAlign,
     tagsCollapsed:
-      typeof p.tagsCollapsed === 'boolean' ? p.tagsCollapsed : DEFAULT_PREFS.tagsCollapsed
+      typeof p.tagsCollapsed === 'boolean' ? p.tagsCollapsed : DEFAULT_PREFS.tagsCollapsed,
+    tasksViewMode:
+      p.tasksViewMode && VALID_TASKS_VIEW_MODES.includes(p.tasksViewMode)
+        ? p.tasksViewMode
+        : DEFAULT_PREFS.tasksViewMode,
+    kanbanGroupBy:
+      p.kanbanGroupBy && VALID_KANBAN_GROUP_BYS.includes(p.kanbanGroupBy)
+        ? p.kanbanGroupBy
+        : DEFAULT_PREFS.kanbanGroupBy
   }
 }
 function loadPrefs(): Prefs {
@@ -748,6 +768,8 @@ function collectPrefs(s: {
   noteRefs: Record<string, { path: string; kind: 'note' | 'asset' }>
   contentAlign: 'center' | 'left'
   tagsCollapsed: boolean
+  tasksViewMode: TasksViewMode
+  kanbanGroupBy: KanbanGroupBy
 }): Prefs {
   return {
     vimMode: s.vimMode,
@@ -793,7 +815,9 @@ function collectPrefs(s: {
     pinnedRefKind: s.pinnedRefKind,
     noteRefs: s.noteRefs,
     contentAlign: s.contentAlign,
-    tagsCollapsed: s.tagsCollapsed
+    tagsCollapsed: s.tagsCollapsed,
+    tasksViewMode: s.tasksViewMode,
+    kanbanGroupBy: s.kanbanGroupBy
   }
 }
 
@@ -1170,6 +1194,14 @@ interface Store {
   tasksLoading: boolean
   tasksFilter: string
   taskCursorIndex: number
+  /** Which sub-view is active inside the Tasks tab. */
+  tasksViewMode: TasksViewMode
+  /** Column source for the Tasks Kanban view. */
+  kanbanGroupBy: KanbanGroupBy
+  /** ISO YYYY-MM-DD currently selected in the Calendar view. null = today. */
+  tasksCalendarSelectedDate: string | null
+  /** First-of-month anchor (ISO YYYY-MM-01) for the Calendar view's grid. */
+  tasksCalendarMonthAnchor: string | null
 
   /** Tags currently selected in the Tags view. The view shows every non-
    *  trash note carrying *any* of these (union), so toggling more tags
@@ -1237,6 +1269,10 @@ interface Store {
    *  trips exactly — works whether or not the note is currently open. */
   toggleTaskFromList: (task: VaultTask) => Promise<void>
   setTasksFilter: (q: string) => void
+  setTasksViewMode: (mode: TasksViewMode) => void
+  setKanbanGroupBy: (group: KanbanGroupBy) => void
+  setTasksCalendarSelectedDate: (iso: string | null) => void
+  setTasksCalendarMonthAnchor: (iso: string | null) => void
   setTaskCursorIndex: (idx: number) => void
   selectNote: (relPath: string | null) => Promise<void>
   openNoteAtOffset: (
@@ -1933,10 +1969,14 @@ export const useStore = create<Store>((set, get) => {
   noteRefs: loadPrefs().noteRefs,
   contentAlign: loadPrefs().contentAlign,
   tagsCollapsed: loadPrefs().tagsCollapsed,
+  tasksViewMode: loadPrefs().tasksViewMode,
+  kanbanGroupBy: loadPrefs().kanbanGroupBy,
   vaultTasks: [],
   tasksLoading: false,
   tasksFilter: '',
   taskCursorIndex: 0,
+  tasksCalendarSelectedDate: null,
+  tasksCalendarMonthAnchor: null,
   selectedTags: [],
   focusedPanel: null,
   sidebarCursorIndex: 0,
@@ -2191,6 +2231,16 @@ export const useStore = create<Store>((set, get) => {
   },
 
   setTasksFilter: (q) => set({ tasksFilter: q, taskCursorIndex: 0 }),
+  setTasksViewMode: (mode) => {
+    set({ tasksViewMode: mode, taskCursorIndex: 0 })
+    savePrefs(collectPrefs(get()))
+  },
+  setKanbanGroupBy: (group) => {
+    set({ kanbanGroupBy: group })
+    savePrefs(collectPrefs(get()))
+  },
+  setTasksCalendarSelectedDate: (iso) => set({ tasksCalendarSelectedDate: iso }),
+  setTasksCalendarMonthAnchor: (iso) => set({ tasksCalendarMonthAnchor: iso }),
   setTaskCursorIndex: (idx) => set({ taskCursorIndex: Math.max(0, idx) }),
 
   selectNote: async (relPath) => {
