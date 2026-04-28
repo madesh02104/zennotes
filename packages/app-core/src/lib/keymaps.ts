@@ -774,6 +774,65 @@ function isModifierKey(key: string): boolean {
   );
 }
 
+/**
+ * Resolve the *physical* key from a KeyboardEvent.
+ *
+ * On macOS, modifier combos like Option+J or Hyper(=⌃⌥⇧⌘)+J produce
+ * transformed glyphs in `event.key` (`ˆ`, `Ô`, …). Using those would
+ * make the recorded shortcut depend on the active layout and fail to
+ * round-trip — `Hyper+J` stored as `Ctrl+Alt+Shift+Mod+Ô` won't match
+ * the next press of the same combo. `event.code` exposes the
+ * layout-independent physical key (`KeyJ`, `Digit1`, `BracketLeft`)
+ * which is what we actually want for letter / digit / symbol keys.
+ *
+ * Falls back to `event.key` for keys without a meaningful physical
+ * mapping in the binding language (Space, Tab, Enter, F1–F24, arrows,
+ * etc.) — these are the same regardless of modifier state.
+ */
+function physicalKeyFromEvent(event: KeyboardEvent): string | null {
+  if (isModifierKey(event.key)) return null;
+  const code = event.code;
+  if (/^Key[A-Z]$/.test(code)) return code.slice(3);
+  if (/^Digit\d$/.test(code)) return code.slice(5);
+  if (/^Numpad\d$/.test(code)) return code.slice(6);
+  switch (code) {
+    case "Minus":
+      return "-";
+    case "Equal":
+      return "=";
+    case "BracketLeft":
+      return "[";
+    case "BracketRight":
+      return "]";
+    case "Backslash":
+      return "\\";
+    case "Semicolon":
+      return ";";
+    case "Quote":
+      return "'";
+    case "Comma":
+      return ",";
+    case "Period":
+      return ".";
+    case "Slash":
+      return "/";
+    case "Backquote":
+      return "`";
+    case "NumpadAdd":
+      return "+";
+    case "NumpadSubtract":
+      return "-";
+    case "NumpadMultiply":
+      return "*";
+    case "NumpadDivide":
+      return "/";
+    case "NumpadDecimal":
+      return ".";
+    default:
+      return null;
+  }
+}
+
 function normalizeKeyName(key: string): string | null {
   if (!key) return null;
   if (isModifierKey(key)) return null;
@@ -927,7 +986,13 @@ export function normalizeKeymapOverrides(input: unknown): KeymapOverrides {
 
 export function shortcutBindingFromEvent(event: KeyboardEvent): string | null {
   const mac = isMacPlatform();
-  const key = normalizeKeyName(event.key);
+  // Prefer event.code for keys that have a physical position (letters,
+  // digits, symbols). This preserves Hyper+J as `Hyper+J` instead of the
+  // transformed glyph macOS produces in event.key under heavy modifier
+  // combos. Falls back to event.key for non-physical keys (Space,
+  // F-keys, arrows, etc.).
+  const physical = physicalKeyFromEvent(event);
+  const key = physical ?? normalizeKeyName(event.key);
   if (!key) return null;
   const modifiers: string[] = [];
   if (event.ctrlKey) modifiers.push(mac ? "Ctrl" : "Mod");
@@ -938,7 +1003,19 @@ export function shortcutBindingFromEvent(event: KeyboardEvent): string | null {
 }
 
 export function sequenceTokenFromEvent(event: KeyboardEvent): string | null {
-  const base = normalizeSequenceBaseToken(event.key);
+  const physical = physicalKeyFromEvent(event);
+  // Sequence tokens are case-sensitive for letters (`<leader>q` vs
+  // `<leader>Q` are different bindings). The physical-key path returns
+  // uppercase letter codes — fold them down so unmodified letters still
+  // produce lowercase tokens, then promote to upper if Shift is held.
+  let base: string | null
+  if (physical && /^[A-Z]$/.test(physical)) {
+    base = event.shiftKey ? physical : physical.toLowerCase()
+  } else if (physical) {
+    base = physical
+  } else {
+    base = normalizeSequenceBaseToken(event.key);
+  }
   if (!base) return null;
   const modifiers: string[] = [];
   if (event.ctrlKey) modifiers.push("Ctrl");

@@ -110,7 +110,7 @@ function applyTheme(prefs: QuickCapturePrefs): void {
   const html = document.documentElement
   const mql = window.matchMedia('(prefers-color-scheme: dark)')
   let id = prefs.themeId
-  if (prefs.themeMode === 'auto') id = resolveAuto(prefs.themeFamily, mql.matches)
+  if (prefs.themeMode === 'auto') id = resolveAuto(prefs.themeFamily, mql.matches, prefs.themeId)
   if (!THEMES.some((t) => t.id === id)) id = DEFAULT_THEME_ID
   html.dataset.theme = id
   html.style.setProperty('--z-editor-font-size', `${prefs.editorFontSize}px`)

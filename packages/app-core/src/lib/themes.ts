@@ -105,8 +105,29 @@ export function findTheme(id: string): ThemeOption {
  * Used when the user selects "auto" — we pick the light or dark flavor of
  * the active family that feels most like its canonical default.
  */
-export function resolveAuto(family: ThemeFamily, prefersDark: boolean): string {
+export function resolveAuto(
+  family: ThemeFamily,
+  prefersDark: boolean,
+  /** Optional current theme id. When provided we try to keep the user's
+   *  variant choice (e.g. "medium" for gruvbox) across system mode flips
+   *  instead of always snapping to the canonical default. */
+  currentThemeId?: string
+): string {
   const targetMode: 'light' | 'dark' = prefersDark ? 'dark' : 'light'
+
+  // Carry the variant across modes when possible: a user who picked
+  // Gruvbox · Hard in light mode should stay on Hard when the system
+  // flips to dark instead of being yanked back to Medium.
+  if (currentThemeId) {
+    const current = THEMES.find((t) => t.id === currentThemeId)
+    if (current && current.family === family && current.variant) {
+      const sameVariant = THEMES.find(
+        (t) =>
+          t.family === family && t.mode === targetMode && t.variant === current.variant
+      )
+      if (sameVariant) return sameVariant.id
+    }
+  }
 
   if (family === 'apple') {
     return targetMode === 'dark' ? 'apple-dark' : 'apple-light'

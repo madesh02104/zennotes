@@ -331,7 +331,7 @@ export const Preview = memo(function Preview({
   }, []);
   const effectiveMode: "light" | "dark" = useMemo(() => {
     const resolvedId =
-      themeMode === "auto" ? resolveAuto(themeFamily, prefersDark) : themeId;
+      themeMode === "auto" ? resolveAuto(themeFamily, prefersDark, themeId) : themeId;
     return THEMES.find((t) => t.id === resolvedId)?.mode ?? "light";
   }, [themeId, themeFamily, themeMode, prefersDark]);
   const selectNote = useStore((s) => s.selectNote);

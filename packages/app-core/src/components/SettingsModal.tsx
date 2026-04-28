@@ -28,7 +28,7 @@ import {
   sequenceTokenFromEvent,
   shortcutBindingFromEvent
 } from '../lib/keymaps'
-import { THEMES, type ThemeFamily, type ThemeMode } from '../lib/themes'
+import { resolveAuto, THEMES, type ThemeFamily, type ThemeMode } from '../lib/themes'
 import { hasSystemFontAccess, listSystemFonts } from '../lib/system-fonts'
 import {
   DEFAULT_SYSTEM_FOLDER_LABELS,
@@ -409,12 +409,41 @@ export function SettingsModal(): JSX.Element {
   //    choice (Latte, Frappé, Macchiato, Mocha / Dark, Dark Dimmed,
   //    Dark HC, Light, Light HC, …). Show them all regardless of mode
   //    so users can pick any variant and have the mode auto-align.
+  // Track `prefers-color-scheme` so the picker reflects what the user
+  // actually sees while in Auto mode. Without this, the contrast row
+  // falls back to whatever mode the *stored* themeId belongs to — which
+  // can drift away from the rendered theme (resolveAuto picks based on
+  // family + system) and makes clicking a contrast variant feel like
+  // it's flipping the whole theme to the wrong mode.
+  const [prefersDark, setPrefersDark] = useState(() =>
+    typeof window !== 'undefined'
+      ? window.matchMedia('(prefers-color-scheme: dark)').matches
+      : false
+  )
+  useEffect(() => {
+    const mql = window.matchMedia('(prefers-color-scheme: dark)')
+    const onChange = (e: MediaQueryListEvent): void => setPrefersDark(e.matches)
+    mql.addEventListener('change', onChange)
+    return () => mql.removeEventListener('change', onChange)
+  }, [])
+
+  /** What mode the app is *actually rendering* right now. */
+  const effectiveMode: 'light' | 'dark' = useMemo(() => {
+    if (themeMode === 'auto') return prefersDark ? 'dark' : 'light'
+    return themeMode
+  }, [themeMode, prefersDark])
+
+  /** Variant id to compare against when highlighting selection. In Auto
+   *  mode this is whatever `resolveAuto` produced, since the stored
+   *  themeId may not match what's painted on screen. */
+  const renderedThemeId = useMemo(
+    () =>
+      themeMode === 'auto' ? resolveAuto(themeFamily, prefersDark, themeId) : themeId,
+    [themeId, themeFamily, themeMode, prefersDark]
+  )
+
   const visibleVariants = useMemo(() => {
     if (themeFamily === 'gruvbox') {
-      const effectiveMode =
-        themeMode === 'auto'
-          ? THEMES.find((t) => t.id === themeId)?.mode ?? 'light'
-          : themeMode
       return THEMES.filter(
         (t) => t.family === 'gruvbox' && t.mode === effectiveMode
       )
@@ -430,16 +459,12 @@ export function SettingsModal(): JSX.Element {
     ]
     if (simpleFamilies.includes(themeFamily)) return []
     return THEMES.filter((t) => t.family === themeFamily)
-  }, [themeFamily, themeMode, themeId])
+  }, [themeFamily, effectiveMode])
 
   const pickFamily = (family: ThemeFamily): void => {
     // When family changes, keep the mode the same and pick the canonical
     // first variant in that family (medium for gruvbox, default for
     // catppuccin/github).
-    const effectiveMode =
-      themeMode === 'auto'
-        ? THEMES.find((t) => t.id === themeId)?.mode ?? 'light'
-        : themeMode
     const preferred: Record<ThemeFamily, { light: string; dark: string }> = {
       apple: { light: 'apple-light', dark: 'apple-dark' },
       gruvbox: { light: 'light-medium', dark: 'dark-medium' },
@@ -475,9 +500,13 @@ export function SettingsModal(): JSX.Element {
   const pickVariant = (id: string): void => {
     const t = THEMES.find((x) => x.id === id)
     if (!t) return
-    // Always snap mode to the variant's native mode so the picker's
-    // explicit selection wins over the mode toggle.
-    setTheme({ id: t.id, family: t.family, mode: t.mode })
+    // Preserve the user's mode toggle. In Auto we keep the mode auto and
+    // store the picked variant — `resolveAuto` will carry the variant
+    // forward when the system flips light/dark. In an explicit mode the
+    // variant's native mode already matches because the picker filtered
+    // by `effectiveMode`.
+    const nextMode: ThemeMode = themeMode === 'auto' ? 'auto' : t.mode
+    setTheme({ id: t.id, family: t.family, mode: nextMode })
   }
 
   const ref = useRef<HTMLDivElement | null>(null)
@@ -600,7 +629,7 @@ export function SettingsModal(): JSX.Element {
                         onClick={() => pickVariant(v.id)}
                         className={[
                           'rounded-xl border px-3 py-1.5 text-xs transition-colors',
-                          themeId === v.id
+                          renderedThemeId === v.id
                             ? 'border-accent/45 bg-accent/10 text-ink-900'
                             : 'border-paper-300/70 bg-paper-100/70 text-ink-700 hover:bg-paper-200/80'
                         ].join(' ')}

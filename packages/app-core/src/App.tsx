@@ -128,7 +128,7 @@ function App(): JSX.Element {
     const apply = (): void => {
       let id = themeId
       if (themeMode === 'auto') {
-        id = resolveAuto(themeFamily, mql.matches)
+        id = resolveAuto(themeFamily, mql.matches, themeId)
       }
       html.dataset.theme = id
     }
