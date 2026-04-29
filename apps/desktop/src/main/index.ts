@@ -20,6 +20,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { IPC } from '@shared/ipc'
 import type {
+  NoteCommentInput,
   NoteFolder,
   RemoteWorkspaceInfo,
   RemoteWorkspaceProfile,
@@ -55,6 +56,7 @@ import {
   loadConfig,
   moveNote,
   moveToTrash,
+  readNoteComments,
   readNote,
   renameFolder,
   renameNote,
@@ -69,6 +71,7 @@ import {
   updateConfig,
   unarchiveNote,
   vaultInfo,
+  writeNoteComments,
   writeNote
 } from './vault'
 import {
@@ -86,6 +89,11 @@ import {
   installMcpForClient,
   uninstallMcpForClient
 } from './mcp-integrations'
+import {
+  getCliInstallStatus,
+  installCli,
+  uninstallCli
+} from './cli-install'
 import {
   checkForAppUpdates,
   downloadAppUpdate,
@@ -1372,6 +1380,22 @@ function registerIpc(): void {
     return await readNote(v.root, relPath)
   })
 
+  handle(IPC.VAULT_READ_COMMENTS, async (_e, relPath: string) => {
+    if (isRemoteWorkspaceActive()) {
+      return await requireRemoteWorkspaceClient().readNoteComments(relPath)
+    }
+    const v = requireVault()
+    return await readNoteComments(v.root, relPath)
+  })
+
+  handle(IPC.VAULT_WRITE_COMMENTS, async (_e, relPath: string, comments: NoteCommentInput[]) => {
+    if (isRemoteWorkspaceActive()) {
+      return await requireRemoteWorkspaceClient().writeNoteComments(relPath, comments)
+    }
+    const v = requireVault()
+    return await writeNoteComments(v.root, relPath, comments)
+  })
+
   handle(IPC.VAULT_SCAN_TASKS, async () => {
     if (isRemoteWorkspaceActive()) return await requireRemoteWorkspaceClient().scanTasks()
     const v = requireVault()
@@ -1664,6 +1688,10 @@ function registerIpc(): void {
       }
     }
   )
+
+  handle(IPC.CLI_GET_STATUS, async () => await getCliInstallStatus())
+  handle(IPC.CLI_INSTALL, async () => await installCli())
+  handle(IPC.CLI_UNINSTALL, async () => await uninstallCli())
 }
 
 /**

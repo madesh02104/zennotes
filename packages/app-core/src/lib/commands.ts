@@ -439,6 +439,16 @@ export function buildCommands(options?: { includeUnavailable?: boolean }): Comma
       }
     },
     {
+      id: 'view.comments-panel',
+      title: 'Toggle Comments Panel',
+      category: 'View',
+      keywords: 'comments annotations discussion margin review',
+      when: () => !!getState().activeNote,
+      run: () => {
+        window.dispatchEvent(new Event('zen:toggle-comments'))
+      }
+    },
+    {
       id: 'view.mode.edit',
       title: 'Switch to Edit Mode',
       category: 'View',
@@ -1228,6 +1238,155 @@ export function buildCommands(options?: { includeUnavailable?: boolean }): Comma
         getState().workspaceMode !== 'remote' &&
         window.zen.getAppInfo().runtime === 'desktop',
       run: () => getState().revealAssetsDir()
+    },
+    {
+      id: 'cli.install',
+      title: 'Install Command-Line Tool (zen)',
+      category: 'CLI',
+      keywords: 'cli zen terminal shell command line install symlink path bin',
+      when: () =>
+        window.zen.getAppInfo().runtime === 'desktop' &&
+        window.zen.getCapabilities().supportsCliInstall,
+      run: async () => {
+        const status = await window.zen.cliGetStatus()
+        if (!status.supportedPlatform) {
+          await confirmApp({
+            title: 'CLI not supported on this platform',
+            description: status.reason ?? 'CLI install is currently macOS- and Linux-only.',
+            confirmLabel: 'OK',
+            cancelLabel: 'Close'
+          })
+          return
+        }
+        if (!status.available) {
+          await confirmApp({
+            title: 'CLI wrapper not bundled',
+            description:
+              status.reason ?? 'The CLI wrapper has not been built yet. Run `npm run build` or open Settings → CLI for details.',
+            confirmLabel: 'OK',
+            cancelLabel: 'Close'
+          })
+          return
+        }
+        if (status.installedAt && status.installedByThisApp) {
+          await confirmApp({
+            title: 'zen is already installed',
+            description: `Installed at ${status.installedAt}. Run \`zen --help\` from any terminal.`,
+            confirmLabel: 'OK',
+            cancelLabel: 'Close'
+          })
+          return
+        }
+        if (status.installedAt && !status.installedByThisApp) {
+          await confirmApp({
+            title: 'A different `zen` already exists',
+            description: `${status.installedAt} is not managed by ZenNotes. Remove it manually if you want ZenNotes to take over.`,
+            confirmLabel: 'OK',
+            cancelLabel: 'Close'
+          })
+          return
+        }
+        const lines: string[] = []
+        if (status.requiresSudo) {
+          lines.push(
+            'macOS will prompt for an admin password because no user-writable directory was found on your PATH.'
+          )
+        }
+        if (status.pathHint) {
+          lines.push(
+            `Heads up: ${status.defaultTarget.replace(/\/[^/]+$/, '')} is not on your PATH yet. Settings → CLI shows the one-line shell snippet you'll need to add after install.`
+          )
+        }
+        const ok = await confirmApp({
+          title: `Install zen to ${status.defaultTarget}?`,
+          description: lines.join('\n\n') || undefined,
+          confirmLabel: 'Install'
+        })
+        if (!ok) return
+        try {
+          const next = await window.zen.cliInstall()
+          const followUp = next.pathHint
+            ? `\n\nAdd ${next.defaultTarget.replace(/\/[^/]+$/, '')} to your PATH so the shell can find it:\n${next.pathHint}`
+            : ''
+          await confirmApp({
+            title: 'zen installed',
+            description: `Symlink created at ${next.installedAt ?? next.defaultTarget}. Open a fresh terminal and run \`zen --help\` to start.${followUp}`,
+            confirmLabel: 'OK',
+            cancelLabel: 'Close'
+          })
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err)
+          if (/canceled/i.test(message)) return
+          await confirmApp({
+            title: 'Install failed',
+            description: message,
+            confirmLabel: 'OK',
+            cancelLabel: 'Close',
+            danger: true
+          })
+        }
+      }
+    },
+    {
+      id: 'cli.uninstall',
+      title: 'Uninstall Command-Line Tool (zen)',
+      category: 'CLI',
+      keywords: 'cli zen terminal shell command line uninstall remove symlink',
+      when: () =>
+        window.zen.getAppInfo().runtime === 'desktop' &&
+        window.zen.getCapabilities().supportsCliInstall,
+      run: async () => {
+        const status = await window.zen.cliGetStatus()
+        if (!status.installedAt) {
+          await confirmApp({
+            title: 'zen is not installed',
+            description: 'There is nothing to uninstall.',
+            confirmLabel: 'OK',
+            cancelLabel: 'Close'
+          })
+          return
+        }
+        if (!status.installedByThisApp) {
+          await confirmApp({
+            title: 'Not managed by ZenNotes',
+            description: `${status.installedAt} was not installed by this app. Remove it manually if you really want it gone.`,
+            confirmLabel: 'OK',
+            cancelLabel: 'Close'
+          })
+          return
+        }
+        const ok = await confirmApp({
+          title: `Remove zen from ${status.installedAt}?`,
+          description:
+            'macOS may prompt for an admin password to remove the symlink. The CLI binary inside the app stays bundled — you can reinstall any time.',
+          confirmLabel: 'Uninstall',
+          danger: true
+        })
+        if (!ok) return
+        try {
+          await window.zen.cliUninstall()
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err)
+          if (/canceled/i.test(message)) return
+          await confirmApp({
+            title: 'Uninstall failed',
+            description: message,
+            confirmLabel: 'OK',
+            cancelLabel: 'Close',
+            danger: true
+          })
+        }
+      }
+    },
+    {
+      id: 'cli.openSettings',
+      title: 'Open CLI Settings',
+      category: 'CLI',
+      keywords: 'cli zen terminal settings command line preferences',
+      when: () =>
+        window.zen.getAppInfo().runtime === 'desktop' &&
+        window.zen.getCapabilities().supportsCliInstall,
+      run: () => getState().setSettingsOpen(true)
     }
   )
 

@@ -3,6 +3,8 @@ import type {
   DirectoryBrowseResult,
   FolderEntry,
   ImportedAsset,
+  NoteComment,
+  NoteCommentInput,
   NoteContent,
   NoteFolder,
   NoteMeta,
@@ -107,6 +109,20 @@ export class RemoteServerClient {
 
   async readNote(relPath: string): Promise<NoteContent> {
     return this.jsonRequest<NoteContent>(`/api/notes/read?path=${encodeURIComponent(relPath)}`)
+  }
+
+  async readNoteComments(relPath: string): Promise<NoteComment[]> {
+    return this.jsonRequest<NoteComment[]>(`/api/comments/read?path=${encodeURIComponent(relPath)}`)
+  }
+
+  async writeNoteComments(
+    relPath: string,
+    comments: NoteCommentInput[]
+  ): Promise<NoteComment[]> {
+    return this.jsonRequest<NoteComment[]>('/api/comments/write', {
+      method: 'POST',
+      body: { path: relPath, comments }
+    })
   }
 
   async scanTasks(): Promise<VaultTask[]> {

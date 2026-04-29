@@ -132,7 +132,7 @@ export const HELP_CORE_CONCEPTS: HelpCard[] = [
   {
     title: 'Context menus are part of the keyboard model',
     body:
-      'ZenNotes treats context menus as keyboard-reachable UI, not mouse-only escape hatches. Use the configured context-menu binding on the selected sidebar or note-list row, or use `Shift+F10` / the system Context Menu key to open the active tab menu from the editor or preview side. The command palette also exposes the same high-value tab actions directly.'
+      'ZenNotes treats context menus as keyboard-reachable UI, not mouse-only escape hatches. Use the configured context-menu binding on the selected sidebar or note-list row. In the editor, select text and press `m` to open the text menu with commenting first; `Shift+F10` / the system Context Menu key still opens the active tab menu when no text is selected. The command palette also exposes the same high-value tab actions directly.'
   },
   {
     title: 'Sessions restore on relaunch',
@@ -293,6 +293,12 @@ export const HELP_SHORTCUT_SECTIONS: HelpShortcutSection[] = [
         action: 'Open date shortcuts',
         detail:
           'Show inline suggestions for Today, Yesterday, and Tomorrow while writing so you can insert dates without leaving the keyboard.'
+      },
+      {
+        keys: 'Select text, then m',
+        action: 'Open text menu',
+        detail:
+          'Open the editor right-click menu from the keyboard. The first action adds a comment to the selected text, matching the review flow used in document editors.'
       },
       {
         keys: 'Type after @',
@@ -559,6 +565,14 @@ export const HELP_SETTINGS: HelpSettingsSection[] = [
     ]
   },
   {
+    title: 'CLI',
+    items: [
+      { label: 'Install Command-Line Tool', detail: 'Symlink the bundled `zen` wrapper into /usr/local/bin so any terminal session can capture, search, and edit notes. macOS prompts for an admin password once. The CLI binary stays packaged with the app, so updates ship together.' },
+      { label: 'Status, path, and quick reference', detail: 'Settings → CLI shows whether `zen` is installed, where the symlink lives, and a copy-able quick reference of the most useful commands. An "External install" badge appears when something else owns /usr/local/bin/zen so ZenNotes never clobbers an unmanaged binary.' },
+      { label: 'Uninstall', detail: 'Removes only the ZenNotes-managed symlink — never an arbitrary binary at /usr/local/bin/zen. The CLI stays inside the app bundle for next time.' }
+    ]
+  },
+  {
     title: 'About',
     items: [
       { label: 'App identity', detail: 'See the ZenNotes app icon, current version, and a short description of the app as a keyboard-first markdown workflow with Vim motions and plain local files.' },
@@ -566,5 +580,48 @@ export const HELP_SETTINGS: HelpSettingsSection[] = [
       { label: 'Website, community, and issue links', detail: 'The app now exposes direct links to the ZenNotes website, Discord, GitHub repository, and issue tracker so support paths stay discoverable.' },
       { label: 'Lumary Labs', detail: 'The About section links to Lumary Labs at lumarylabs.com so company details stay easy to find from inside the app.' }
     ]
+  }
+]
+
+export const HELP_CLI: HelpCard[] = [
+  {
+    title: 'What the CLI is for',
+    body:
+      '`zen` is a command-line companion that talks to your vault directly. It reads and writes the same markdown files the app does, so anything you do in a terminal — capture, search, append, archive, list tasks — shows up in the app instantly. Use it for shell pipelines, scripts, cron jobs, editor plugins (vim, emacs, helix), launcher integrations (Raycast, Alfred), or just because the keyboard is faster.'
+  },
+  {
+    title: 'Install it once from Settings',
+    body:
+      'Open Settings → CLI and click Install. macOS will prompt for an admin password once so ZenNotes can symlink the bundled wrapper into /usr/local/bin/zen. After that, `zen --help` works in any new terminal. You can also run the install from the command palette via "Install Command-Line Tool (zen)".'
+  },
+  {
+    title: 'No app required',
+    body:
+      'The CLI reads from the same vault folder the desktop app uses, so it works whether or not ZenNotes is open. When the app is open, file watchers pick up CLI changes automatically — captures and edits show up live in the sidebar.'
+  },
+  {
+    title: 'Capture is the gateway drug',
+    body:
+      'The fastest way to add a note is `zen capture "..."`. Pipe-friendly: `pbpaste | zen capture --tag idea` lifts the clipboard into a tagged note. The first non-empty line becomes the title.'
+  },
+  {
+    title: 'Read and search from the terminal',
+    body:
+      'Use `zen list` to see recent notes, `zen list --tag work --limit 5` to filter, `zen read inbox/Project.md` to print a body, and `zen search "deadline"` for full-text matches with file:line previews. Add `--json` to any command to get structured output you can pipe into `jq`.'
+  },
+  {
+    title: 'Edit incrementally',
+    body:
+      'Prefer `zen append` and `zen prepend` over `zen write` for journals and running lists — they preserve the rest of the body. Both accept `--body "literal"` or `--body -` to read stdin (so `cat ideas.txt | zen append daily.md --body -` works).'
+  },
+  {
+    title: 'Tasks and folders',
+    body:
+      '`zen task list` enumerates open checkboxes across the vault with stable ids. `zen task toggle <id>` flips a task without opening the note. `zen folder list / create / rename / delete` keep your subfolder tree manageable from the terminal.'
+  },
+  {
+    title: 'MCP for AI agents',
+    body:
+      '`zen mcp` starts the ZenNotes MCP server in stdio mode — the same one Claude Code, Claude Desktop, and Codex use under the hood. Once `zen` is installed, Settings → MCP installs configure the clients to launch `zen mcp` directly, so the install path is one stable absolute path that survives app moves.'
   }
 ]

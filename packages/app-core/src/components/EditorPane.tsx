@@ -6,7 +6,14 @@
  * The store keeps per-path note content (`noteContents`) shared across
  * all panes, so the same note open in two panes stays in sync on edit.
  */
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState
+} from 'react'
 import {
   Annotation,
   Compartment,
@@ -20,6 +27,7 @@ import {
   Decoration,
   type DecorationSet,
   EditorView,
+  WidgetType,
   drawSelection,
   highlightActiveLine,
   highlightActiveLineGutter,
@@ -28,7 +36,7 @@ import {
   tooltips
 } from '@codemirror/view'
 import { Vim, getCM, vim } from '@replit/codemirror-vim'
-import type { NoteFolder } from '@shared/ipc'
+import type { NoteComment, NoteFolder } from '@shared/ipc'
 import {
   defaultKeymap,
   history,
@@ -56,6 +64,7 @@ import { wikilinkSource } from '../lib/cm-wikilinks'
 import { Preview } from './Preview'
 import { ConnectionsPanel } from './ConnectionsPanel'
 import { OutlinePanel } from './OutlinePanel'
+import { CommentsPanel, type CommentDraft } from './CommentsPanel'
 import { ContextMenu, type ContextMenuItem } from './ContextMenu'
 import { TasksView } from './TasksView'
 import { TagView } from './TagView'
@@ -84,6 +93,7 @@ import {
   CloseIcon,
   DocumentIcon,
   FileDownIcon,
+  FeedbackIcon,
   ListTreeIcon,
   PanelLeftIcon,
   PanelRightIcon,
@@ -106,6 +116,8 @@ import {
   hasDroppedFiles
 } from '../lib/editor-drops'
 import { ZEN_SET_PANE_MODE_EVENT, type PaneMode } from '../lib/pane-mode'
+import { resolveCommentAnchor, selectionToCommentAnchor } from '../lib/comments'
+import { ZEN_OPEN_EDITOR_CONTEXT_MENU_EVENT } from '../lib/keyboard-context-menu'
 
 const paperHighlight = HighlightStyle.define([
   // Markdown-level tokens
@@ -191,8 +203,119 @@ const paperHighlight = HighlightStyle.define([
 const programmatic = Annotation.define<boolean>()
 const OUTLINE_JUMP_TOP_MARGIN = 24
 const TASK_JUMP_HIGHLIGHT_MS = 1400
+const EMPTY_COMMENTS: NoteComment[] = []
 const taskJumpHighlightEffect = StateEffect.define<number | null>()
 const taskJumpHighlightDecoration = Decoration.line({ class: 'cm-task-jump-highlight' })
+const commentDecorationEffect = StateEffect.define<{
+  comments: NoteComment[]
+  activeId: string | null
+}>()
+
+function buildCommentDecorations(
+  comments: NoteComment[],
+  activeId: string | null,
+  doc: string
+): DecorationSet {
+  const lineMarkerCounts = new Map<number, number>()
+  const decoratedLines = new Set<number>()
+  const ranges = comments
+    .filter((comment) => comment.resolvedAt == null)
+    .flatMap((comment) => {
+      const anchor = resolveCommentAnchor(comment, doc)
+      if (anchor.to <= anchor.from) return []
+      const active = activeId === comment.id
+      const lineFrom = doc.lastIndexOf('\n', Math.max(0, anchor.from - 1)) + 1
+      const markerIndex = lineMarkerCounts.get(lineFrom) ?? 0
+      lineMarkerCounts.set(lineFrom, markerIndex + 1)
+      const ranges = [
+        Decoration.widget({
+          widget: new CommentMarkerWidget(comment.id, active, markerIndex),
+          side: 1
+        }).range(lineFrom)
+      ]
+      if (!decoratedLines.has(lineFrom)) {
+        decoratedLines.add(lineFrom)
+        ranges.unshift(Decoration.line({ class: 'cm-comment-line' }).range(lineFrom))
+      }
+      if (active) {
+        ranges.unshift(
+          Decoration.mark({ class: 'cm-comment-anchor-active' }).range(anchor.from, anchor.to)
+        )
+      }
+      return ranges
+    })
+  return Decoration.set(ranges, true)
+}
+
+class CommentMarkerWidget extends WidgetType {
+  constructor(
+    private readonly commentId: string,
+    private readonly active: boolean,
+    private readonly markerIndex: number
+  ) {
+    super()
+  }
+
+  eq(other: CommentMarkerWidget): boolean {
+    return (
+      other.commentId === this.commentId &&
+      other.active === this.active &&
+      other.markerIndex === this.markerIndex
+    )
+  }
+
+  toDOM(): HTMLElement {
+    const wrap = document.createElement('span')
+    wrap.className = 'cm-comment-marker-wrap'
+    wrap.style.setProperty('--z-comment-marker-offset', `${this.markerIndex * 26}px`)
+    const button = document.createElement('button')
+    button.type = 'button'
+    button.className = this.active
+      ? 'cm-comment-marker cm-comment-marker-active'
+      : 'cm-comment-marker'
+    button.dataset.commentId = this.commentId
+    button.title = 'Open comment'
+    button.tabIndex = -1
+    button.setAttribute('aria-label', 'Open comment')
+
+    const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+    icon.setAttribute('viewBox', '0 0 24 24')
+    icon.setAttribute('width', '14')
+    icon.setAttribute('height', '14')
+    icon.setAttribute('fill', 'none')
+    icon.setAttribute('stroke', 'currentColor')
+    icon.setAttribute('stroke-width', '1.8')
+    icon.setAttribute('stroke-linecap', 'round')
+    icon.setAttribute('stroke-linejoin', 'round')
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
+    path.setAttribute('d', 'M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z')
+    icon.appendChild(path)
+    button.appendChild(icon)
+    wrap.appendChild(button)
+    return wrap
+  }
+
+  ignoreEvent(): boolean {
+    return false
+  }
+}
+
+const commentDecorationField = StateField.define<DecorationSet>({
+  create: () => Decoration.none,
+  update(value, tr) {
+    let next = value.map(tr.changes)
+    for (const effect of tr.effects) {
+      if (!effect.is(commentDecorationEffect)) continue
+      next = buildCommentDecorations(
+        effect.value.comments,
+        effect.value.activeId,
+        tr.state.doc.toString()
+      )
+    }
+    return next
+  },
+  provide: (field) => EditorView.decorations.from(field)
+})
 const taskJumpHighlightField = StateField.define<DecorationSet>({
   create: () => Decoration.none,
   update(value, tr) {
@@ -226,6 +349,81 @@ function lineNumberExtension(mode: LineNumberMode): Extension {
 }
 
 type TabDropIndicator = { path: string; position: 'before' | 'after' } | null
+type SelectionCommentAction = { x: number; y: number } | null
+const COMMENT_ACTION_WIDTH = 34
+const COMMENT_ACTION_HEIGHT = 34
+
+function clampViewport(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value))
+}
+
+function selectionEdgeCoords(view: EditorView): {
+  left: number
+  right: number
+  top: number
+  bottom: number
+} | null {
+  const sel = view.state.selection.main
+  const head = sel.head
+  const forward = head >= sel.anchor
+  return (
+    view.coordsAtPos(head, forward ? -1 : 1) ??
+    view.coordsAtPos(sel.to, -1) ??
+    view.coordsAtPos(sel.from, 1)
+  )
+}
+
+function selectionEndCoords(view: EditorView): {
+  right: number
+  top: number
+  bottom: number
+} | null {
+  const sel = view.state.selection.main
+  return (
+    view.coordsAtPos(sel.to, -1) ??
+    view.coordsAtPos(sel.to, 1) ??
+    selectionEdgeCoords(view)
+  )
+}
+
+function getSelectionCommentAction(view: EditorView): SelectionCommentAction {
+  const sel = view.state.selection.main
+  const active = document.activeElement
+  const hasFocus = view.hasFocus || (active instanceof Node && view.dom.contains(active))
+  if (sel.empty || !hasFocus) return null
+  const coords = selectionEndCoords(view)
+  if (!coords) return null
+  const editorRect = view.scrollDOM.getBoundingClientRect()
+  const desiredX = coords.right + 10
+  const maxX = Math.min(
+    editorRect.right - COMMENT_ACTION_WIDTH - 12,
+    window.innerWidth - COMMENT_ACTION_WIDTH - 8
+  )
+  return {
+    x: clampViewport(
+      desiredX,
+      editorRect.left + 8,
+      Math.max(editorRect.left + 8, maxX)
+    ),
+    y: clampViewport(
+      coords.top + (coords.bottom - coords.top) / 2 - COMMENT_ACTION_HEIGHT / 2,
+      8,
+      window.innerHeight - COMMENT_ACTION_HEIGHT - 8
+    )
+  }
+}
+
+function getEditorContextMenuPosition(view: EditorView): { x: number; y: number } {
+  const sel = view.state.selection.main
+  const coords = sel.empty
+    ? view.coordsAtPos(sel.head, 1)
+    : selectionEdgeCoords(view)
+  const editorRect = view.dom.getBoundingClientRect()
+  return {
+    x: clampViewport((coords?.right ?? coords?.left ?? editorRect.left + 28) + 8, 8, window.innerWidth - 12),
+    y: clampViewport((coords?.bottom ?? editorRect.top + 32) + 6, 8, window.innerHeight - 12)
+  }
+}
 
 export function EditorPane({ pane }: { pane: PaneLeaf }): JSX.Element {
   const paneId = pane.id
@@ -236,6 +434,10 @@ export function EditorPane({ pane }: { pane: PaneLeaf }): JSX.Element {
 
   const content = useStore((s) => (activeTab ? s.noteContents[activeTab] ?? null : null))
   const isDirty = useStore((s) => (activeTab ? s.noteDirty[activeTab] ?? false : false))
+  const comments = useStore((s) =>
+    activeTab ? s.noteComments[activeTab] ?? EMPTY_COMMENTS : EMPTY_COMMENTS
+  )
+  const activeCommentId = useStore((s) => s.activeCommentId)
   const notes = useStore((s) => s.notes)
   const vault = useStore((s) => s.vault)
   const refreshNotes = useStore((s) => s.refreshNotes)
@@ -258,6 +460,8 @@ export function EditorPane({ pane }: { pane: PaneLeaf }): JSX.Element {
   const unarchiveActive = useStore((s) => s.unarchiveActive)
   const exportActiveNotePdf = useStore((s) => s.exportActiveNotePdf)
   const renameActive = useStore((s) => s.renameActive)
+  const loadNoteComments = useStore((s) => s.loadNoteComments)
+  const setActiveCommentId = useStore((s) => s.setActiveCommentId)
 
   const setEditorViewRef = useStore((s) => s.setEditorViewRef)
   const sidebarOpen = useStore((s) => s.sidebarOpen)
@@ -285,6 +489,10 @@ export function EditorPane({ pane }: { pane: PaneLeaf }): JSX.Element {
   const [mode, setMode] = useState<PaneMode>('edit')
   const [connectionsOpen, setConnectionsOpen] = useState(false)
   const [outlineOpen, setOutlineOpen] = useState(false)
+  const [commentsOpen, setCommentsOpen] = useState(false)
+  const [commentDraft, setCommentDraft] = useState<CommentDraft | null>(null)
+  const [selectionCommentAction, setSelectionCommentAction] =
+    useState<SelectionCommentAction>(null)
   const [paneDropEdge, setPaneDropEdge] = useState<PaneEdge | null>(null)
   const [tabDropIndicator, setTabDropIndicator] = useState<TabDropIndicator>(null)
   const [tabMenu, setTabMenu] = useState<{ x: number; y: number; path: string } | null>(null)
@@ -311,6 +519,7 @@ export function EditorPane({ pane }: { pane: PaneLeaf }): JSX.Element {
   const ignoreEditorScrollRef = useRef(false)
   const ignorePreviewScrollRef = useRef(false)
   const pendingOutlineJumpLineRef = useRef<number | null>(null)
+  const selectionActionFrameRef = useRef<number | null>(null)
   const taskJumpHighlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   /**
    * Path currently rendered in this pane's CodeMirror view. The CM update
@@ -318,6 +527,37 @@ export function EditorPane({ pane }: { pane: PaneLeaf }): JSX.Element {
    * sync effect updates it whenever we swap the view's document.
    */
   const viewPathRef = useRef<string | null>(null)
+
+  const updateSelectionCommentAction = useCallback((view: EditorView | null = viewRef.current): void => {
+    setSelectionCommentAction(view ? getSelectionCommentAction(view) : null)
+  }, [])
+
+  const scheduleSelectionCommentAction = useCallback((view: EditorView | null = viewRef.current): void => {
+    if (selectionActionFrameRef.current != null) {
+      cancelAnimationFrame(selectionActionFrameRef.current)
+    }
+    selectionActionFrameRef.current = requestAnimationFrame(() => {
+      selectionActionFrameRef.current = null
+      updateSelectionCommentAction(view)
+    })
+  }, [updateSelectionCommentAction])
+
+  const openEditorContextMenu = useCallback((): boolean => {
+    const view = viewRef.current
+    if (!view || !viewPathRef.current) return false
+    const pos = getEditorContextMenuPosition(view)
+    const sel = view.state.selection.main
+    setActivePane(paneId)
+    setFocusedPanel('editor')
+    setSelectionCommentAction(null)
+    setEditorMenu({
+      x: pos.x,
+      y: pos.y,
+      hasSelection: !sel.empty
+    })
+    view.focus()
+    return true
+  }, [paneId, setActivePane, setFocusedPanel])
 
   const toggleConnectionsPanel = useCallback(() => {
     setConnectionsOpen((open) => {
@@ -347,6 +587,23 @@ export function EditorPane({ pane }: { pane: PaneLeaf }): JSX.Element {
     setOutlineOpen((open) => !open)
   }, [])
 
+  const toggleCommentsPanel = useCallback(() => {
+    setCommentsOpen((open) => !open)
+  }, [])
+
+  const closeRightPanels = useCallback(() => {
+    setConnectionsOpen(false)
+    setConnectionPreview(null)
+    setCommentsOpen(false)
+    setCommentDraft(null)
+    setActiveCommentId(null)
+    setOutlineOpen(false)
+    if (focusedPanel === 'connections' || focusedPanel === 'hoverpreview') {
+      setFocusedPanel('editor')
+      viewRef.current?.focus()
+    }
+  }, [focusedPanel, setActiveCommentId, setConnectionPreview, setFocusedPanel])
+
   const applyPaneMode = useCallback((nextMode: PaneMode) => {
     setMode(nextMode)
     setActivePane(paneId)
@@ -370,6 +627,24 @@ export function EditorPane({ pane }: { pane: PaneLeaf }): JSX.Element {
     window.addEventListener('zen:toggle-outline', handler)
     return () => window.removeEventListener('zen:toggle-outline', handler)
   }, [isActive, toggleOutlinePanel])
+
+  useEffect(() => {
+    if (!isActive) return
+    const handler = (): void => {
+      toggleCommentsPanel()
+    }
+    window.addEventListener('zen:toggle-comments', handler)
+    return () => window.removeEventListener('zen:toggle-comments', handler)
+  }, [isActive, toggleCommentsPanel])
+
+  useEffect(() => {
+    if (!isActive) return
+    const handler = (): void => {
+      openEditorContextMenu()
+    }
+    window.addEventListener(ZEN_OPEN_EDITOR_CONTEXT_MENU_EVENT, handler)
+    return () => window.removeEventListener(ZEN_OPEN_EDITOR_CONTEXT_MENU_EVENT, handler)
+  }, [isActive, openEditorContextMenu])
 
   // `zen:set-pane-mode` — active-pane-only route for command palette and
   // vim ex commands that switch the current note between Edit / Split /
@@ -415,6 +690,53 @@ export function EditorPane({ pane }: { pane: PaneLeaf }): JSX.Element {
     }
   }, [applyPaneMode, commitOutlineJump, mode, paneId, setActivePane, setFocusedPanel])
 
+  const clearCommentDraft = useCallback((): void => {
+    setCommentDraft(null)
+  }, [])
+
+  const captureCommentDraft = useCallback((): CommentDraft | null => {
+    const view = viewRef.current
+    if (!view || !content) return null
+    const sel = view.state.selection.main
+    const doc = view.state.doc.toString()
+    let from = sel.from
+    let to = sel.to
+    if (sel.empty) {
+      const line = view.state.doc.lineAt(sel.head)
+      from = line.from
+      to = line.to
+    }
+    const draft = selectionToCommentAnchor(doc, from, to)
+    setCommentDraft(draft)
+    setCommentsOpen(true)
+    setActiveCommentId(null)
+    setSelectionCommentAction(null)
+    setActivePane(paneId)
+    setFocusedPanel('editor')
+    return draft
+  }, [content, paneId, setActiveCommentId, setActivePane, setFocusedPanel])
+
+  const jumpToComment = useCallback((comment: NoteComment) => {
+    const view = viewRef.current
+    setActivePane(paneId)
+    setFocusedPanel('editor')
+    setActiveCommentId(comment.id)
+    if (!view) return
+    if (mode === 'preview') {
+      applyPaneMode('edit')
+    }
+    const anchor = resolveCommentAnchor(comment, view.state.doc.toString())
+    const selection =
+      anchor.to > anchor.from
+        ? { anchor: anchor.from, head: anchor.to }
+        : { anchor: anchor.from }
+    view.dispatch({
+      selection,
+      effects: EditorView.scrollIntoView(anchor.from, { y: 'center' })
+    })
+    view.focus()
+  }, [applyPaneMode, mode, paneId, setActiveCommentId, setActivePane, setFocusedPanel])
+
   useEffect(() => {
     const pendingLine = pendingOutlineJumpLineRef.current
     if (pendingLine == null) return
@@ -448,6 +770,11 @@ export function EditorPane({ pane }: { pane: PaneLeaf }): JSX.Element {
   const setContainerRef = useCallback(
     (el: HTMLDivElement | null) => {
       if (!el) {
+        if (selectionActionFrameRef.current != null) {
+          cancelAnimationFrame(selectionActionFrameRef.current)
+          selectionActionFrameRef.current = null
+        }
+        setSelectionCommentAction(null)
         const existingView = viewRef.current
         if (
           existingView &&
@@ -479,6 +806,7 @@ export function EditorPane({ pane }: { pane: PaneLeaf }): JSX.Element {
           drawSelection(),
           highlightActiveLine(),
           taskJumpHighlightField,
+          commentDecorationField,
           wordWrapCompartment.of(s0.wordWrap ? EditorView.lineWrapping : []),
           markdown({ base: markdownLanguage, codeLanguages: resolveCodeLanguage, addKeymap: true }),
           headingFolding(),
@@ -513,9 +841,57 @@ export function EditorPane({ pane }: { pane: PaneLeaf }): JSX.Element {
             ...completionKeymap
           ]),
           EditorView.domEventHandlers({
+            mousedown: (event) => {
+              const target = event.target as HTMLElement | null
+              const marker = target?.closest<HTMLElement>('.cm-comment-marker[data-comment-id]')
+              const commentId = marker?.dataset.commentId
+              if (!commentId) return false
+              event.preventDefault()
+              event.stopPropagation()
+              setActivePane(paneId)
+              setFocusedPanel('editor')
+              setActiveCommentId(commentId)
+              setCommentsOpen(true)
+              setCommentDraft(null)
+              setSelectionCommentAction(null)
+              return true
+            },
+            click: (event) => {
+              const target = event.target as HTMLElement | null
+              const marker = target?.closest<HTMLElement>('.cm-comment-marker[data-comment-id]')
+              const commentId = marker?.dataset.commentId
+              if (!commentId) return false
+              event.preventDefault()
+              event.stopPropagation()
+              setActivePane(paneId)
+              setFocusedPanel('editor')
+              setActiveCommentId(commentId)
+              setCommentsOpen(true)
+              setCommentDraft(null)
+              setSelectionCommentAction(null)
+              return true
+            },
             keydown: (event, view) => {
-              if (event.key !== 'Escape') return false
               const state = useStore.getState()
+              if (
+                event.key === 'm' &&
+                !event.metaKey &&
+                !event.ctrlKey &&
+                !event.altKey &&
+                !event.shiftKey &&
+                state.vimMode
+              ) {
+                const cm = getCM(view)
+                const insertMode = !!cm?.state.vim?.insertMode
+                const sel = view.state.selection.main
+                if (!insertMode && !sel.empty) {
+                  event.preventDefault()
+                  event.stopPropagation()
+                  openEditorContextMenu()
+                  return true
+                }
+              }
+              if (event.key !== 'Escape') return false
               if (!state.vimMode) return false
               const cm = getCM(view)
               if (!cm?.state.vim?.insertMode) return false
@@ -526,6 +902,9 @@ export function EditorPane({ pane }: { pane: PaneLeaf }): JSX.Element {
             }
           }),
           EditorView.updateListener.of((upd) => {
+            if (upd.selectionSet || upd.docChanged || upd.focusChanged || upd.viewportChanged || upd.geometryChanged) {
+              scheduleSelectionCommentAction(upd.view)
+            }
             if (!upd.docChanged) return
             if (upd.transactions.some((tr: Transaction) => tr.annotation(programmatic))) return
             const path = viewPathRef.current
@@ -541,7 +920,16 @@ export function EditorPane({ pane }: { pane: PaneLeaf }): JSX.Element {
         setEditorViewRef(view)
       }
     },
-    [paneId, setEditorViewRef, updateNoteBody]
+    [
+      openEditorContextMenu,
+      paneId,
+      scheduleSelectionCommentAction,
+      setActiveCommentId,
+      setActivePane,
+      setEditorViewRef,
+      setFocusedPanel,
+      updateNoteBody
+    ]
   )
 
   // Register our view as the focused editor whenever our pane is active.
@@ -551,6 +939,16 @@ export function EditorPane({ pane }: { pane: PaneLeaf }): JSX.Element {
     if (!view) return
     setEditorViewRef(view)
   }, [isActive, setEditorViewRef, activeTab])
+
+  useEffect(() => {
+    const refresh = (): void => scheduleSelectionCommentAction()
+    window.addEventListener('resize', refresh)
+    window.addEventListener('scroll', refresh, true)
+    return () => {
+      window.removeEventListener('resize', refresh)
+      window.removeEventListener('scroll', refresh, true)
+    }
+  }, [scheduleSelectionCommentAction])
 
   // Sync CM doc to external content changes (file watcher, peer panes, tab switch).
   useEffect(() => {
@@ -573,6 +971,22 @@ export function EditorPane({ pane }: { pane: PaneLeaf }): JSX.Element {
     })
     viewPathRef.current = nextPath
   }, [content?.body, content?.path])
+
+  useEffect(() => {
+    if (!content) return
+    void loadNoteComments(content.path)
+  }, [content?.path, loadNoteComments])
+
+  useEffect(() => {
+    const view = viewRef.current
+    if (!view) return
+    view.dispatch({
+      effects: commentDecorationEffect.of({
+        comments,
+        activeId: activeCommentId
+      })
+    })
+  }, [activeCommentId, comments, content?.path])
 
   // Toggle Vim / live-preview / line-numbers via compartments.
   useEffect(() => {
@@ -1403,6 +1817,12 @@ export function EditorPane({ pane }: { pane: PaneLeaf }): JSX.Element {
     ]
   )
 
+  const openCommentCount = useMemo(
+    () => comments.filter((comment) => comment.resolvedAt == null).length,
+    [comments]
+  )
+  const rightPanelOpen = connectionsOpen || commentsOpen || outlineOpen
+
   const toolbar = useMemo(() => {
     if (!content) return null
     const folder = content.folder
@@ -1416,6 +1836,17 @@ export function EditorPane({ pane }: { pane: PaneLeaf }): JSX.Element {
           onClick={toggleConnectionsPanel}
         >
           <PanelRightIcon />
+        </IconBtn>
+        <IconBtn
+          title={
+            commentsOpen
+              ? 'Hide comments'
+              : `Show comments${openCommentCount > 0 ? ` (${openCommentCount})` : ''}`
+          }
+          active={commentsOpen}
+          onClick={toggleCommentsPanel}
+        >
+          <FeedbackIcon />
         </IconBtn>
         <IconBtn
           title={outlineOpen ? 'Hide outline' : 'Show outline'}
@@ -1443,14 +1874,11 @@ export function EditorPane({ pane }: { pane: PaneLeaf }): JSX.Element {
         <IconBtn title={`Move to ${folderLabels.trash.toLowerCase()}`} onClick={() => void trashActive()}>
           <TrashIcon />
         </IconBtn>
-        <IconBtn
-          title="Close note (⌘W / :q)"
-          onClick={() => {
-            if (activeTab) void closeTabInPane(paneId, activeTab)
-          }}
-        >
-          <CloseIcon />
-        </IconBtn>
+        {rightPanelOpen && (
+          <IconBtn title="Close right panel" onClick={closeRightPanels}>
+            <CloseIcon />
+          </IconBtn>
+        )}
       </div>
     )
   }, [
@@ -1458,16 +1886,18 @@ export function EditorPane({ pane }: { pane: PaneLeaf }): JSX.Element {
     mode,
     connectionsOpen,
     toggleConnectionsPanel,
+    commentsOpen,
+    openCommentCount,
+    toggleCommentsPanel,
     outlineOpen,
     toggleOutlinePanel,
+    rightPanelOpen,
+    closeRightPanels,
     trashActive,
     archiveActive,
     restoreActive,
     unarchiveActive,
-    exportActiveNotePdf,
-    closeTabInPane,
-    activeTab,
-    paneId
+    exportActiveNotePdf
   ])
 
   const showEditor = !!content && mode !== 'preview'
@@ -1612,6 +2042,7 @@ export function EditorPane({ pane }: { pane: PaneLeaf }): JSX.Element {
                   e.preventDefault()
                   view.focus()
                   const sel = view.state.selection.main
+                  setSelectionCommentAction(null)
                   setEditorMenu({
                     x: e.clientX,
                     y: e.clientY,
@@ -1668,10 +2099,42 @@ export function EditorPane({ pane }: { pane: PaneLeaf }): JSX.Element {
           )}
         </div>
         {content && connectionsOpen && isActive && !zenMode && <ConnectionsPanel note={content} />}
+        {content && commentsOpen && !zenMode && (
+          <CommentsPanel
+            note={content}
+            draft={commentDraft}
+            onCaptureDraft={captureCommentDraft}
+            onClearDraft={clearCommentDraft}
+            onJump={jumpToComment}
+          />
+        )}
         {content && outlineOpen && !zenMode && (
           <OutlinePanel note={content} onJump={jumpToOutlineLine} />
         )}
       </div>
+      {content &&
+        showEditor &&
+        selectionCommentAction &&
+        !commentDraft &&
+        !zenMode && (
+          <button
+            type="button"
+            data-selection-comment-action
+            title="Add comment"
+            aria-label="Add comment to selected text"
+            onMouseDown={(event) => {
+              event.preventDefault()
+              event.stopPropagation()
+            }}
+            onClick={() => {
+              captureCommentDraft()
+            }}
+            className="fixed z-50 flex h-[34px] w-[34px] items-center justify-center rounded-lg border border-paper-300/75 bg-paper-100/92 text-ink-700 shadow-[0_10px_24px_-18px_rgb(var(--z-shadow)/0.7),0_0_0_1px_rgb(var(--z-bg)/0.55)] backdrop-blur transition-colors hover:border-accent/45 hover:bg-paper-50 hover:text-accent"
+            style={{ left: selectionCommentAction.x, top: selectionCommentAction.y }}
+          >
+            <FeedbackIcon width={16} height={16} />
+          </button>
+        )}
       {tabMenu && (
         <ContextMenu
           x={tabMenu.x}
@@ -1684,7 +2147,11 @@ export function EditorPane({ pane }: { pane: PaneLeaf }): JSX.Element {
         <ContextMenu
           x={editorMenu.x}
           y={editorMenu.y}
-          items={buildEditorContextItems(viewRef.current, editorMenu.hasSelection)}
+          items={buildEditorContextItems(
+            viewRef.current,
+            editorMenu.hasSelection,
+            captureCommentDraft
+          )}
           onClose={() => setEditorMenu(null)}
         />
       )}
@@ -1698,7 +2165,8 @@ export function EditorPane({ pane }: { pane: PaneLeaf }): JSX.Element {
  */
 function buildEditorContextItems(
   view: EditorView | null,
-  hasSelection: boolean
+  hasSelection: boolean,
+  onAddComment: () => void
 ): ContextMenuItem[] {
   if (!view) return []
 
@@ -1741,6 +2209,16 @@ function buildEditorContextItems(
   }
 
   return [
+    {
+      label: 'Add comment',
+      hint: 'Enter',
+      icon: <FeedbackIcon width={14} height={14} />,
+      disabled: !hasSelection,
+      onSelect: async () => {
+        onAddComment()
+      }
+    },
+    { kind: 'separator' },
     { label: 'Cut', hint: '⌘X', disabled: !hasSelection, onSelect: cut },
     { label: 'Copy', hint: '⌘C', disabled: !hasSelection, onSelect: copy },
     { label: 'Paste', hint: '⌘V', onSelect: paste },

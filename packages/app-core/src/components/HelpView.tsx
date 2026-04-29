@@ -3,6 +3,7 @@ import { useStore } from '../store'
 import { buildCommands, type Command } from '../lib/commands'
 import { getKeymapDisplay, type KeymapId, type KeymapOverrides } from '../lib/keymaps'
 import {
+  HELP_CLI,
   HELP_CORE_CONCEPTS,
   HELP_HOW_TO_GUIDES,
   HELP_QUICK_START,
@@ -143,6 +144,7 @@ const HELP_SECTION_LINKS = [
   { id: 'help-shortcuts', label: 'Shortcuts' },
   { id: 'help-vim', label: 'Vim + Ex' },
   { id: 'help-commands', label: 'Commands' },
+  { id: 'help-cli', label: 'CLI' },
   { id: 'help-settings', label: 'Settings' }
 ]
 
@@ -156,7 +158,8 @@ const COMMAND_CATEGORY_ORDER = [
   'Reference',
   'UI',
   'Tag',
-  'App'
+  'App',
+  'CLI'
 ]
 
 function commandExAlias(id: string): string {
@@ -271,6 +274,12 @@ export function HelpView(): JSX.Element {
         }
         return null
       }).filter((section): section is (typeof HELP_SETTINGS)[number] => !!section),
+    [deferredQuery]
+  )
+
+  const cliCards = useMemo(
+    () =>
+      HELP_CLI.filter((card) => matchesQuery(deferredQuery, card.title, card.body)),
     [deferredQuery]
   )
 
@@ -624,6 +633,20 @@ export function HelpView(): JSX.Element {
                         ))}
                       </div>
                     </div>
+                  ))}
+                </div>
+              </SectionShell>
+            )}
+
+            {cliCards.length > 0 && (
+              <SectionShell
+                id="help-cli"
+                title="Command-Line Tool (zen)"
+                subtitle="Capture, search, and edit your vault from any terminal. Install once from Settings → CLI."
+              >
+                <div className="grid gap-4 lg:grid-cols-2">
+                  {cliCards.map((card) => (
+                    <InfoCard key={card.title} title={card.title} body={card.body} />
                   ))}
                 </div>
               </SectionShell>

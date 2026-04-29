@@ -19,12 +19,18 @@ import {
   matchesSequenceToken,
   sequenceTokenFromEvent
 } from '../lib/keymaps'
-import { dispatchKeyboardContextMenu, findTabContextMenuTarget } from '../lib/keyboard-context-menu'
+import {
+  ZEN_OPEN_EDITOR_CONTEXT_MENU_EVENT,
+  dispatchKeyboardContextMenu,
+  findTabContextMenuTarget
+} from '../lib/keyboard-context-menu'
 
 function escapeForAttr(value: string): string {
   if (typeof CSS !== 'undefined' && typeof CSS.escape === 'function') return CSS.escape(value)
   return value.replace(/["\\]/g, '\\$&')
 }
+
+type IndexedDatasetKey = 'sidebarIdx' | 'notelistIdx' | 'connectionsIdx' | 'commentsIdx'
 
 /**
  * Global vim-style keyboard navigation layer.
@@ -322,6 +328,7 @@ export function VimNav(): JSX.Element | null {
           state.noteListOpen,
           state.unifiedSidebar,
           document.querySelector('[data-connections-panel]') !== null,
+          document.querySelector('[data-comments-panel]') !== null,
           isTasksViewActive(state)
         )
         const direction =
@@ -355,6 +362,11 @@ export function VimNav(): JSX.Element | null {
           // keyboard handler fires off window keydown. Just blur whatever
           // had DOM focus so the sidebar/notelist stop intercepting keys.
           ;(document.activeElement as HTMLElement)?.blur()
+        } else if (next === 'comments') {
+          ;(document.activeElement as HTMLElement)?.blur()
+          requestAnimationFrame(() => {
+            focusCommentsPanel(state)
+          })
         } else {
           // Steal focus away from the editor so it stops processing keys
           ;(document.activeElement as HTMLElement)?.blur()
@@ -561,6 +573,18 @@ export function VimNav(): JSX.Element | null {
         }
       }
 
+      const wantsEditorTextContextMenu =
+        isEditorFocused(state.editorViewRef) &&
+        !editorInsertMode &&
+        !state.editorViewRef?.state.selection.main.empty &&
+        (matchesSequenceToken(e, overrides, 'nav.contextMenu') || wantsNativeContextMenuKey(e))
+      if (wantsEditorTextContextMenu) {
+        e.preventDefault()
+        e.stopImmediatePropagation()
+        window.dispatchEvent(new Event(ZEN_OPEN_EDITOR_CONTEXT_MENU_EVENT))
+        return
+      }
+
       // ------- Sidebar navigation (explicit) -----------------------------
       // When focusedPanel is 'sidebar', always handle here — even if the
       // editor still holds stale DOM focus from a previous interaction.
@@ -574,6 +598,11 @@ export function VimNav(): JSX.Element | null {
         return
       }
 
+      if (state.focusedPanel === 'comments') {
+        handleCommentsKey(e, state)
+        return
+      }
+
       if (state.focusedPanel === 'tabs') {
         handleTabsKey(e, state)
         return
@@ -584,20 +613,28 @@ export function VimNav(): JSX.Element | null {
         return
       }
 
-      const wantsEditorTabMenu =
-        wantsNativeContextMenuKey(e) &&
-        (isEditorFocused(state.editorViewRef) ||
-          (previewEl ? isPreviewNavigationActive(previewEl, state, target) : false))
-      if (wantsEditorTabMenu && openActiveTabContextMenu(state)) {
-        e.preventDefault()
-        e.stopImmediatePropagation()
-        return
-      }
-
       // ------- Editor focused -------------------------------------------
       if (isEditorFocused(state.editorViewRef)) {
         if (isEditorInsertMode(state.editorViewRef, state.vimMode)) {
           resetLeader()
+        }
+
+        const hasEditorSelection = !state.editorViewRef?.state.selection.main.empty
+        const wantsTextContextMenu =
+          hasEditorSelection &&
+          !isEditorInsertMode(state.editorViewRef, state.vimMode) &&
+          (matchesSequenceToken(e, overrides, 'nav.contextMenu') || wantsNativeContextMenuKey(e))
+        if (wantsTextContextMenu) {
+          e.preventDefault()
+          e.stopImmediatePropagation()
+          window.dispatchEvent(new Event(ZEN_OPEN_EDITOR_CONTEXT_MENU_EVENT))
+          return
+        }
+
+        if (wantsNativeContextMenuKey(e) && openActiveTabContextMenu(state)) {
+          e.preventDefault()
+          e.stopImmediatePropagation()
+          return
         }
 
         if (
@@ -614,6 +651,16 @@ export function VimNav(): JSX.Element | null {
       resetLeader()
 
       // ------- Preview navigation --------------------------------------
+      const wantsPreviewTabMenu =
+        wantsNativeContextMenuKey(e) &&
+        previewEl &&
+        isPreviewNavigationActive(previewEl, state, target)
+      if (wantsPreviewTabMenu && openActiveTabContextMenu(state)) {
+        e.preventDefault()
+        e.stopImmediatePropagation()
+        return
+      }
+
       if (previewEl && isPreviewNavigationActive(previewEl, state, target)) {
         handlePreviewKey(e, previewEl, state)
         return
@@ -960,6 +1007,122 @@ export function VimNav(): JSX.Element | null {
     }
   }
 
+  function handleCommentsKey(e: KeyboardEvent, state: ReturnType<typeof useStore.getState>): void {
+    const key = e.key
+    const overrides = state.keymapOverrides
+    const target = e.target as HTMLElement | null
+    const nativeButtonActivation =
+      !!target?.closest('[data-comment-card-control]') &&
+      (key === 'Enter' || key === ' ')
+    if (nativeButtonActivation) return
+
+    const items = getCommentItems()
+    const count = items.length
+    const max = count - 1
+    const currentPos = findCommentPosition(items, state.activeCommentId)
+    const wantsHandledKey =
+      matchesSequenceToken(e, overrides, 'nav.moveDown') ||
+      matchesSequenceToken(e, overrides, 'nav.moveUp') ||
+      matchesSequenceToken(e, overrides, 'nav.jumpBottom') ||
+      sequenceTokenFromEvent(e) === getSequenceTokens(overrides, 'nav.jumpTop')[0] ||
+      matchesSequenceToken(e, overrides, 'nav.openSideItem') ||
+      matchesSequenceToken(e, overrides, 'nav.back') ||
+      matchesSequenceToken(e, overrides, 'nav.filter') ||
+      matchesSequenceToken(e, overrides, 'vim.hintMode') ||
+      key === 'Enter' ||
+      key === 'o' ||
+      key === 'e' ||
+      key === 'r' ||
+      key === 'd' ||
+      key === 'n' ||
+      key === '+' ||
+      key === 'Backspace' ||
+      key === 'Delete' ||
+      key === 'Escape' ||
+      key === 'ArrowDown' ||
+      key === 'ArrowUp' ||
+      key === 'ArrowLeft' ||
+      key === 'ArrowRight'
+    if (!wantsHandledKey) return
+
+    e.preventDefault()
+    e.stopImmediatePropagation()
+    if (state.focusedPanel !== 'comments') state.setFocusedPanel('comments')
+    document.querySelector<HTMLElement>('[data-comments-panel]')?.focus({ preventScroll: true })
+
+    if (key === 'Escape' || matchesSequenceToken(e, overrides, 'nav.back') || key === 'ArrowLeft') {
+      focusEditor()
+      return
+    }
+    if (key === 'n' || key === '+') {
+      document.querySelector<HTMLElement>('[data-comments-new]')?.click()
+      return
+    }
+    if (matchesSequenceToken(e, overrides, 'nav.filter')) {
+      state.setSearchOpen(true)
+      return
+    }
+    if (matchesSequenceToken(e, overrides, 'vim.hintMode')) {
+      setHint(true)
+      return
+    }
+
+    if (count === 0) return
+
+    if (matchesSequenceToken(e, overrides, 'nav.moveDown') || key === 'ArrowDown') {
+      scrollToCommentElement(items[Math.min(currentPos + 1, max)], state)
+      return
+    }
+    if (matchesSequenceToken(e, overrides, 'nav.moveUp') || key === 'ArrowUp') {
+      scrollToCommentElement(items[Math.max(currentPos - 1, 0)], state)
+      return
+    }
+    if (matchesSequenceToken(e, overrides, 'nav.jumpBottom')) {
+      scrollToCommentElement(items[max], state)
+      return
+    }
+    if (
+      advanceSequence(
+        e,
+        getKeymapBinding(overrides, 'nav.jumpTop'),
+        jumpTopPending,
+        jumpTopTimer,
+        () => {
+          scrollToCommentElement(items[0], state)
+        },
+        () => {
+          e.preventDefault()
+          e.stopImmediatePropagation()
+        },
+        300
+      )
+    ) {
+      return
+    }
+
+    const current = items[currentPos]
+    if (
+      key === 'Enter' ||
+      key === 'o' ||
+      key === 'ArrowRight' ||
+      matchesSequenceToken(e, overrides, 'nav.openSideItem')
+    ) {
+      activateCommentItem(current)
+      return
+    }
+    if (key === 'e') {
+      clickCommentAction(current, 'edit')
+      return
+    }
+    if (key === 'r') {
+      clickCommentAction(current, 'resolve')
+      return
+    }
+    if (key === 'd' || key === 'Backspace' || key === 'Delete') {
+      clickCommentAction(current, 'delete')
+    }
+  }
+
   function handleTabsKey(e: KeyboardEvent, state: ReturnType<typeof useStore.getState>): void {
     const key = e.key
     const overrides = state.keymapOverrides
@@ -1216,7 +1379,7 @@ export function VimNav(): JSX.Element | null {
 
   function getIndexedElements(
     selector: string,
-    datasetKey: 'sidebarIdx' | 'notelistIdx' | 'connectionsIdx'
+    datasetKey: IndexedDatasetKey
   ): HTMLElement[] {
     return [...document.querySelectorAll<HTMLElement>(selector)]
       .filter((el) => el.getClientRects().length > 0)
@@ -1238,7 +1401,7 @@ export function VimNav(): JSX.Element | null {
 
   function getIndexedValue(
     el: HTMLElement | null,
-    datasetKey: 'sidebarIdx' | 'notelistIdx' | 'connectionsIdx'
+    datasetKey: IndexedDatasetKey
   ): number {
     const value = Number(el?.dataset[datasetKey] ?? -1)
     return Number.isFinite(value) ? value : -1
@@ -1247,7 +1410,7 @@ export function VimNav(): JSX.Element | null {
   /** Find position in sorted items array by stored cursor index (no DOM focus dependency). */
   function findPositionByIndex(
     items: HTMLElement[],
-    datasetKey: 'sidebarIdx' | 'notelistIdx' | 'connectionsIdx',
+    datasetKey: IndexedDatasetKey,
     cursorIndex: number
   ): number {
     const exact = items.findIndex((item) => getIndexedValue(item, datasetKey) === cursorIndex)
@@ -1259,7 +1422,7 @@ export function VimNav(): JSX.Element | null {
   /** Update the cursor index and scroll the element into view. */
   function scrollToIndexedElement(
     el: HTMLElement | undefined,
-    datasetKey: 'sidebarIdx' | 'notelistIdx' | 'connectionsIdx',
+    datasetKey: IndexedDatasetKey,
     setIndex: (idx: number) => void
   ): void {
     if (!el) return
@@ -1267,6 +1430,45 @@ export function VimNav(): JSX.Element | null {
     if (idx < 0) return
     setIndex(idx)
     el.scrollIntoView({ block: 'nearest' })
+  }
+
+  function getCommentItems(): HTMLElement[] {
+    return getIndexedElements('[data-comments-idx]', 'commentsIdx')
+  }
+
+  function findCommentPosition(items: HTMLElement[], activeCommentId: string | null): number {
+    if (items.length === 0) return 0
+    if (!activeCommentId) return 0
+    const exact = items.findIndex((item) => item.dataset.commentId === activeCommentId)
+    return exact >= 0 ? exact : 0
+  }
+
+  function scrollToCommentElement(
+    el: HTMLElement | undefined,
+    state: ReturnType<typeof useStore.getState>
+  ): void {
+    if (!el) return
+    const commentId = el.dataset.commentId
+    if (commentId) state.setActiveCommentId(commentId)
+    el.scrollIntoView({ block: 'nearest' })
+  }
+
+  function focusCommentsPanel(state: ReturnType<typeof useStore.getState>): void {
+    const panel = document.querySelector<HTMLElement>('[data-comments-panel]')
+    panel?.focus({ preventScroll: true })
+    const items = getCommentItems()
+    if (items.length === 0) return
+    const pos = findCommentPosition(items, state.activeCommentId)
+    scrollToCommentElement(items[pos], state)
+  }
+
+  function activateCommentItem(el: HTMLElement | undefined): void {
+    if (!el) return
+    el.click()
+  }
+
+  function clickCommentAction(el: HTMLElement | undefined, action: string): void {
+    el?.querySelector<HTMLElement>(`[data-comment-action="${action}"]`)?.click()
   }
 
   function openContextMenuForIndexedElement(el: HTMLElement | undefined): void {

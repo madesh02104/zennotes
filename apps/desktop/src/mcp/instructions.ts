@@ -36,6 +36,29 @@ the subject itself.
    trivial notes with a \`## Related\` section.
 5. **Tags are scarce.** 0\u20132 per note. Folders already classify;
    don\u2019t repeat them as tags.
+6. **Trust the \`path\` other tools return.** Every tool that creates,
+   moves, or finds a note returns a canonical \`path\` field. Pass that
+   path back verbatim to follow-up tools. Never construct a path by
+   joining \`folder + title\` yourself, and never prefix \`inbox/\` to a
+   path that came back without one.
+
+## Vault layout: two modes
+
+ZenNotes vaults run in one of two modes:
+
+- \`primaryNotesLocation: inbox\` \u2014 notes for the conceptual inbox
+  area live under \`<root>/inbox/\` (paths look like
+  \`inbox/MyNote.md\`).
+- \`primaryNotesLocation: root\` \u2014 Obsidian-style. Notes for the
+  conceptual inbox area live directly at the vault root (paths look
+  like \`MyNote.md\`, no \`inbox/\` prefix).
+
+Call \`vault_info\` at the start of a session if you need to know which
+mode this vault uses. The folder enum in tool arguments (\`inbox\`,
+\`quick\`, \`archive\`, \`trash\`) stays the same in both modes \u2014 only
+the on-disk shape differs. The \`path\` returned by every tool already
+reflects the mode; use it verbatim and you never have to think about
+this again.
 
 ## Archetypes (pick one, then tailor)
 
@@ -91,8 +114,11 @@ decide, remember, or record?" That answers the archetype.
 When the user asks for something that spans many notes (a course, a
 handbook, a wiki, a trip plan with multiple destinations):
 
-- Put everything under a single subfolder (e.g.
-  \`inbox/Linear Algebra/\`). Never scatter.
+- Put everything under a single subfolder of the inbox area (call
+  create_note with \`folder: "inbox"\` and a \`subpath\` like
+  \`Linear Algebra\`; the resulting on-disk path will be either
+  \`inbox/Linear Algebra/...\` or just \`Linear Algebra/...\`
+  depending on the vault's mode). Never scatter.
 - Use a **two-digit numeric prefix** on filenames for intended reading
   order (\`01 - Vectors.md\`, \`02 - Vector Spaces.md\`).
 - Create a **map / index note first** (\`00 - Course Map.md\` or
@@ -243,8 +269,9 @@ Adjust these \u2014 don't invent ASCII replacements.
 - "Add to the X note" \u2192 search_by_title \u2192 append_to_note.
   Don't start a parallel note.
 - "Capture X" \u2192 create_note in quick/.
-- "File X" \u2192 move_note into the right inbox/ subfolder.
+- "File X" \u2192 move_note into the right inbox subfolder
+  (\`folder: "inbox"\`, \`targetSubpath: "<topic>"\`).
 - "Write me a note / course / recipe / plan about \u2026" \u2192 pick
-  the archetype from the subject, pick a sensible inbox/ subfolder,
+  the archetype from the subject, pick a sensible inbox subfolder,
   create_note (or a folder of create_notes with an index), apply
   the archetype\u2019s shape.`;

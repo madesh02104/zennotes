@@ -10,9 +10,12 @@ import { IPC } from '@shared/ipc'
 import type {
   AppUpdateState,
   AssetMeta,
+  CliInstallStatus,
   DirectoryBrowseResult,
   FolderEntry,
   ImportedAsset,
+  NoteComment,
+  NoteCommentInput,
   NoteContent,
   NoteFolder,
   NoteMeta,
@@ -43,7 +46,11 @@ const DESKTOP_CAPABILITIES: ZenCapabilities = {
   supportsNativeMenus: true,
   supportsFloatingWindows: true,
   supportsLocalFilesystemPickers: true,
-  supportsRemoteWorkspace: true
+  supportsRemoteWorkspace: true,
+  // CLI install is supported on macOS and Linux via /usr/local/bin or
+  // ~/.local/bin symlinks. Windows uses a different model (PATH munging)
+  // and is gated to a follow-up.
+  supportsCliInstall: process.platform === 'darwin' || process.platform === 'linux'
 }
 
 const DESKTOP_APP_INFO: ZenAppInfo = {
@@ -223,6 +230,10 @@ const api: ZenBridge = {
   ): Promise<VaultTextSearchMatch[]> =>
     ipcRenderer.invoke(IPC.VAULT_SEARCH_TEXT, query, backend, paths),
   readNote: (relPath: string): Promise<NoteContent> => ipcRenderer.invoke(IPC.VAULT_READ_NOTE, relPath),
+  readNoteComments: (relPath: string): Promise<NoteComment[]> =>
+    ipcRenderer.invoke(IPC.VAULT_READ_COMMENTS, relPath),
+  writeNoteComments: (relPath: string, comments: NoteCommentInput[]): Promise<NoteComment[]> =>
+    ipcRenderer.invoke(IPC.VAULT_WRITE_COMMENTS, relPath, comments),
   scanTasks: (): Promise<VaultTask[]> => ipcRenderer.invoke(IPC.VAULT_SCAN_TASKS),
   scanTasksForPath: (relPath: string): Promise<VaultTask[]> =>
     ipcRenderer.invoke(IPC.VAULT_SCAN_TASKS_FOR, relPath),
@@ -344,6 +355,9 @@ const api: ZenBridge = {
     ipcRenderer.invoke(IPC.MCP_GET_INSTRUCTIONS),
   mcpSetInstructions: (next: string | null): Promise<McpInstructionsPayload> =>
     ipcRenderer.invoke(IPC.MCP_SET_INSTRUCTIONS, next),
+  cliGetStatus: (): Promise<CliInstallStatus> => ipcRenderer.invoke(IPC.CLI_GET_STATUS),
+  cliInstall: (): Promise<CliInstallStatus> => ipcRenderer.invoke(IPC.CLI_INSTALL),
+  cliUninstall: (): Promise<CliInstallStatus> => ipcRenderer.invoke(IPC.CLI_UNINSTALL),
   clipboardWriteText: (text: string): void => clipboard.writeText(text),
   clipboardReadText: (): string => clipboard.readText()
 }

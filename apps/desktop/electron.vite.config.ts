@@ -70,14 +70,16 @@ export default defineConfig({
       outDir: 'out/main',
       rollupOptions: {
         external: ['keytar'],
-        // The MCP server is an independent Node entry point bundled
-        // alongside the main process. electron-vite\u2019s `main`
-        // section is the only slot whose output is plain ESM that
-        // `node` can execute directly, which is exactly what Claude
-        // Code / Claude Desktop / Codex will spawn via stdio.
+        // The MCP server and the `zen` CLI are independent Node entry
+        // points bundled alongside the main process. electron-vite\u2019s
+        // `main` section is the only slot whose output is plain ESM
+        // that `node` can execute directly \u2014 which is what both
+        // Claude Code / Claude Desktop / Codex (stdio MCP) and the
+        // CLI wrapper script (build/zen) need.
         input: {
           index: resolve(__dirname, 'src/main/index.ts'),
-          mcp: resolve(__dirname, 'src/mcp/index.ts')
+          mcp: resolve(__dirname, 'src/mcp/index.ts'),
+          cli: resolve(__dirname, 'src/cli/index.ts')
         }
       }
     },

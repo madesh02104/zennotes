@@ -1,8 +1,11 @@
 import type {
   AppUpdateState,
   AssetMeta,
+  CliInstallStatus,
   FolderEntry,
   ImportedAsset,
+  NoteComment,
+  NoteCommentInput,
   NoteContent,
   NoteFolder,
   NoteMeta,
@@ -36,6 +39,7 @@ export interface ZenCapabilities {
   supportsFloatingWindows: boolean
   supportsLocalFilesystemPickers: boolean
   supportsRemoteWorkspace: boolean
+  supportsCliInstall: boolean
 }
 
 export interface ZenAppInfo {
@@ -102,6 +106,8 @@ export interface ZenBridge {
     paths?: VaultTextSearchToolPaths
   ): Promise<VaultTextSearchMatch[]>
   readNote(relPath: string): Promise<NoteContent>
+  readNoteComments(relPath: string): Promise<NoteComment[]>
+  writeNoteComments(relPath: string, comments: NoteCommentInput[]): Promise<NoteComment[]>
   scanTasks(): Promise<VaultTask[]>
   scanTasksForPath(relPath: string): Promise<VaultTask[]>
   writeNote(relPath: string, body: string): Promise<NoteMeta>
@@ -148,6 +154,9 @@ export interface ZenBridge {
   mcpUninstall(id: McpClientId): Promise<McpClientStatus>
   mcpGetInstructions(): Promise<McpInstructionsPayload>
   mcpSetInstructions(next: string | null): Promise<McpInstructionsPayload>
+  cliGetStatus(): Promise<CliInstallStatus>
+  cliInstall(): Promise<CliInstallStatus>
+  cliUninstall(): Promise<CliInstallStatus>
   clipboardWriteText(text: string): void
   clipboardReadText(): string
 }

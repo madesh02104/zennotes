@@ -85,6 +85,10 @@ export default defineConfig({
         target: 'http://127.0.0.1:7878',
         changeOrigin: true
       },
+      '/comments': {
+        target: 'http://127.0.0.1:7878',
+        changeOrigin: true
+      },
       '/folders': {
         target: 'http://127.0.0.1:7878',
         changeOrigin: true

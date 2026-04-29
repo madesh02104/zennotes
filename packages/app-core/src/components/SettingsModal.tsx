@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { DEFAULT_DAILY_NOTES_DIRECTORY } from '@shared/ipc'
 import type {
   AppUpdateState,
+  CliInstallStatus,
   RemoteWorkspaceProfile,
   RemoteWorkspaceProfileInput,
   VaultTextSearchBackendPreference,
@@ -47,6 +48,7 @@ type SettingsCategoryId =
   | 'typography'
   | 'vault'
   | 'mcp'
+  | 'cli'
   | 'about'
 
 type ResolvedVaultTextSearchBackend = 'builtin' | 'ripgrep' | 'fzf'
@@ -1227,6 +1229,25 @@ export function SettingsModal(): JSX.Element {
       content: <McpSettings />
     },
     {
+      id: 'cli',
+      title: 'CLI',
+      description:
+        'Install the `zen` command-line tool so you can capture, search, and edit notes from any terminal.',
+      keywords: [
+        'cli',
+        'command line',
+        'terminal',
+        'shell',
+        'zen',
+        'script',
+        'automation',
+        'pipe',
+        'capture',
+        'developer'
+      ],
+      content: <CliSettings />
+    },
+    {
       id: 'about',
       title: 'About',
       description: 'App identity, version, updater status, and company information.',
@@ -1408,7 +1429,7 @@ export function SettingsModal(): JSX.Element {
       >
         <div
           ref={ref}
-          className="grid h-[min(82vh,820px)] w-[min(1120px,96vw)] grid-cols-[252px_minmax(0,1fr)] overflow-hidden rounded-[26px] border border-paper-300/70 bg-paper-100 shadow-float"
+          className="grid h-[min(92vh,980px)] w-[min(1120px,96vw)] grid-cols-[252px_minmax(0,1fr)] overflow-hidden rounded-[26px] border border-paper-300/70 bg-paper-100 shadow-float"
           onClick={(e) => e.stopPropagation()}
         >
         <aside className="flex min-h-0 flex-col border-r border-paper-300/60 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.01))]">
@@ -2466,6 +2487,213 @@ function SegmentedRow<T extends string>({
   )
 }
 
+function CliSettings(): JSX.Element {
+  const [status, setStatus] = useState<CliInstallStatus | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const refresh = useCallback(async (): Promise<void> => {
+    try {
+      const next = await window.zen.cliGetStatus()
+      setStatus(next)
+      setError(null)
+    } catch (err) {
+      setError((err as Error).message)
+    }
+  }, [])
+
+  useEffect(() => {
+    void refresh()
+  }, [refresh])
+
+  const onInstall = async (): Promise<void> => {
+    setBusy(true)
+    setError(null)
+    try {
+      await window.zen.cliInstall()
+      await refresh()
+    } catch (err) {
+      setError((err as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const onUninstall = async (): Promise<void> => {
+    setBusy(true)
+    setError(null)
+    try {
+      await window.zen.cliUninstall()
+      await refresh()
+    } catch (err) {
+      setError((err as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const copyToClipboard = (text: string): void => {
+    window.zen.clipboardWriteText(text)
+  }
+
+  if (status == null) {
+    return (
+      <div className="space-y-6">
+        <Section title="Command-Line Tool" description="Install the `zen` shell command for terminal-based note workflows.">
+          <InlineNote>Checking install status…</InlineNote>
+        </Section>
+      </div>
+    )
+  }
+
+  if (!status.supportedPlatform) {
+    return (
+      <div className="space-y-6">
+        <Section title="Command-Line Tool" description="Install the `zen` shell command for terminal-based note workflows.">
+          <InlineNote>{status.reason ?? 'Not supported on this platform yet.'}</InlineNote>
+        </Section>
+      </div>
+    )
+  }
+
+  const installed = status.installedAt != null
+  const ours = status.installedByThisApp
+  const chip = installed
+    ? ours
+      ? { label: 'Installed', tone: 'ok' as const }
+      : { label: 'External install', tone: 'warn' as const }
+    : { label: 'Not installed', tone: 'off' as const }
+
+  const isUnavailable = !status.available
+
+  return (
+    <div className="space-y-6">
+      <Section
+        title="Command-Line Tool"
+        description="The `zen` CLI talks to your vault directly from any terminal — perfect for scripts, cron jobs, editor plugins, and shell pipelines. Once installed, try `zen --help` or pipe text in: `pbpaste | zen capture`."
+      >
+        <div className="flex flex-col gap-3 px-5 py-4">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <span className="text-sm font-medium text-ink-900">zen</span>
+                <span
+                  className={[
+                    'rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.14em]',
+                    statusChipClass(chip.tone)
+                  ].join(' ')}
+                >
+                  {chip.label}
+                </span>
+              </div>
+              <div className="mt-1 text-xs leading-5 text-ink-500">
+                {installed && ours
+                  ? `Active. Run \`zen --help\` from any terminal.`
+                  : installed && !ours
+                    ? `An unmanaged \`zen\` already exists at this path. Remove it before installing if you want ZenNotes to take over.`
+                    : status.requiresSudo
+                      ? `Symlinks ${status.defaultTarget} to ZenNotes' bundled wrapper. macOS will prompt for admin once because no user-writable directory was found on your PATH.`
+                      : `Symlinks ${status.defaultTarget} to ZenNotes' bundled wrapper.`}
+              </div>
+              {status.reason && (
+                <div className="mt-1.5 text-xs leading-5 text-amber-500">{status.reason}</div>
+              )}
+              {!installed && status.pathHint && (
+                <div className="mt-2 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-[11px] leading-5 text-ink-700">
+                  <div className="font-medium text-amber-600">
+                    {status.defaultTarget.replace(/\/[^/]+$/, '')} is not on your PATH.
+                  </div>
+                  <div className="mt-1 text-ink-500">
+                    After install, run this once so your shell can find <code className="font-mono">zen</code>:
+                  </div>
+                  <div className="mt-1.5 flex items-center gap-2">
+                    <code className="min-w-0 flex-1 break-all rounded-md bg-paper-100/80 px-2 py-1 font-mono text-[11px] text-ink-900">
+                      {status.pathHint}
+                    </code>
+                    <button
+                      type="button"
+                      onClick={() => copyToClipboard(status.pathHint ?? '')}
+                      className="shrink-0 rounded-md border border-paper-300/70 bg-paper-100/80 px-2 py-1 text-[11px] font-medium text-ink-700 hover:bg-paper-200"
+                    >
+                      Copy
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              {installed ? (
+                <button
+                  type="button"
+                  onClick={() => void onUninstall()}
+                  disabled={busy || (installed && !ours)}
+                  className={[
+                    'rounded-xl border px-3 py-1.5 text-xs font-medium transition-colors',
+                    busy || (installed && !ours)
+                      ? 'cursor-not-allowed border-paper-300/60 bg-paper-100/45 text-ink-400'
+                      : 'border-paper-300/70 bg-paper-100/80 text-ink-700 hover:bg-paper-200'
+                  ].join(' ')}
+                >
+                  {busy ? 'Working…' : 'Uninstall'}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => void onInstall()}
+                  disabled={busy || isUnavailable}
+                  className={[
+                    'rounded-xl px-3.5 py-1.5 text-xs font-medium transition-colors',
+                    busy || isUnavailable
+                      ? 'cursor-not-allowed bg-paper-300 text-ink-500'
+                      : 'bg-ink-900 text-paper-50 hover:bg-ink-800'
+                  ].join(' ')}
+                >
+                  {busy ? 'Installing…' : 'Install'}
+                </button>
+              )}
+            </div>
+          </div>
+          <div className="flex items-center gap-2 border-t border-paper-300/45 pt-2 text-[11px] text-ink-500">
+            <span className="text-[10px] font-medium uppercase tracking-[0.14em] text-ink-400">
+              Path
+            </span>
+            <code className="min-w-0 flex-1 break-all rounded-md bg-paper-100/80 px-2 py-1 font-mono text-[11px] text-ink-800">
+              {status.installedAt ?? status.defaultTarget}
+            </code>
+            <button
+              type="button"
+              onClick={() => copyToClipboard(status.installedAt ?? status.defaultTarget)}
+              className="shrink-0 rounded-md border border-paper-300/70 bg-paper-100/80 px-2 py-1 text-[11px] font-medium text-ink-700 hover:bg-paper-200"
+            >
+              Copy
+            </button>
+          </div>
+        </div>
+      </Section>
+
+      <Section
+        title="Quick reference"
+        description="A handful of the most useful commands. Run `zen --help` for the full list."
+      >
+        <div className="space-y-2 px-5 py-4 font-mono text-[12px] leading-6 text-ink-800">
+          <div>zen list --tag idea</div>
+          <div>zen read inbox/Project.md</div>
+          <div>echo "hello" | zen capture</div>
+          <div>zen append daily.md --body "- talked to alice"</div>
+          <div>zen search "deadline" --json | jq .</div>
+          <div>zen mcp           # used by Claude Code/Desktop/Codex</div>
+        </div>
+      </Section>
+
+      {error && (
+        <InlineNote>
+          <span className="text-ink-900">Something went wrong:</span> {error}
+        </InlineNote>
+      )}
+    </div>
+  )
+}
+
 function McpSettings(): JSX.Element {
   const [statuses, setStatuses] = useState<McpClientStatus[] | null>(null)
   const [runtime, setRuntime] = useState<McpServerRuntime | null>(null)
@@ -2588,10 +2816,10 @@ function McpSettings(): JSX.Element {
 
       <Section
         title="Integrations"
-        description="Pick the clients you want connected to this vault. Install writes a managed ZenNotes entry into that client\u2019s config; Uninstall removes just that entry."
+        description={"Pick the clients you want connected to this vault. Install writes a managed ZenNotes entry into that client\u2019s config; Uninstall removes just that entry."}
       >
         {statuses == null ? (
-          <InlineNote>Checking integration status\u2026</InlineNote>
+          <InlineNote>{'Checking integration status\u2026'}</InlineNote>
         ) : (
           <div className="divide-y divide-paper-300/45">
             {MCP_CLIENTS.map((descriptor) => {

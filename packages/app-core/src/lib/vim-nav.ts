@@ -12,6 +12,7 @@ export type Panel =
   | 'tabs'
   | 'editor'
   | 'connections'
+  | 'comments'
   | 'hoverpreview'
   | 'tasks'
   | 'tags'
@@ -21,6 +22,7 @@ export function getVisiblePanels(
   noteListOpen: boolean,
   unifiedSidebar: boolean,
   connectionsOpen: boolean,
+  commentsOpen: boolean,
   tasksViewOpen = false
 ): Panel[] {
   const panels: Panel[] = []
@@ -28,6 +30,7 @@ export function getVisiblePanels(
   if (noteListOpen && !unifiedSidebar) panels.push('notelist')
   panels.push(tasksViewOpen ? 'tasks' : 'editor')
   if (connectionsOpen) panels.push('connections')
+  if (commentsOpen) panels.push('comments')
   return panels
 }
 
@@ -68,7 +71,8 @@ export function clearEditorPendingVimStatus(view: EditorView | null): void {
 
 export function isEditorFocused(view: EditorView | null): boolean {
   if (!view) return false
-  return view.hasFocus
+  const active = document.activeElement
+  return view.hasFocus || (active instanceof Node && view.dom.contains(active))
 }
 
 // ---------------------------------------------------------------------------

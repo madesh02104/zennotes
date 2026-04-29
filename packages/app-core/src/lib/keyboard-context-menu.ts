@@ -3,6 +3,8 @@ function cssEscape(value: string): string {
   return value.replace(/["\\]/g, '\\$&')
 }
 
+export const ZEN_OPEN_EDITOR_CONTEXT_MENU_EVENT = 'zen:open-editor-context-menu'
+
 export function dispatchKeyboardContextMenu(el: HTMLElement): void {
   el.scrollIntoView({ block: 'nearest', inline: 'nearest' })
   const rect = el.getBoundingClientRect()

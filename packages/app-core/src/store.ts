@@ -4,6 +4,8 @@ import { DEFAULT_VAULT_SETTINGS } from '@shared/ipc'
 import type {
   AssetMeta,
   FolderEntry,
+  NoteComment,
+  NoteCommentInput,
   NoteContent,
   NoteFolder,
   NoteMeta,
@@ -1347,6 +1349,9 @@ interface Store {
   noteContents: Record<string, NoteContent>
   /** Dirty flags keyed by path — a buffer with unsaved edits. */
   noteDirty: Record<string, boolean>
+  /** Comment sidecars keyed by note path. Loaded lazily per open note. */
+  noteComments: Record<string, NoteComment[]>
+  activeCommentId: string | null
 
   setVault: (v: VaultInfo | null) => void
   setVaultSettings: (next: VaultSettings) => Promise<void>
@@ -1546,6 +1551,15 @@ interface Store {
   updateNoteBody: (path: string, body: string) => void
   /** Persist a specific note to disk. */
   persistNote: (path: string) => Promise<void>
+  loadNoteComments: (path: string) => Promise<NoteComment[]>
+  addNoteComment: (input: NoteCommentInput) => Promise<NoteComment | null>
+  updateNoteComment: (
+    path: string,
+    id: string,
+    patch: Partial<Pick<NoteComment, 'body' | 'resolvedAt' | 'anchorStart' | 'anchorEnd' | 'anchorText'>>
+  ) => Promise<void>
+  deleteNoteComment: (path: string, id: string) => Promise<void>
+  setActiveCommentId: (id: string | null) => void
 
   /* ---- Legacy compatibility aliases used by NoteList / Sidebar ---- */
   openNoteInTab: (relPath: string) => Promise<void>
@@ -1739,7 +1753,22 @@ function renameNoteState(
     pendingTitleFocusPath:
       s.pendingTitleFocusPath === oldPath ? meta.path : s.pendingTitleFocusPath,
     pinnedRefPath: s.pinnedRefPath === oldPath ? meta.path : s.pinnedRefPath,
+    noteComments: rewriteNoteCommentsPath(s.noteComments, oldPath, meta.path),
+    activeCommentId: s.activeCommentId,
     ...activeFieldsFrom(ensured.layout, ensured.activePaneId, contents, dirty)
+  }
+}
+
+function rewriteNoteCommentsPath(
+  comments: Record<string, NoteComment[]>,
+  oldPath: string,
+  nextPath: string
+): Record<string, NoteComment[]> {
+  if (oldPath === nextPath || !(oldPath in comments)) return comments
+  const { [oldPath]: moving, ...rest } = comments
+  return {
+    ...rest,
+    [nextPath]: moving.map((comment) => ({ ...comment, notePath: nextPath }))
   }
 }
 
@@ -2122,6 +2151,8 @@ export const useStore = create<Store>((set, get) => {
   activePaneId: initialPane.id,
   noteContents: {},
   noteDirty: {},
+  noteComments: {},
+  activeCommentId: null,
 
   setVault: (v) => set({ vault: v }),
   setVaultSettings: async (next) => {
@@ -2549,6 +2580,10 @@ export const useStore = create<Store>((set, get) => {
   },
 
   applyChange: async (ev) => {
+    if (ev.scope === 'comments') {
+      await get().loadNoteComments(ev.path)
+      return
+    }
     await Promise.all([
       get().refreshNotes(),
       ev.scope === 'vault-settings'
@@ -2693,6 +2728,94 @@ export const useStore = create<Store>((set, get) => {
       console.error('writeNote failed', err)
     }
   },
+
+  loadNoteComments: async (path) => {
+    if (!path || isWorkspaceVirtualTabPath(path)) return []
+    try {
+      const comments = await window.zen.readNoteComments(path)
+      set((s) => ({
+        noteComments: { ...s.noteComments, [path]: comments }
+      }))
+      return comments
+    } catch (err) {
+      console.error('readNoteComments failed', err)
+      return get().noteComments[path] ?? []
+    }
+  },
+
+  addNoteComment: async (input) => {
+    const path = input.notePath
+    if (!path || isWorkspaceVirtualTabPath(path)) return null
+    const body = input.body.trim()
+    if (!body) return null
+    const now = Date.now()
+    const current = get().noteComments[path] ?? (await get().loadNoteComments(path))
+    const draft: NoteCommentInput = {
+      ...input,
+      notePath: path,
+      body,
+      createdAt: input.createdAt ?? now,
+      updatedAt: now,
+      resolvedAt: input.resolvedAt ?? null
+    }
+    try {
+      const comments = await window.zen.writeNoteComments(path, [...current, draft])
+      const created = comments[comments.length - 1] ?? null
+      set((s) => ({
+        noteComments: { ...s.noteComments, [path]: comments },
+        activeCommentId: created?.id ?? s.activeCommentId
+      }))
+      return created
+    } catch (err) {
+      console.error('writeNoteComments failed', err)
+      return null
+    }
+  },
+
+  updateNoteComment: async (path, id, patch) => {
+    if (!path || !id) return
+    const current = get().noteComments[path] ?? (await get().loadNoteComments(path))
+    const now = Date.now()
+    const next = current.map((comment) =>
+      comment.id === id
+        ? {
+            ...comment,
+            ...patch,
+            body: patch.body !== undefined ? patch.body.trim() : comment.body,
+            updatedAt: now
+          }
+        : comment
+    )
+    try {
+      const comments = await window.zen.writeNoteComments(path, next)
+      set((s) => ({
+        noteComments: { ...s.noteComments, [path]: comments },
+        activeCommentId:
+          s.activeCommentId && comments.some((comment) => comment.id === s.activeCommentId)
+            ? s.activeCommentId
+            : null
+      }))
+    } catch (err) {
+      console.error('updateNoteComment failed', err)
+    }
+  },
+
+  deleteNoteComment: async (path, id) => {
+    if (!path || !id) return
+    const current = get().noteComments[path] ?? (await get().loadNoteComments(path))
+    const next = current.filter((comment) => comment.id !== id)
+    try {
+      const comments = await window.zen.writeNoteComments(path, next)
+      set((s) => ({
+        noteComments: { ...s.noteComments, [path]: comments },
+        activeCommentId: s.activeCommentId === id ? null : s.activeCommentId
+      }))
+    } catch (err) {
+      console.error('deleteNoteComment failed', err)
+    }
+  },
+
+  setActiveCommentId: (id) => set({ activeCommentId: id }),
 
   formatActiveNote: async () => {
     const s = get()

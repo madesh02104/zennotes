@@ -24,9 +24,12 @@ import {
 import type {
   AppUpdateState,
   AssetMeta,
+  CliInstallStatus,
   DirectoryBrowseResult,
   FolderEntry,
   ImportedAsset,
+  NoteComment,
+  NoteCommentInput,
   NoteContent,
   NoteFolder,
   NoteMeta,
@@ -58,7 +61,8 @@ const WEB_CAPABILITIES: ZenCapabilities = {
   supportsNativeMenus: false,
   supportsFloatingWindows: false,
   supportsLocalFilesystemPickers: false,
-  supportsRemoteWorkspace: false
+  supportsRemoteWorkspace: false,
+  supportsCliInstall: false
 }
 
 const WEB_APP_INFO: ZenAppInfo = {
@@ -300,6 +304,20 @@ function hasAssetsDir(): Promise<boolean> {
 
 function readNote(relPath: string): Promise<NoteContent> {
   return jsonRequest<NoteContent>(`/notes/read?path=${encodeURIComponent(relPath)}`)
+}
+
+function readNoteComments(relPath: string): Promise<NoteComment[]> {
+  return jsonRequest<NoteComment[]>(`/comments/read?path=${encodeURIComponent(relPath)}`)
+}
+
+function writeNoteComments(
+  relPath: string,
+  comments: NoteCommentInput[]
+): Promise<NoteComment[]> {
+  return jsonRequest<NoteComment[]>('/comments/write', {
+    method: 'POST',
+    body: { path: relPath, comments }
+  })
 }
 
 function writeNote(relPath: string, body: string): Promise<NoteMeta> {
@@ -821,6 +839,34 @@ async function mcpSetInstructions(
 }
 
 // --------------------------------------------------------------------
+// CLI install (desktop-only)
+// --------------------------------------------------------------------
+
+const WEB_CLI_STATUS: CliInstallStatus = {
+  available: false,
+  reason: 'CLI installation is only available in the desktop build.',
+  defaultTarget: '',
+  requiresSudo: false,
+  targetOnPath: false,
+  pathHint: null,
+  installedAt: null,
+  installedByThisApp: false,
+  supportedPlatform: false
+}
+
+async function cliGetStatus(): Promise<CliInstallStatus> {
+  return WEB_CLI_STATUS
+}
+
+async function cliInstall(): Promise<CliInstallStatus> {
+  return notImplemented('cliInstall')
+}
+
+async function cliUninstall(): Promise<CliInstallStatus> {
+  return notImplemented('cliUninstall')
+}
+
+// --------------------------------------------------------------------
 // Clipboard (web build uses navigator.clipboard)
 // --------------------------------------------------------------------
 
@@ -886,6 +932,8 @@ export const httpBridge: ZenBridge = {
   getVaultTextSearchCapabilities,
   searchVaultText,
   readNote,
+  readNoteComments,
+  writeNoteComments,
   scanTasks,
   scanTasksForPath,
   writeNote,
@@ -932,6 +980,9 @@ export const httpBridge: ZenBridge = {
   mcpUninstall,
   mcpGetInstructions,
   mcpSetInstructions,
+  cliGetStatus,
+  cliInstall,
+  cliUninstall,
   clipboardWriteText,
   clipboardReadText
 }

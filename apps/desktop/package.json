@@ -121,6 +121,14 @@
       {
         "from": "build/icon.png",
         "to": "icon.png"
+      },
+      {
+        "from": "build/zen",
+        "to": "zen"
+      },
+      {
+        "from": "out/main/cli.js",
+        "to": "cli.js"
       }
     ],
     "afterSign": "scripts/notarize.cjs",

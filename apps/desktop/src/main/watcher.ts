@@ -6,6 +6,8 @@ import { folderForRelativePath } from './vault'
 const ATTACHMENTS_DIRS = new Set(['attachements', '_assets'])
 const INTERNAL_VAULT_DIR = '.zennotes'
 const VAULT_SETTINGS_RELATIVE_PATH = `${INTERNAL_VAULT_DIR}/vault.json`
+const NOTE_COMMENTS_PREFIX = `${INTERNAL_VAULT_DIR}/comments/`
+const NOTE_COMMENTS_SUFFIX = '.comments.json'
 
 function toPosix(p: string): string {
   return p.split(path.sep).join('/')
@@ -25,6 +27,12 @@ function relativeVaultPath(root: string, abs: string): string {
 
 function isVaultSettingsPath(root: string, abs: string): boolean {
   return relativeVaultPath(root, abs) === VAULT_SETTINGS_RELATIVE_PATH
+}
+
+function commentsNotePath(root: string, abs: string): string | null {
+  const rel = relativeVaultPath(root, abs)
+  if (!rel.startsWith(NOTE_COMMENTS_PREFIX) || !rel.endsWith(NOTE_COMMENTS_SUFFIX)) return null
+  return rel.slice(NOTE_COMMENTS_PREFIX.length, -NOTE_COMMENTS_SUFFIX.length)
 }
 
 export class VaultWatcher {
@@ -58,6 +66,16 @@ export class VaultWatcher {
           path: VAULT_SETTINGS_RELATIVE_PATH,
           folder: 'inbox',
           scope: 'vault-settings'
+        })
+        return
+      }
+      const commentsPath = commentsNotePath(this.root, absPath)
+      if (commentsPath) {
+        onEvent({
+          kind,
+          path: commentsPath,
+          folder: folderForRelativePath(commentsPath) ?? 'inbox',
+          scope: 'comments'
         })
         return
       }

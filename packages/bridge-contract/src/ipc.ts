@@ -24,6 +24,8 @@ export const IPC = {
   VAULT_TEXT_SEARCH_CAPABILITIES: 'vault:text-search-capabilities',
   VAULT_SEARCH_TEXT: 'vault:search-text',
   VAULT_READ_NOTE: 'vault:read-note',
+  VAULT_READ_COMMENTS: 'vault:read-comments',
+  VAULT_WRITE_COMMENTS: 'vault:write-comments',
   VAULT_WRITE_NOTE: 'vault:write-note',
   VAULT_APPEND_NOTE: 'vault:append-note',
   VAULT_CREATE_NOTE: 'vault:create-note',
@@ -74,7 +76,10 @@ export const IPC = {
   MCP_UNINSTALL: 'mcp:uninstall',
   MCP_RUNTIME: 'mcp:runtime',
   MCP_GET_INSTRUCTIONS: 'mcp:get-instructions',
-  MCP_SET_INSTRUCTIONS: 'mcp:set-instructions'
+  MCP_SET_INSTRUCTIONS: 'mcp:set-instructions',
+  CLI_GET_STATUS: 'cli:get-status',
+  CLI_INSTALL: 'cli:install',
+  CLI_UNINSTALL: 'cli:uninstall'
 } as const
 
 export interface TikzRenderResponse {
@@ -92,6 +97,38 @@ export type AppUpdatePhase =
   | 'downloading'
   | 'downloaded'
   | 'error'
+
+/** Where on disk the `zen` shim is currently installed (or could be). */
+export interface CliInstallStatus {
+  /** True if the wrapper script is shipped with this build. False in
+   *  dev runs where electron-vite has not bundled the CLI yet. */
+  available: boolean
+  /** Reason the wrapper is unavailable, if available is false. */
+  reason: string | null
+  /** Where the next install would land. Picked dynamically from the
+   *  user's PATH preferring user-writable locations like ~/.local/bin
+   *  so installs don't need a sudo prompt. */
+  defaultTarget: string
+  /** True when defaultTarget is not user-writable and we'd need to
+   *  invoke osascript / pkexec to symlink there. */
+  requiresSudo: boolean
+  /** Whether the directory containing defaultTarget is on the user's
+   *  $PATH. False means we'd install but the binary wouldn't be
+   *  callable until the user updates their shell config. */
+  targetOnPath: boolean
+  /** Shell snippet the user can paste into ~/.zshrc / ~/.bashrc to
+   *  put the chosen directory on PATH. Null when targetOnPath is true
+   *  or when nothing helpful applies. */
+  pathHint: string | null
+  /** Absolute path of an existing install if found. Null when none. */
+  installedAt: string | null
+  /** True when an install exists AND points at the wrapper for this
+   *  build. False when something else owns the symlink. */
+  installedByThisApp: boolean
+  /** Whether this platform supports installing the CLI from Settings.
+   *  False on Windows for now (different install model). */
+  supportedPlatform: boolean
+}
 
 export interface AppUpdateState {
   phase: AppUpdatePhase
@@ -189,6 +226,33 @@ export interface NoteMeta {
 export interface NoteContent extends NoteMeta {
   /** Raw markdown body including any frontmatter. */
   body: string
+}
+
+export interface NoteComment {
+  id: string
+  /** Path relative to the vault root for the note this comment belongs to. */
+  notePath: string
+  /** Zero-based editor offsets captured when the comment was created. */
+  anchorStart: number
+  anchorEnd: number
+  /** Exact text selected when the comment was created. Used to re-anchor after edits. */
+  anchorText: string
+  body: string
+  createdAt: number
+  updatedAt: number
+  resolvedAt: number | null
+}
+
+export interface NoteCommentInput {
+  id?: string
+  notePath: string
+  anchorStart: number
+  anchorEnd: number
+  anchorText: string
+  body: string
+  createdAt?: number
+  updatedAt?: number
+  resolvedAt?: number | null
 }
 
 export type VaultTextSearchBackendPreference = 'auto' | 'builtin' | 'ripgrep' | 'fzf'
@@ -324,7 +388,7 @@ export interface FolderEntry {
 }
 
 export type VaultChangeKind = 'add' | 'change' | 'unlink'
-export type VaultChangeScope = 'content' | 'vault-settings'
+export type VaultChangeScope = 'content' | 'vault-settings' | 'comments'
 
 export interface VaultChangeEvent {
   kind: VaultChangeKind

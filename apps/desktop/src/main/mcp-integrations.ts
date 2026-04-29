@@ -22,6 +22,7 @@ import {
   type McpClientStatus,
   type McpServerRuntime
 } from '@shared/mcp-clients'
+import { findManagedCliBinary } from './cli-install'
 
 /* ---------- Runtime discovery ----------------------------------------- */
 
@@ -51,8 +52,22 @@ export async function getMcpServerRuntime(): Promise<McpServerRuntime> {
   } catch {
     exists = false
   }
-  // We invoke the Electron binary in plain-Node mode. This avoids
-  // forcing users to install Node 18+ on their system.
+
+  // When the user has installed the `zen` CLI from Settings, prefer
+  // that as the MCP launcher: `zen mcp` is one stable absolute path
+  // that survives app moves and reads better in client config files.
+  // Otherwise fall back to invoking the Electron binary in plain-Node
+  // mode against the bundled mcp.js (the historical install shape;
+  // no system Node required).
+  const managedCli = await findManagedCliBinary()
+  if (managedCli) {
+    return {
+      command: managedCli,
+      args: ['mcp'],
+      env: {},
+      entryPath: exists ? entry : null
+    }
+  }
   const command = process.execPath
   const args = [entry]
   const env = {

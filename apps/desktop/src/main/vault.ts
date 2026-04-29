@@ -13,6 +13,8 @@ import {
   FolderEntry,
   ImportedAsset,
   ImportedAssetKind,
+  NoteComment,
+  NoteCommentInput,
   NoteContent,
   NoteFolder,
   NoteMeta,
@@ -35,6 +37,8 @@ const LEGACY_ATTACHMENTS_DIRS = ['_assets']
 const ATTACHMENTS_DIRS = [PRIMARY_ATTACHMENTS_DIR, ...LEGACY_ATTACHMENTS_DIRS]
 const INTERNAL_VAULT_DIR = '.zennotes'
 const VAULT_SETTINGS_FILE = 'vault.json'
+const NOTE_COMMENTS_DIR = 'comments'
+const NOTE_COMMENTS_SUFFIX = '.comments.json'
 const RESERVED_ROOT_NAMES = new Set<string>([...FOLDERS, ...ATTACHMENTS_DIRS, INTERNAL_VAULT_DIR])
 const HIDDEN_PRIMARY_ROOT_NAMES = new Set<string>([
   'quick',
@@ -326,6 +330,14 @@ export async function updateConfig(
 
 function vaultSettingsPath(root: string): string {
   return path.join(root, INTERNAL_VAULT_DIR, VAULT_SETTINGS_FILE)
+}
+
+function noteCommentsRoot(root: string): string {
+  return path.join(root, INTERNAL_VAULT_DIR, NOTE_COMMENTS_DIR)
+}
+
+function noteCommentsPath(root: string, rel: string): string {
+  return resolveSafe(noteCommentsRoot(root), `${toPosix(rel)}${NOTE_COMMENTS_SUFFIX}`)
 }
 
 function cloneVaultSettings(settings: VaultSettings): VaultSettings {
@@ -1244,6 +1256,134 @@ export async function writeNote(root: string, rel: string, body: string): Promis
   return await readMeta(root, abs, folder)
 }
 
+function normalizeNoteComment(input: NoteCommentInput, notePath: string): NoteComment | null {
+  const body = typeof input.body === 'string' ? input.body.trim() : ''
+  if (!body) return null
+  const now = Date.now()
+  const rawStart = Number.isFinite(input.anchorStart) ? Math.max(0, Math.floor(input.anchorStart)) : 0
+  const rawEnd = Number.isFinite(input.anchorEnd) ? Math.max(0, Math.floor(input.anchorEnd)) : rawStart
+  const anchorStart = Math.min(rawStart, rawEnd)
+  const anchorEnd = Math.max(rawStart, rawEnd)
+  const anchorText =
+    typeof input.anchorText === 'string'
+      ? input.anchorText.replace(/\s+/g, ' ').trim().slice(0, 500)
+      : ''
+  return {
+    id: typeof input.id === 'string' && input.id.trim() ? input.id.trim() : randomUUID(),
+    notePath,
+    anchorStart,
+    anchorEnd,
+    anchorText,
+    body,
+    createdAt:
+      typeof input.createdAt === 'number' && Number.isFinite(input.createdAt)
+        ? input.createdAt
+        : now,
+    updatedAt:
+      typeof input.updatedAt === 'number' && Number.isFinite(input.updatedAt)
+        ? input.updatedAt
+        : now,
+    resolvedAt:
+      typeof input.resolvedAt === 'number' && Number.isFinite(input.resolvedAt)
+        ? input.resolvedAt
+        : null
+  }
+}
+
+function normalizeNoteComments(raw: unknown, notePath: string): NoteComment[] {
+  const values = Array.isArray(raw)
+    ? raw
+    : raw && typeof raw === 'object' && Array.isArray((raw as { comments?: unknown }).comments)
+      ? (raw as { comments: unknown[] }).comments
+      : []
+  const seen = new Set<string>()
+  const comments: NoteComment[] = []
+  for (const value of values) {
+    if (!value || typeof value !== 'object') continue
+    const comment = normalizeNoteComment(value as NoteCommentInput, notePath)
+    if (!comment || seen.has(comment.id)) continue
+    seen.add(comment.id)
+    comments.push(comment)
+  }
+  comments.sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id))
+  return comments
+}
+
+export async function readNoteComments(root: string, rel: string): Promise<NoteComment[]> {
+  const notePath = toPosix(rel)
+  const abs = noteCommentsPath(root, notePath)
+  try {
+    const raw = await fs.readFile(abs, 'utf8')
+    return normalizeNoteComments(JSON.parse(raw), notePath)
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return []
+    if (err instanceof SyntaxError) return []
+    throw err
+  }
+}
+
+export async function writeNoteComments(
+  root: string,
+  rel: string,
+  comments: NoteCommentInput[]
+): Promise<NoteComment[]> {
+  const notePath = toPosix(rel)
+  const normalized = normalizeNoteComments(comments, notePath)
+  const abs = noteCommentsPath(root, notePath)
+  if (normalized.length === 0) {
+    await fs.rm(abs, { force: true })
+    return []
+  }
+  await fs.mkdir(path.dirname(abs), { recursive: true })
+  await fs.writeFile(abs, JSON.stringify({ version: 1, comments: normalized }, null, 2), 'utf8')
+  return normalized
+}
+
+async function removeNoteComments(root: string, rel: string): Promise<void> {
+  await fs.rm(noteCommentsPath(root, rel), { force: true })
+}
+
+async function moveNoteComments(root: string, oldRel: string, nextRel: string): Promise<void> {
+  const oldAbs = noteCommentsPath(root, oldRel)
+  const nextAbs = noteCommentsPath(root, nextRel)
+  if (oldAbs === nextAbs) return
+  try {
+    await fs.access(oldAbs)
+  } catch {
+    return
+  }
+  await fs.mkdir(path.dirname(nextAbs), { recursive: true })
+  try {
+    await fs.access(nextAbs)
+    const [existing, moving] = await Promise.all([
+      readNoteComments(root, nextRel),
+      readNoteComments(root, oldRel)
+    ])
+    await writeNoteComments(root, nextRel, [...existing, ...moving])
+    await fs.rm(oldAbs, { force: true })
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err
+    await fs.rename(oldAbs, nextAbs)
+  }
+}
+
+async function copyNoteComments(root: string, sourceRel: string, nextRel: string): Promise<void> {
+  const source = await readNoteComments(root, sourceRel)
+  if (source.length === 0) return
+  const now = Date.now()
+  await writeNoteComments(
+    root,
+    nextRel,
+    source.map((comment) => ({
+      ...comment,
+      id: randomUUID(),
+      notePath: nextRel,
+      createdAt: now,
+      updatedAt: now
+    }))
+  )
+}
+
 export async function appendToNote(
   root: string,
   rel: string,
@@ -1364,7 +1504,9 @@ export async function renameNote(
       await fs.rename(abs, target)
     }
   }
-  return await readMeta(root, target, folder)
+  const meta = await readMeta(root, target, folder)
+  await moveNoteComments(root, rel, meta.path)
+  return meta
 }
 
 async function moveBetweenFolders(
@@ -1380,7 +1522,9 @@ async function moveBetweenFolders(
   const finalTitle = await uniqueTitle(destDir, baseTitle)
   const destAbs = path.join(destDir, `${finalTitle}.md`)
   await fs.rename(abs, destAbs)
-  return await readMeta(root, destAbs, target)
+  const meta = await readMeta(root, destAbs, target)
+  await moveNoteComments(root, rel, meta.path)
+  return meta
 }
 
 export function moveToTrash(root: string, rel: string): Promise<NoteMeta> {
@@ -1403,6 +1547,7 @@ export async function emptyTrash(root: string): Promise<void> {
   const trashDir = path.join(root, 'trash')
   try {
     const entries = await fs.readdir(trashDir)
+    await Promise.all(entries.map((e) => removeNoteComments(root, `trash/${e}`)))
     await Promise.all(
       entries.map((e) => fs.rm(path.join(trashDir, e), { recursive: true, force: true }))
     )
@@ -1414,6 +1559,7 @@ export async function emptyTrash(root: string): Promise<void> {
 export async function deleteNote(root: string, rel: string): Promise<void> {
   const abs = resolveSafe(root, rel)
   await fs.rm(abs, { force: true })
+  await removeNoteComments(root, rel)
 }
 
 /* ---------- Folder operations ---------------------------------------- */
@@ -1719,7 +1865,9 @@ export async function moveNote(
   const finalTitle = await uniqueTitle(destDir, baseTitle)
   const destAbs = path.join(destDir, `${finalTitle}${ext}`)
   await fs.rename(oldAbs, destAbs)
-  return await readMeta(root, destAbs, targetFolder)
+  const meta = await readMeta(root, destAbs, targetFolder)
+  await moveNoteComments(root, oldRel, meta.path)
+  return meta
 }
 
 export async function duplicateNote(root: string, rel: string): Promise<NoteMeta> {
@@ -1733,7 +1881,9 @@ export async function duplicateNote(root: string, rel: string): Promise<NoteMeta
   const destAbs = path.join(dir, `${copyTitle}${ext}`)
   const body = await fs.readFile(abs, 'utf8')
   await fs.writeFile(destAbs, body, 'utf8')
-  return await readMeta(root, destAbs, folder)
+  const meta = await readMeta(root, destAbs, folder)
+  await copyNoteComments(root, rel, meta.path)
+  return meta
 }
 
 export async function importFiles(
