@@ -9,6 +9,13 @@ const INTERNAL_WORKSPACE_PACKAGES = [
   '@zennotes/shared-ui'
 ]
 
+export const PACKAGED_CLI_RUNTIME_PACKAGES = ['@modelcontextprotocol/sdk']
+
+const MAIN_EXTERNALIZE_EXCLUSIONS = [
+  ...INTERNAL_WORKSPACE_PACKAGES,
+  ...PACKAGED_CLI_RUNTIME_PACKAGES
+]
+
 function rendererManualChunk(id: string): string | undefined {
   if (!id.includes('node_modules')) return undefined
 
@@ -65,7 +72,7 @@ function rendererManualChunk(id: string): string | undefined {
 
 export default defineConfig({
   main: {
-    plugins: [externalizeDepsPlugin({ exclude: INTERNAL_WORKSPACE_PACKAGES })],
+    plugins: [externalizeDepsPlugin({ exclude: MAIN_EXTERNALIZE_EXCLUSIONS })],
     build: {
       outDir: 'out/main',
       rollupOptions: {

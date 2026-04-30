@@ -129,6 +129,10 @@
       {
         "from": "out/main/cli.js",
         "to": "cli.js"
+      },
+      {
+        "from": "out/main/chunks",
+        "to": "chunks"
       }
     ],
     "afterSign": "scripts/notarize.cjs",
