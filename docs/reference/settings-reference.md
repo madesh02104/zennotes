@@ -206,6 +206,61 @@ Behavior depends on runtime:
 
 PDF export uses the rendered Markdown view rather than raw Markdown source, and the export surface uses a white paper-style background.
 
+## CLI and launcher integrations
+
+Desktop builds expose a `CLI` settings page for installing the `zen` command-line companion.
+
+### Install Command-Line Tool
+
+The installer creates a symlink named `zen` that points to the wrapper bundled with the app.
+Packaged desktop releases include the CLI runtime dependencies, so `zen`, `zen mcp`, and launcher integrations use the app bundle instead of depending on the development build directory.
+
+Install behavior:
+
+- prefers a user-writable directory that is already on PATH
+- can create `~/.local/bin` or `~/bin` and show a PATH snippet when needed
+- falls back to `/usr/local/bin` with an admin prompt only when no user-writable target is available
+- refuses to overwrite an unmanaged `zen` binary
+
+The status panel shows:
+
+- whether `zen` is installed
+- the current or planned install path
+- whether the install is managed by ZenNotes
+- any PATH command you need to run after install
+
+### Quick reference
+
+The CLI can list, read, create, capture, search, append, prepend, rename, move, archive, trash, restore, delete, duplicate, manage folders, inspect tags, list/toggle tasks, and start the MCP server.
+
+For note paths with spaces, quote the path or use `--path`.
+
+Examples:
+
+```bash
+zen list --tag idea
+zen read "inbox/Project.md"
+zen read --path "hellointerview/system design.md"
+zen search "deadline" --json
+zen mcp
+```
+
+### Raycast
+
+On macOS, the Raycast integration requires the CLI. The Raycast command calls `zen list --json`, then opens selected notes through `zennotes://open` or `zennotes://open-window`.
+
+Raycast actions include:
+
+- open in ZenNotes
+- open in a floating window
+- archive or unarchive
+- move to Trash
+- reveal in Finder
+- copy note path
+- copy wikilink
+
+Read [Use ZenNotes with Raycast on macOS](../how-to/use-raycast.md) for setup and troubleshooting.
+
 ## Remote/session behavior
 
 Relevant settings-like runtime behaviors:

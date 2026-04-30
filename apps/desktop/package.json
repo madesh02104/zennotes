@@ -1,7 +1,7 @@
 {
   "name": "@zennotes/desktop",
   "productName": "ZenNotes",
-  "version": "1.3.3",
+  "version": "1.3.4",
   "description": "ZenNotes desktop shell",
   "private": true,
   "main": "./out/main/index.js",
@@ -141,6 +141,14 @@
         "provider": "github",
         "owner": "ZenNotes",
         "repo": "zennotes"
+      }
+    ],
+    "protocols": [
+      {
+        "name": "ZenNotes Links",
+        "schemes": [
+          "zennotes"
+        ]
       }
     ],
     "electronVersion": "41.2.1",

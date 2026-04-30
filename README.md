@@ -11,6 +11,7 @@ ZenNotes is a keyboard-first Markdown notes app with a shared product core and m
 - a future hosted deployment mode built on the same web/server stack
 
 ZenNotes keeps your notes as ordinary Markdown files on disk. It adds Vim-friendly editing, split and preview workflows, tasks, tags, archive/trash, diagrams, search, daily notes, and MCP integration on top of the files you already own.
+On macOS, the first-party `zen` CLI also powers launcher workflows such as the Raycast extension.
 
 Download the latest desktop build from [GitHub Releases](https://github.com/ZenNotes/zennotes/releases/latest).  
 Website: [zennotes.org](https://zennotes.org)
@@ -25,6 +26,7 @@ Detailed in-repo documentation lives under [docs/README.md](docs/README.md).
 - keeping tasks, tags, search, archive, trash, and quick capture inside the same vault
 - rendering math and diagrams directly from Markdown
 - exposing the vault to MCP-capable tools through a first-party server
+- searching and opening notes from terminal scripts or Raycast on macOS
 - self-hosting the app on your own machine or home server
 
 ## Product modes
@@ -136,6 +138,8 @@ ZenNotes includes:
 
 Vault text search can use the built-in engine, `ripgrep`, or `fzf`, with auto-detection and optional custom binary paths.
 
+The desktop app also ships a `zen` command-line companion for list, read, search, capture, edit, archive/trash, task, folder, and MCP workflows. On macOS, the Raycast integration uses that CLI plus `zennotes://` deep links to search notes, open them in the main app, open them in floating windows, archive/unarchive, move notes to Trash, reveal files in Finder, and copy note paths or wikilinks.
+
 ### Obsidian-friendly vault support
 
 ZenNotes now works better with existing Obsidian-style vaults.
@@ -153,9 +157,12 @@ This means imported vaults with top-level notes, folders, and loose images/files
 ZenNotes supports local files in notes and in the sidebar/list views.
 
 - local images and files can appear directly in the vault tree
+- images, SVGs, videos, audio, PDFs, and other media open inside ZenNotes tabs or reference panes instead of being handed off to the OS by default
 - desktop context menus include reveal-in-file-manager actions
 - desktop uses Finder on macOS and the platform file manager on Windows/Linux
 - watcher updates now include non-Markdown file changes, so deleting files externally updates the UI without a manual refresh
+
+Sidebar multi-select supports platform modifiers: use Cmd/Ctrl-click to toggle individual notes or folders, Shift-click to select a visible range, then use the context menu to apply actions such as open in tabs, move, archive, trash, restore, delete folders, copy paths, or drag the selected group to a folder.
 
 ### Themes, fonts, and customization
 
@@ -182,6 +189,8 @@ Desktop-only features include:
 - native menus
 - app updater
 - floating note windows
+- `zen` CLI install/uninstall flow
+- Raycast search integration on macOS
 - MCP install/uninstall flows for supported clients
 - reveal in Finder / platform file manager
 - packaging and signed releases

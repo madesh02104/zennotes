@@ -90,6 +90,8 @@ Recent versions of ZenNotes also allow:
 - hiding sidebar arrows
 - customizing folder icons
 - naming Quick Notes with a prefix
+- selecting multiple notes or folders with Cmd/Ctrl-click and Shift-click
+- opening images, SVGs, PDFs, videos, audio, and other media inside ZenNotes tabs instead of leaving the app
 
 ## 5. Understand tabs and panes
 
@@ -193,7 +195,26 @@ Open a note and run:
 
 On desktop, ZenNotes renders the note as Markdown and exports it on a white paper-style background instead of exporting the raw editor surface.
 
-## 10. Adjust the vault model if needed
+## 10. Install the CLI if you want terminal or Raycast workflows
+
+Open `Settings -> CLI` and click `Install`.
+
+ZenNotes installs the bundled `zen` wrapper into a usable PATH location. It prefers a user-writable directory and only falls back to an admin prompt when no writable PATH location is available.
+
+After install, try:
+
+```bash
+zen list
+zen read "inbox/Project.md"
+zen read --path "hellointerview/system design.md"
+zen search "deadline" --json
+```
+
+Quote note paths that contain spaces, or pass them with `--path`.
+
+On macOS, the Raycast extension uses this CLI to search notes and uses ZenNotes deep links to open notes in the main app or a floating window. See [Use ZenNotes with Raycast on macOS](../how-to/use-raycast.md).
+
+## 11. Adjust the vault model if needed
 
 Open `Settings -> Vault`.
 
@@ -217,7 +238,7 @@ You can also configure:
 - daily notes directory
 - folder icons
 
-## 11. Understand what ZenNotes stores
+## 12. Understand what ZenNotes stores
 
 ZenNotes stores notes in your vault as plain Markdown files.
 
@@ -234,11 +255,12 @@ The important boundary is:
 - note content is yours, on disk, as files
 - ZenNotes behavior is layered on top of those files
 
-## 12. Where to go next
+## 13. Where to go next
 
 Now that you know the desktop basics, read one of these:
 
 - [Settings Reference](../reference/settings-reference.md)
+- [Use ZenNotes with Raycast on macOS](../how-to/use-raycast.md)
 - [Vault and Folder Model](../reference/vault-and-folder-model.md)
 - [Connect Desktop to a Remote ZenNotes Server](../how-to/connect-desktop-to-remote-server.md)
 - [Self-Host with Docker](../how-to/self-host-with-docker.md)

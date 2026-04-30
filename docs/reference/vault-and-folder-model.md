@@ -48,10 +48,13 @@ In `Vault root` mode:
 
 - ZenNotes surfaces top-level Markdown files and folders directly
 - this is better for flatter vaults, especially imported Obsidian vaults
+- the original `inbox` lifecycle id still exists internally, but the UI can present the vault root as the primary notes area
 
 Important nuance:
 
 Switching to `Vault root` should not make your notes appear to disappear. If a real top-level `inbox/` exists, current behavior should still surface it appropriately instead of making the tree feel empty or misleading.
+
+When primary notes live at the vault root, folders nested under `inbox/` can be moved up to the vault root from sidebar actions. That keeps imported or demo content from being trapped under `inbox/` when the vault is configured for a root-first layout.
 
 ## Quick Notes
 
@@ -94,11 +97,24 @@ ZenNotes now behaves more like an Obsidian-compatible file-based vault:
 
 - loose files anywhere in the vault can be treated as vault files/assets
 - image and file embeds are supported
+- images, SVGs, video, audio, PDFs, and generic files can open in ZenNotes tabs or the reference pane
 - Obsidian-style `![[image.png]]` resolution works better than a strict note-relative-only model
 
 New referenced files default to the vault root rather than forcing a special attachments folder.
 
 Legacy attachment locations such as `attachements/` and `_assets/` are still recognized for compatibility.
+
+## Selection and bulk actions
+
+The sidebar supports selecting multiple notes and folders.
+
+Supported selection gestures:
+
+- Cmd-click on macOS, or Ctrl-click on Windows/Linux, toggles one visible item
+- Shift-click selects a visible range from the anchor item
+- dragging a selected item drags the selected group
+
+Bulk actions can open selected notes in tabs, move notes, archive/unarchive, move notes to Trash, restore trashed notes, permanently delete trashed notes, delete folders, copy paths, or move compatible folders by drag/drop.
 
 ## Metadata
 
@@ -136,6 +152,7 @@ ZenNotes is not trying to be a byte-for-byte clone of Obsidian. But it now suppo
 - loose files in the vault
 - Obsidian-style image/file embed behavior
 - imported vaults that are not structured around `inbox/`
+- media files that stay inside the app when opened from the vault tree, note list, or preview
 
 ## Related docs
 

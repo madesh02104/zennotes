@@ -52,6 +52,8 @@ export const IPC = {
   APP_LIST_FONTS: 'app:list-fonts',
   APP_ICON_DATA_URL: 'app:icon-data-url',
   APP_OPEN_SETTINGS: 'app:open-settings',
+  APP_OPEN_NOTE_REQUESTED: 'app:open-note-requested',
+  APP_RENDERER_READY: 'app:renderer-ready',
   APP_ZOOM_IN: 'app:zoom-in',
   APP_ZOOM_OUT: 'app:zoom-out',
   APP_ZOOM_RESET: 'app:zoom-reset',

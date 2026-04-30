@@ -110,6 +110,10 @@ import {
   MCP_SERVER_INSTRUCTIONS
 } from '../mcp/instructions-store'
 import { recordMainPerf } from './perf'
+import {
+  parseOpenNoteDeepLink,
+  ZENNOTES_DEEP_LINK_SCHEME
+} from './deep-links'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const LOCAL_ASSET_SCHEME = 'zen-asset'
@@ -128,6 +132,8 @@ protocol.registerSchemesAsPrivileged([
 ])
 
 let mainWindow: BrowserWindow | null = null
+let mainWindowReadyForAppEvents = false
+let creatingMainWindow: Promise<void> | null = null
 let currentVault: VaultInfo | null = null
 let currentWorkspaceMode: 'local' | 'remote' = 'local'
 let remoteWorkspaceConfig: PersistedRemoteWorkspaceConfig | null = null
@@ -152,6 +158,9 @@ const APP_REPOSITORY_URL = 'https://github.com/ZenNotes/zennotes'
 const APP_RELEASES_URL = 'https://github.com/ZenNotes/zennotes/releases/latest'
 const APP_ISSUES_URL = 'https://github.com/ZenNotes/zennotes/issues'
 let currentZoomFactor = DEFAULT_ZOOM_FACTOR
+const pendingOpenNoteRequests: string[] = []
+const pendingFloatingNoteRequests: string[] = []
+let flushingFloatingNoteRequests = false
 
 function isMac(): boolean {
   return process.platform === 'darwin'
@@ -166,6 +175,94 @@ function windowIconPath(): string {
 function openAllowedExternalUrl(url: string): void {
   if (/^(https?:|mailto:)/i.test(url)) {
     shell.openExternal(url).catch(() => {})
+  }
+}
+
+function registerAppDeepLinkProtocol(): void {
+  if (!isMac()) return
+
+  try {
+    const defaultApp = (process as NodeJS.Process & { defaultApp?: boolean }).defaultApp === true
+    const didRegister =
+      defaultApp && process.argv[1]
+        ? app.setAsDefaultProtocolClient(
+            ZENNOTES_DEEP_LINK_SCHEME,
+            process.execPath,
+            [path.resolve(process.argv[1])]
+          )
+        : app.setAsDefaultProtocolClient(ZENNOTES_DEEP_LINK_SCHEME)
+
+    if (!didRegister) {
+      console.warn(`Failed to register ${ZENNOTES_DEEP_LINK_SCHEME} URL handler`)
+    }
+  } catch (err) {
+    console.warn(`Failed to register ${ZENNOTES_DEEP_LINK_SCHEME} URL handler`, err)
+  }
+}
+
+function dispatchOpenNoteRequest(win: BrowserWindow, relPath: string): void {
+  if (win.isDestroyed()) return
+  if (win.isMinimized()) win.restore()
+  win.show()
+  win.focus()
+  win.webContents.send(IPC.APP_OPEN_NOTE_REQUESTED, relPath)
+}
+
+function flushPendingOpenNoteRequests(win = mainWindow): void {
+  if (!win || win.isDestroyed() || !mainWindowReadyForAppEvents) return
+
+  const requests = pendingOpenNoteRequests.splice(0)
+  for (const relPath of requests) dispatchOpenNoteRequest(win, relPath)
+}
+
+function queueOpenNoteRequest(relPath: string): void {
+  pendingOpenNoteRequests.push(relPath)
+
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    flushPendingOpenNoteRequests(mainWindow)
+    return
+  }
+
+  if (app.isReady()) {
+    void ensureMainWindow().then(() => flushPendingOpenNoteRequests())
+  }
+}
+
+function queueFloatingNoteRequest(relPath: string): void {
+  pendingFloatingNoteRequests.push(relPath)
+  if (app.isReady()) void flushPendingFloatingNoteRequests()
+}
+
+async function flushPendingFloatingNoteRequests(): Promise<void> {
+  if (flushingFloatingNoteRequests || pendingFloatingNoteRequests.length === 0) return
+  flushingFloatingNoteRequests = true
+  try {
+    const vault = await loadCurrentVaultFromConfig()
+    if (!vault) {
+      await ensureMainWindow()
+      return
+    }
+
+    const requests = pendingFloatingNoteRequests.splice(0)
+    for (const relPath of requests) openFloatingNoteWindow(relPath)
+  } finally {
+    flushingFloatingNoteRequests = false
+  }
+}
+
+function handleExternalOpenUrl(rawUrl: string): boolean {
+  const request = parseOpenNoteDeepLink(rawUrl)
+  if (!request) return false
+  if (request.target === 'window') queueFloatingNoteRequest(request.path)
+  else queueOpenNoteRequest(request.path)
+  return true
+}
+
+function handleStartupDeepLinks(argv: string[]): void {
+  for (const arg of argv) {
+    if (arg.startsWith(`${ZENNOTES_DEEP_LINK_SCHEME}:`)) {
+      handleExternalOpenUrl(arg)
+    }
   }
 }
 
@@ -484,6 +581,7 @@ async function createWindow(): Promise<void> {
   })
 
   mainWindow = win
+  mainWindowReadyForAppEvents = false
 
   let persistWindowStateTimer: ReturnType<typeof setTimeout> | null = null
   const scheduleWindowStatePersist = () => {
@@ -508,6 +606,9 @@ async function createWindow(): Promise<void> {
     if (restoredState?.isMaximized) win.maximize()
     win.show()
   })
+  win.webContents.on('did-start-loading', () => {
+    if (mainWindow === win) mainWindowReadyForAppEvents = false
+  })
   win.webContents.once('did-finish-load', () => {
     recordMainPerf('main.window.did-finish-load', performance.now() - createWindowStartedAt, {
       restored: !!restoredState
@@ -521,7 +622,10 @@ async function createWindow(): Promise<void> {
   win.on('close', flushWindowStatePersist)
   win.on('closed', () => {
     if (persistWindowStateTimer) clearTimeout(persistWindowStateTimer)
-    if (mainWindow === win) mainWindow = null
+    if (mainWindow === win) {
+      mainWindow = null
+      mainWindowReadyForAppEvents = false
+    }
   })
 
   installNavigationGuards(win)
@@ -534,6 +638,17 @@ async function createWindow(): Promise<void> {
   } else {
     void win.loadFile(path.join(__dirname, '../renderer/index.html'))
   }
+}
+
+async function ensureMainWindow(): Promise<void> {
+  if (mainWindow && !mainWindow.isDestroyed()) return
+  if (!app.isReady()) return
+  if (!creatingMainWindow) {
+    creatingMainWindow = createWindow().finally(() => {
+      creatingMainWindow = null
+    })
+  }
+  await creatingMainWindow
 }
 
 function currentRemoteWorkspaceInfo(): RemoteWorkspaceInfo | null {
@@ -1041,6 +1156,39 @@ async function connectRemoteWorkspaceProfile(
   return result
 }
 
+async function loadCurrentVaultFromConfig(): Promise<VaultInfo | null> {
+  if (currentVault) return currentVault
+  const cfg = await loadConfig()
+  remoteWorkspaceConfig = cfg.remoteWorkspace
+  currentRemoteWorkspaceProfileId = cfg.remoteWorkspaceProfileId
+  if (cfg.workspaceMode === 'remote' && cfg.remoteWorkspace?.baseUrl) {
+    const remoteProfile = findRemoteProfileById(cfg.remoteWorkspaceProfiles, cfg.remoteWorkspaceProfileId)
+    const authToken =
+      (remoteProfile && (await getRemoteWorkspaceSecret(remoteProfile.id))) ??
+      cfg.remoteWorkspace.authToken ??
+      null
+    try {
+      const result = await setRemoteWorkspace(cfg.remoteWorkspace.baseUrl, authToken, {
+        persist: false,
+        profileId: remoteProfile?.id ?? cfg.remoteWorkspaceProfileId,
+        vaultPath: remoteProfile?.vaultPath ?? null
+      })
+      return result.vault
+    } catch {
+      currentRemoteWorkspaceProfileId = null
+      return null
+    }
+  }
+  if (cfg.vaultRoot) {
+    try {
+      return await setVault(cfg.vaultRoot)
+    } catch {
+      return null
+    }
+  }
+  return null
+}
+
 function requireVault(): VaultInfo {
   if (!currentVault) throw new Error('No vault is open')
   return currentVault
@@ -1198,6 +1346,13 @@ function registerIpc(): void {
       return null
     }
   })
+  on(IPC.APP_RENDERER_READY, (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    if (!win || win !== mainWindow) return
+    mainWindowReadyForAppEvents = true
+    flushPendingOpenNoteRequests(win)
+    void flushPendingFloatingNoteRequests()
+  })
   handle(IPC.APP_ZOOM_IN, async (e) => {
     return await adjustWindowZoom(BrowserWindow.fromWebContents(e.sender), ZOOM_STEP)
   })
@@ -1238,36 +1393,7 @@ function registerIpc(): void {
   })
 
   handle(IPC.VAULT_GET_CURRENT, async () => {
-    if (currentVault) return currentVault
-    const cfg = await loadConfig()
-    remoteWorkspaceConfig = cfg.remoteWorkspace
-    currentRemoteWorkspaceProfileId = cfg.remoteWorkspaceProfileId
-    if (cfg.workspaceMode === 'remote' && cfg.remoteWorkspace?.baseUrl) {
-      const remoteProfile = findRemoteProfileById(cfg.remoteWorkspaceProfiles, cfg.remoteWorkspaceProfileId)
-      const authToken =
-        (remoteProfile && (await getRemoteWorkspaceSecret(remoteProfile.id))) ??
-        cfg.remoteWorkspace.authToken ??
-        null
-      try {
-        const result = await setRemoteWorkspace(cfg.remoteWorkspace.baseUrl, authToken, {
-          persist: false,
-          profileId: remoteProfile?.id ?? cfg.remoteWorkspaceProfileId,
-          vaultPath: remoteProfile?.vaultPath ?? null
-        })
-        return result.vault
-      } catch {
-        currentRemoteWorkspaceProfileId = null
-        return null
-      }
-    }
-    if (cfg.vaultRoot) {
-      try {
-        return await setVault(cfg.vaultRoot)
-      } catch {
-        return null
-      }
-    }
-    return null
+    return await loadCurrentVaultFromConfig()
   })
 
   handle(IPC.VAULT_PICK, async () => {
@@ -2162,7 +2288,11 @@ app.whenReady().then(async () => {
   installAppMenu()
   registerIpc()
   initAppUpdater()
-  await createWindow()
+  registerAppDeepLinkProtocol()
+  handleStartupDeepLinks(process.argv)
+
+  await ensureMainWindow()
+  void flushPendingFloatingNoteRequests()
   scheduleBackgroundAppUpdateCheck()
 
   try {
@@ -2175,8 +2305,15 @@ app.whenReady().then(async () => {
   }
 
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) void createWindow()
+    if (BrowserWindow.getAllWindows().length === 0) void ensureMainWindow()
   })
+})
+
+app.on('open-url', (event, url) => {
+  event.preventDefault()
+  if (!handleExternalOpenUrl(url)) {
+    console.warn(`Ignoring unsupported ${ZENNOTES_DEEP_LINK_SCHEME} URL: ${url}`)
+  }
 })
 
 app.on('window-all-closed', () => {

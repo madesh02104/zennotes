@@ -325,6 +325,12 @@ const api: ZenBridge = {
     ipcRenderer.on(IPC.APP_OPEN_SETTINGS, listener)
     return () => ipcRenderer.removeListener(IPC.APP_OPEN_SETTINGS, listener)
   },
+  onOpenNoteRequested: (cb: (relPath: string) => void): (() => void) => {
+    const listener = (_: unknown, relPath: string): void => cb(relPath)
+    ipcRenderer.on(IPC.APP_OPEN_NOTE_REQUESTED, listener)
+    return () => ipcRenderer.removeListener(IPC.APP_OPEN_NOTE_REQUESTED, listener)
+  },
+  notifyRendererReady: (): void => ipcRenderer.send(IPC.APP_RENDERER_READY),
   onAppUpdateState: (cb: (state: AppUpdateState) => void): (() => void) => {
     const listener = (_: unknown, state: AppUpdateState): void => cb(state)
     ipcRenderer.on(IPC.APP_UPDATER_ON_STATE, listener)

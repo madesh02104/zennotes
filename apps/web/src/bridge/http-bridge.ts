@@ -772,6 +772,18 @@ function onAppUpdateState(_cb: (state: AppUpdateState) => void): () => void {
   return () => {}
 }
 
+function onOpenNoteRequested(_cb: (relPath: string) => void): () => void {
+  // Deep-link note delivery is desktop-only. The web bridge still
+  // exposes the hook so shared app-core startup code can remain runtime
+  // agnostic.
+  return () => {}
+}
+
+function notifyRendererReady(): void {
+  // Desktop uses this to flush queued zennotes:// deep-link requests.
+  // Browser builds do not register the zennotes:// protocol.
+}
+
 function windowMinimize(): void {}
 function windowToggleMaximize(): void {}
 function windowClose(): void {}
@@ -963,6 +975,8 @@ export const httpBridge: ZenBridge = {
 
   onVaultChange,
   onOpenSettings,
+  onOpenNoteRequested,
+  notifyRendererReady,
   onAppUpdateState,
 
   windowMinimize,

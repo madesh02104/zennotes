@@ -1232,13 +1232,15 @@ export function SettingsModal(): JSX.Element {
       id: 'cli',
       title: 'CLI',
       description:
-        'Install the `zen` command-line tool so you can capture, search, and edit notes from any terminal.',
+        'Install the `zen` command-line tool for terminal workflows, MCP, and launcher integrations like Raycast.',
       keywords: [
         'cli',
         'command line',
         'terminal',
         'shell',
         'zen',
+        'raycast',
+        'launcher',
         'script',
         'automation',
         'pipe',
@@ -2570,7 +2572,7 @@ function CliSettings(): JSX.Element {
     <div className="space-y-6">
       <Section
         title="Command-Line Tool"
-        description="The `zen` CLI talks to your vault directly from any terminal — perfect for scripts, cron jobs, editor plugins, and shell pipelines. Once installed, try `zen --help` or pipe text in: `pbpaste | zen capture`."
+        description="The `zen` CLI talks to your vault directly from any terminal — perfect for scripts, cron jobs, editor plugins, shell pipelines, MCP, and launcher integrations like Raycast. Once installed, try `zen --help` or pipe text in: `pbpaste | zen capture`."
       >
         <div className="flex flex-col gap-3 px-5 py-4">
           <div className="flex items-start justify-between gap-4">
@@ -2673,11 +2675,12 @@ function CliSettings(): JSX.Element {
 
       <Section
         title="Quick reference"
-        description="A handful of the most useful commands. Run `zen --help` for the full list."
+        description="A handful of the most useful commands. Quote paths with spaces, or pass them with `--path`. Run `zen --help` for the full list."
       >
         <div className="space-y-2 px-5 py-4 font-mono text-[12px] leading-6 text-ink-800">
           <div>zen list --tag idea</div>
-          <div>zen read inbox/Project.md</div>
+          <div>zen read "inbox/Project.md"</div>
+          <div>zen read --path "hellointerview/system design.md"</div>
           <div>echo "hello" | zen capture</div>
           <div>zen append daily.md --body "- talked to alice"</div>
           <div>zen search "deadline" --json | jq .</div>

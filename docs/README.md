@@ -14,6 +14,7 @@ The docs are organized using the Diataxis model:
 If you are new to ZenNotes, read these first:
 
 - [Get Started on Desktop](./tutorials/get-started-desktop.md)
+- [Use ZenNotes with Raycast on macOS](./how-to/use-raycast.md)
 - [Self-Host with Docker](./how-to/self-host-with-docker.md)
 - [Connect Desktop to a Remote ZenNotes Server](./how-to/connect-desktop-to-remote-server.md)
 
@@ -24,6 +25,7 @@ If you are new to ZenNotes, read these first:
 ## How-to guides
 
 - [Self-Host with Docker](./how-to/self-host-with-docker.md)
+- [Use ZenNotes with Raycast on macOS](./how-to/use-raycast.md)
 - [Connect Desktop to a Remote ZenNotes Server](./how-to/connect-desktop-to-remote-server.md)
 - [Secure Self-Hosting](./how-to/secure-self-hosting.md)
 - [At-Rest Encryption](./how-to/at-rest-encryption.md)

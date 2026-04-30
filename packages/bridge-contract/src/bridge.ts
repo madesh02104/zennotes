@@ -137,6 +137,8 @@ export interface ZenBridge {
 
   onVaultChange(cb: (ev: VaultChangeEvent) => void): () => void
   onOpenSettings(cb: () => void): () => void
+  onOpenNoteRequested(cb: (relPath: string) => void): () => void
+  notifyRendererReady(): void
   onAppUpdateState(cb: (state: AppUpdateState) => void): () => void
 
   windowMinimize(): void

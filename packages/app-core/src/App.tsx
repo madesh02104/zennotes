@@ -24,6 +24,7 @@ import { recordRendererPerf } from './lib/perf'
 function App(): JSX.Element {
   const mountedAtRef = useRef(performance.now())
   const workspaceReadyLoggedRef = useRef(false)
+  const pendingOpenNoteRequestsRef = useRef<string[]>([])
   const vault = useStore((s) => s.vault)
   const init = useStore((s) => s.init)
   const workspaceRestored = useStore((s) => s.workspaceRestored)
@@ -78,6 +79,29 @@ function App(): JSX.Element {
       setSettingsOpen(true)
     })
   }, [setSettingsOpen])
+
+  useEffect(() => {
+    return window.zen.onOpenNoteRequested((relPath) => {
+      const state = useStore.getState()
+      if (state.vault && state.workspaceRestored) {
+        void state.openNoteInTab(relPath)
+        return
+      }
+      pendingOpenNoteRequestsRef.current.push(relPath)
+    })
+  }, [])
+
+  useEffect(() => {
+    window.zen.notifyRendererReady()
+  }, [])
+
+  useEffect(() => {
+    if (!vault || !workspaceRestored || pendingOpenNoteRequestsRef.current.length === 0) return
+    const requests = pendingOpenNoteRequestsRef.current.splice(0)
+    for (const relPath of requests) {
+      void useStore.getState().openNoteInTab(relPath)
+    }
+  }, [vault, workspaceRestored])
 
   useEffect(() => {
     if (!vault || !workspaceRestored) return

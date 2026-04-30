@@ -235,7 +235,7 @@ export function renderHelp(): string {
   }
   out.push('')
   out.push(
-    italic(dim('  Install /usr/local/bin/zen from Settings → CLI in the ZenNotes app.'))
+    italic(dim('  Install `zen` from Settings → CLI in the ZenNotes app. Quote note paths that contain spaces.'))
   )
   out.push(italic(dim('  Run `zen <command>` to try one out.')))
   out.push('')

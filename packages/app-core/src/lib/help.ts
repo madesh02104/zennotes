@@ -41,7 +41,7 @@ export const HELP_QUICK_START: HelpCard[] = [
   {
     title: 'Start in Inbox, use Quick Notes for capture',
     body:
-      'Inbox is for active notes. Quick Notes are for fast capture. Archive is for notes you want to keep without keeping them in the way, and Trash is recoverable deletion rather than immediate loss.'
+      'Inbox is for active notes. Quick Notes are for fast capture. Archive is for notes you want to keep without keeping them in the way, and Trash is recoverable deletion rather than immediate loss. If you prefer an Obsidian-style vault, Settings can make the vault root your primary notes area instead of requiring an inbox folder.'
   },
   {
     title: 'Use the keyboard from the start',
@@ -69,6 +69,11 @@ export const HELP_QUICK_START: HelpCard[] = [
       'Tabs, splits, floating windows, the reference pane, and the connections panel are all there to help you keep related material visible while you write instead of forcing constant back-and-forth navigation.'
   },
   {
+    title: 'Use files without leaving ZenNotes',
+    body:
+      'Images, SVGs, PDFs, audio, video, and other local files can appear in the vault tree and open in ZenNotes tabs or reference panes. The files stay ordinary vault files, but opening them does not have to bounce you out to another app.'
+  },
+  {
     title: 'Pick up where you left off',
     body:
       'ZenNotes restores open tabs, splits, built-in views, and sidebar layout per vault. It also remembers the main window bounds, so reopening the app feels like returning to a workspace rather than starting over.'
@@ -92,6 +97,11 @@ export const HELP_HOW_TO_GUIDES: HelpCard[] = [
       'Use the note context menu, search for `move` or `mv` in the command palette, or run `:move` or `:mv`. With no argument, ZenNotes opens a folder picker; with a target like `archive/Reference` or `inbox/Work`, it moves the note directly.'
   },
   {
+    title: 'Act on multiple sidebar items',
+    body:
+      'Use Cmd-click on macOS or Ctrl-click on Windows/Linux to toggle notes and folders in the sidebar. Use Shift-click to select a visible range. The context menu then applies to the selected set, including open in tabs, move, archive, trash, restore, delete folders, copy paths, and drag/drop moves where those actions make sense.'
+  },
+  {
     title: 'Read a note beside its source',
     body:
       'Switch the active pane to Split mode when you want markdown on one side and rendered output on the other. Use Preview when you only want the rendered view, or keep Edit when you want the least visual noise while writing.'
@@ -105,6 +115,11 @@ export const HELP_HOW_TO_GUIDES: HelpCard[] = [
     title: 'Keep supporting notes visible',
     body:
       'Open a note in a floating window when you want it in a separate OS window, or pin a note or PDF as a reference when you want it attached to the current writing context inside ZenNotes.'
+  },
+  {
+    title: 'Search from Raycast on macOS',
+    body:
+      'Install the `zen` CLI from Settings, then install the Raycast extension. Raycast can search notes, filter by folder or tag, open a note in the app, open it in a floating window, archive or unarchive, move to Trash, reveal in Finder, copy the note path, and copy a wikilink.'
   },
   {
     title: 'Check for updates and install them',
@@ -125,6 +140,11 @@ export const HELP_CORE_CONCEPTS: HelpCard[] = [
       'Inbox, Quick Notes, Archive, and Trash are built-in top-level buckets with specific jobs. You can rename how they appear in the UI without renaming the actual folders on disk, which keeps your workflow flexible without breaking the file layout.'
   },
   {
+    title: 'Primary notes can live at the vault root',
+    body:
+      'Settings → Vault lets you choose between the original Inbox model and a Vault root model. Vault root mode surfaces top-level notes, folders, and loose files directly, which is better for imported Obsidian-style vaults and flat Markdown folders.'
+  },
+  {
     title: 'Tabs and splits are first-class',
     body:
       'Each editor pane can hold multiple tabs. Split the current tab right or down, move between panes with pane motions, switch the active note between Edit, Split, and Preview from commands, and, if you hide tabs, use the buffer switcher shortcut or `:buffers`. The active tab also has a full keyboard context menu, so actions like Close Others, Close Tabs to the Right, Pin Tab, Pin as Reference, Open in Floating Window, and Reveal in Finder stay accessible without the mouse. If you disable Vim mode, use the command palette instead.'
@@ -133,6 +153,11 @@ export const HELP_CORE_CONCEPTS: HelpCard[] = [
     title: 'Context menus are part of the keyboard model',
     body:
       'ZenNotes treats context menus as keyboard-reachable UI, not mouse-only escape hatches. Use the configured context-menu binding on the selected sidebar or note-list row. In the editor, select text and press `m` to open the text menu with commenting first; `Shift+F10` / the system Context Menu key still opens the active tab menu when no text is selected. The command palette also exposes the same high-value tab actions directly.'
+  },
+  {
+    title: 'Comments attach to selected text',
+    body:
+      'Select text in the editor and use the text menu to add a comment. ZenNotes stores note comments beside the note in vault metadata, then highlights the anchored text and line when the comment is active.'
   },
   {
     title: 'Sessions restore on relaunch',
@@ -187,7 +212,12 @@ export const HELP_CORE_CONCEPTS: HelpCard[] = [
   {
     title: 'Files stay local',
     body:
-      'Drop files into a note to insert local files. By default, ZenNotes keeps them as ordinary files in the vault root, can reveal the vault from the app, and treats PDFs specially in preview and reference workflows.'
+      'Drop files into a note to insert local files. By default, ZenNotes keeps them as ordinary files in the vault root, can reveal them from the app, and opens images, SVGs, PDFs, audio, video, and generic files inside ZenNotes tabs or reference panes where possible.'
+  },
+  {
+    title: 'The CLI is the bridge to launchers',
+    body:
+      'The `zen` command-line tool can list, read, search, capture, edit, archive, trash, inspect tasks, and start the MCP server without the app running. Raycast uses it for search, then uses `zennotes://open` and `zennotes://open-window` links to bring the selected note back into ZenNotes.'
   },
   {
     title: 'Math, diagrams, and plots render from plain fences',
@@ -264,6 +294,8 @@ export const HELP_SHORTCUT_SECTIONS: HelpShortcutSection[] = [
       { keys: 'j / k', action: 'Move selection', detail: 'Move down or up one visible item.' },
       { keys: 'g g / G', action: 'Jump to top or bottom', detail: 'Fast travel to the first or last visible row.' },
       { keys: 'Enter / l', action: 'Open item', detail: 'Open the selected note, folder, tag, or built-in row.' },
+      { keys: 'Cmd/Ctrl-click', action: 'Toggle multi-select', detail: 'Add or remove one visible note or folder from the sidebar selection.' },
+      { keys: 'Shift-click', action: 'Select range', detail: 'Select the visible range between the last selection anchor and the clicked sidebar item.' },
       { keys: 'h', action: 'Collapse or move left', detail: 'Collapse the current folder or move focus back toward the editor.' },
       { keys: 'o', action: 'Toggle folder', detail: 'Expand or collapse the selected folder in the sidebar.' },
       { keys: '/', action: 'Search notes', detail: 'Open note search directly from keyboard navigation mode.' },
@@ -567,9 +599,11 @@ export const HELP_SETTINGS: HelpSettingsSection[] = [
   {
     title: 'CLI',
     items: [
-      { label: 'Install Command-Line Tool', detail: 'Symlink the bundled `zen` wrapper into /usr/local/bin so any terminal session can capture, search, and edit notes. macOS prompts for an admin password once. The CLI binary stays packaged with the app, so updates ship together.' },
-      { label: 'Status, path, and quick reference', detail: 'Settings → CLI shows whether `zen` is installed, where the symlink lives, and a copy-able quick reference of the most useful commands. An "External install" badge appears when something else owns /usr/local/bin/zen so ZenNotes never clobbers an unmanaged binary.' },
-      { label: 'Uninstall', detail: 'Removes only the ZenNotes-managed symlink — never an arbitrary binary at /usr/local/bin/zen. The CLI stays inside the app bundle for next time.' }
+      { label: 'Install Command-Line Tool', detail: 'Symlink the bundled `zen` wrapper into a usable PATH location so any terminal session can capture, search, and edit notes. ZenNotes prefers user-writable directories and only prompts for admin access when no writable PATH target is available. The CLI runtime stays packaged with the app, including the dependencies needed by `zen mcp`, so updates ship together.' },
+      { label: 'Status, path, and quick reference', detail: 'Settings → CLI shows whether `zen` is installed, where the symlink lives, and a copy-able quick reference of the most useful commands. If the chosen directory is not on PATH yet, Settings shows the exact shell command to add it. An "External install" badge appears when something else owns `zen` so ZenNotes never clobbers an unmanaged binary.' },
+      { label: 'Paths with spaces', detail: 'Quote note paths like `zen read "hellointerview/system design.md"` or pass them with `--path "hellointerview/system design.md"` so your shell keeps the path as one argument.' },
+      { label: 'Raycast on macOS', detail: 'The Raycast extension requires `zen`. It searches with `zen list --json`, then opens notes in ZenNotes through `zennotes://open` or `zennotes://open-window` and exposes archive, unarchive, trash, reveal, copy path, and copy wikilink actions from Raycast.' },
+      { label: 'Uninstall', detail: 'Removes only the ZenNotes-managed symlink — never an arbitrary unmanaged binary named `zen`. The CLI stays inside the app bundle for next time.' }
     ]
   },
   {
@@ -592,7 +626,7 @@ export const HELP_CLI: HelpCard[] = [
   {
     title: 'Install it once from Settings',
     body:
-      'Open Settings → CLI and click Install. macOS will prompt for an admin password once so ZenNotes can symlink the bundled wrapper into /usr/local/bin/zen. After that, `zen --help` works in any new terminal. You can also run the install from the command palette via "Install Command-Line Tool (zen)".'
+      'Open Settings → CLI and click Install. ZenNotes symlinks the bundled wrapper into a usable PATH location, preferring user-writable directories and only asking for admin access when no writable PATH target is available. After that, `zen --help` works in any new terminal. You can also run the install from the command palette via "Install Command-Line Tool (zen)".'
   },
   {
     title: 'No app required',
@@ -607,7 +641,12 @@ export const HELP_CLI: HelpCard[] = [
   {
     title: 'Read and search from the terminal',
     body:
-      'Use `zen list` to see recent notes, `zen list --tag work --limit 5` to filter, `zen read inbox/Project.md` to print a body, and `zen search "deadline"` for full-text matches with file:line previews. Add `--json` to any command to get structured output you can pipe into `jq`.'
+      'Use `zen list` to see recent notes, `zen list --tag work --limit 5` to filter, `zen read inbox/Project.md` to print a body, and `zen search "deadline"` for full-text matches with file:line previews. Quote paths with spaces, like `zen read "hellointerview/system design.md"`, or use `--path`. Add `--json` to any command to get structured output you can pipe into `jq`.'
+  },
+  {
+    title: 'Raycast uses the same CLI',
+    body:
+      'On macOS, install the Raycast extension after `zen` is installed. The Search Notes command reads from `zen list --json`, then uses `zennotes://open` to open notes in the main app or `zennotes://open-window` to open a floating window. Cmd+K actions also archive, unarchive, move to Trash, reveal in Finder, copy the path, and copy a wikilink.'
   },
   {
     title: 'Edit incrementally',
