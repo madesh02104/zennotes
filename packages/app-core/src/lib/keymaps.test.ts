@@ -21,11 +21,40 @@ function fakeEvent(init: FakeEventInit): KeyboardEvent {
   } as KeyboardEvent
 }
 
+function withPlatform<T>(platform: NodeJS.Platform, run: () => T): T {
+  const host = globalThis as typeof globalThis & {
+    window?: { zen?: { platformSync?: () => NodeJS.Platform } }
+  }
+  const previousWindow = host.window
+  Object.defineProperty(host, 'window', {
+    value: {
+      ...(previousWindow ?? {}),
+      zen: { ...(previousWindow?.zen ?? {}), platformSync: () => platform }
+    },
+    configurable: true
+  })
+
+  try {
+    return run()
+  } finally {
+    if (previousWindow === undefined) {
+      Reflect.deleteProperty(host, 'window')
+    } else {
+      Object.defineProperty(host, 'window', {
+        value: previousWindow,
+        configurable: true
+      })
+    }
+  }
+}
+
 describe('shortcutBindingFromEvent', () => {
   it('uses the typed character on Colemak (Cmd+P fires on the key that types p)', () => {
     // On Colemak the 'p' character lives at the QWERTY-R position.
     const event = fakeEvent({ key: 'p', code: 'KeyR', metaKey: true })
-    expect(shortcutBindingFromEvent(event)).toBe('Mod+P')
+    withPlatform('darwin', () => {
+      expect(shortcutBindingFromEvent(event)).toBe('Mod+P')
+    })
   })
 
   it('preserves Hyper+J on QWERTY when event.key is the Alt-mangled glyph', () => {
@@ -38,23 +67,31 @@ describe('shortcutBindingFromEvent', () => {
       shiftKey: true,
       metaKey: true
     })
-    expect(shortcutBindingFromEvent(event)).toBe('Ctrl+Alt+Shift+Mod+J')
+    withPlatform('darwin', () => {
+      expect(shortcutBindingFromEvent(event)).toBe('Ctrl+Alt+Shift+Mod+J')
+    })
   })
 
   it('falls back to event.code for Alt+digit when event.key is non-ASCII', () => {
     // Alt+1 on US Mac produces '¡' (codepoint 0xA1, outside ASCII).
     const event = fakeEvent({ key: '¡', code: 'Digit1', altKey: true, metaKey: true })
-    expect(shortcutBindingFromEvent(event)).toBe('Alt+Mod+1')
+    withPlatform('darwin', () => {
+      expect(shortcutBindingFromEvent(event)).toBe('Alt+Mod+1')
+    })
   })
 
   it('records plain Cmd+1 as Mod+1', () => {
     const event = fakeEvent({ key: '1', code: 'Digit1', metaKey: true })
-    expect(shortcutBindingFromEvent(event)).toBe('Mod+1')
+    withPlatform('darwin', () => {
+      expect(shortcutBindingFromEvent(event)).toBe('Mod+1')
+    })
   })
 
   it('records Shift+digit as the typed symbol (Shift+Mod+!)', () => {
     const event = fakeEvent({ key: '!', code: 'Digit1', shiftKey: true, metaKey: true })
-    expect(shortcutBindingFromEvent(event)).toBe('Shift+Mod+!')
+    withPlatform('darwin', () => {
+      expect(shortcutBindingFromEvent(event)).toBe('Shift+Mod+!')
+    })
   })
 
   it('handles named keys via the event.key fallback path', () => {
@@ -73,7 +110,9 @@ describe('shortcutBindingFromEvent', () => {
     // dropping the key. The fast path must skip '+' so we fall back
     // to event.code='Equal' -> '='.
     const event = fakeEvent({ key: '+', code: 'Equal', shiftKey: true, metaKey: true })
-    expect(shortcutBindingFromEvent(event)).toBe('Shift+Mod+=')
+    withPlatform('darwin', () => {
+      expect(shortcutBindingFromEvent(event)).toBe('Shift+Mod+=')
+    })
   })
 })
 

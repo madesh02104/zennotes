@@ -95,6 +95,10 @@ import {
   uninstallCli
 } from './cli-install'
 import {
+  getRaycastExtensionStatus,
+  installRaycastExtension
+} from './raycast-integration'
+import {
   checkForAppUpdates,
   downloadAppUpdate,
   getAppUpdateState,
@@ -1818,6 +1822,8 @@ function registerIpc(): void {
   handle(IPC.CLI_GET_STATUS, async () => await getCliInstallStatus())
   handle(IPC.CLI_INSTALL, async () => await installCli())
   handle(IPC.CLI_UNINSTALL, async () => await uninstallCli())
+  handle(IPC.RAYCAST_GET_STATUS, async () => await getRaycastExtensionStatus())
+  handle(IPC.RAYCAST_INSTALL, async () => await installRaycastExtension())
 }
 
 /**

@@ -33,6 +33,7 @@ import type {
   NoteContent,
   NoteFolder,
   NoteMeta,
+  RaycastExtensionStatus,
   RemoteWorkspaceInfo,
   RemoteWorkspaceProfile,
   RemoteWorkspaceProfileInput,
@@ -878,6 +879,36 @@ async function cliUninstall(): Promise<CliInstallStatus> {
   return notImplemented('cliUninstall')
 }
 
+const WEB_RAYCAST_STATUS: RaycastExtensionStatus = {
+  available: false,
+  reason: 'Raycast extension installation is only available in the macOS desktop build.',
+  supportedPlatform: false,
+  installed: false,
+  upToDate: false,
+  extensionPath: '',
+  sourcePath: null,
+  raycastInstalled: false,
+  nodeAvailable: false,
+  npmAvailable: false,
+  nodePath: null,
+  npmPath: null,
+  nodeVersion: null,
+  npmVersion: null,
+  nodeMeetsMinimum: false,
+  npmMeetsMinimum: false,
+  installedVersion: null,
+  bundledVersion: WEB_APP_INFO.version,
+  lastInstalledAt: null
+}
+
+async function raycastGetStatus(): Promise<RaycastExtensionStatus> {
+  return WEB_RAYCAST_STATUS
+}
+
+async function raycastInstall(): Promise<RaycastExtensionStatus> {
+  return notImplemented('raycastInstall')
+}
+
 // --------------------------------------------------------------------
 // Clipboard (web build uses navigator.clipboard)
 // --------------------------------------------------------------------
@@ -997,6 +1028,8 @@ export const httpBridge: ZenBridge = {
   cliGetStatus,
   cliInstall,
   cliUninstall,
+  raycastGetStatus,
+  raycastInstall,
   clipboardWriteText,
   clipboardReadText
 }

@@ -9,7 +9,7 @@ Search notes from Raycast and open them in ZenNotes or a floating window.
 - ZenNotes desktop app
 - ZenNotes CLI installed as `zen`
 
-Install the CLI from ZenNotes Settings -> CLI, then verify it:
+Install the CLI from ZenNotes Settings -> CLI, then install the Raycast extension from the same settings page. To verify the CLI manually:
 
 ```sh
 zen list

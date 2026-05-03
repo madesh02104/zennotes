@@ -19,6 +19,7 @@ import type {
   NoteContent,
   NoteFolder,
   NoteMeta,
+  RaycastExtensionStatus,
   RemoteWorkspaceInfo,
   RemoteWorkspaceProfile,
   RemoteWorkspaceProfileInput,
@@ -364,6 +365,10 @@ const api: ZenBridge = {
   cliGetStatus: (): Promise<CliInstallStatus> => ipcRenderer.invoke(IPC.CLI_GET_STATUS),
   cliInstall: (): Promise<CliInstallStatus> => ipcRenderer.invoke(IPC.CLI_INSTALL),
   cliUninstall: (): Promise<CliInstallStatus> => ipcRenderer.invoke(IPC.CLI_UNINSTALL),
+  raycastGetStatus: (): Promise<RaycastExtensionStatus> =>
+    ipcRenderer.invoke(IPC.RAYCAST_GET_STATUS),
+  raycastInstall: (): Promise<RaycastExtensionStatus> =>
+    ipcRenderer.invoke(IPC.RAYCAST_INSTALL),
   clipboardWriteText: (text: string): void => clipboard.writeText(text),
   clipboardReadText: (): string => clipboard.readText()
 }

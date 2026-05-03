@@ -5,6 +5,7 @@ import desktopPackage from '../../package.json'
 interface ExtraResource {
   from: string
   to: string
+  filter?: string[]
 }
 
 describe('desktop packaging', () => {
@@ -21,5 +22,18 @@ describe('desktop packaging', () => {
 
   it('bundles CLI-only package dependencies instead of resolving them from Resources', () => {
     expect(PACKAGED_CLI_RUNTIME_PACKAGES).toContain('@modelcontextprotocol/sdk')
+  })
+
+  it('ships the Raycast extension source without vendored dependencies', () => {
+    const resources = desktopPackage.build.extraResources as ExtraResource[]
+    const raycastResource = resources.find((resource) => resource.to === 'raycast/zennotes')
+
+    expect(raycastResource).toMatchObject({
+      from: '../../integrations/raycast',
+      to: 'raycast/zennotes'
+    })
+    expect(raycastResource?.filter).toEqual(
+      expect.arrayContaining(['package.json', 'package-lock.json', 'src/**', '!node_modules/**'])
+    )
   })
 })

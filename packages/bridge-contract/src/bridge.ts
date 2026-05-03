@@ -9,6 +9,7 @@ import type {
   NoteContent,
   NoteFolder,
   NoteMeta,
+  RaycastExtensionStatus,
   DirectoryBrowseResult,
   RemoteWorkspaceInfo,
   RemoteWorkspaceProfile,
@@ -159,6 +160,8 @@ export interface ZenBridge {
   cliGetStatus(): Promise<CliInstallStatus>
   cliInstall(): Promise<CliInstallStatus>
   cliUninstall(): Promise<CliInstallStatus>
+  raycastGetStatus(): Promise<RaycastExtensionStatus>
+  raycastInstall(): Promise<RaycastExtensionStatus>
   clipboardWriteText(text: string): void
   clipboardReadText(): string
 }

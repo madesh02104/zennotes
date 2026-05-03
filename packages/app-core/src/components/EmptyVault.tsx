@@ -1,6 +1,5 @@
-import { useEffect, useState } from 'react'
 import { useStore } from '../store'
-import { EnsoLogo } from './EnsoLogo'
+import appIcon from '../assets/zennotes-app-icon.png'
 
 export function EmptyVault(): JSX.Element {
   const openVaultPicker = useStore((s) => s.openVaultPicker)
@@ -11,30 +10,15 @@ export function EmptyVault(): JSX.Element {
   const isServerVaultSetup =
     appInfo.runtime === 'web' && !capabilities.supportsLocalFilesystemPickers
   const canConnectRemote = appInfo.runtime === 'desktop' && capabilities.supportsRemoteWorkspace
-  const [appIconUrl, setAppIconUrl] = useState<string | null>(null)
-
-  useEffect(() => {
-    let cancelled = false
-    void window.zen.getAppIconDataUrl().then((url) => {
-      if (!cancelled) setAppIconUrl(url)
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [])
 
   return (
     <div className="flex h-[calc(100vh-2.75rem)] items-center justify-center">
       <div className="flex max-w-md flex-col items-center gap-5 text-center">
-        {appIconUrl ? (
-          <img
-            src={appIconUrl}
-            alt="ZenNotes app icon"
-            className="h-[72px] w-[72px] rounded-[18px] shadow-panel"
-          />
-        ) : (
-          <EnsoLogo size={72} className="drop-shadow-panel" />
-        )}
+        <img
+          src={appIcon}
+          alt="ZenNotes app icon"
+          className="h-[72px] w-[72px] rounded-[18px] shadow-panel"
+        />
         <div>
           <h1 className="font-serif text-2xl font-semibold text-ink-900">Welcome to ZenNotes</h1>
           <p className="mt-2 text-sm text-ink-600">

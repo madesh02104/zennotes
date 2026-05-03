@@ -4,6 +4,7 @@ import { DEFAULT_DAILY_NOTES_DIRECTORY } from '@shared/ipc'
 import type {
   AppUpdateState,
   CliInstallStatus,
+  RaycastExtensionStatus,
   RemoteWorkspaceProfile,
   RemoteWorkspaceProfileInput,
   VaultTextSearchBackendPreference,
@@ -2673,6 +2674,11 @@ function CliSettings(): JSX.Element {
         </div>
       </Section>
 
+      <RaycastExtensionSettings
+        cliInstalled={installed}
+        copyToClipboard={copyToClipboard}
+      />
+
       <Section
         title="Quick reference"
         description="A handful of the most useful commands. Quote paths with spaces, or pass them with `--path`. Run `zen --help` for the full list."
@@ -2695,6 +2701,176 @@ function CliSettings(): JSX.Element {
       )}
     </div>
   )
+}
+
+function RaycastExtensionSettings({
+  cliInstalled,
+  copyToClipboard
+}: {
+  cliInstalled: boolean
+  copyToClipboard: (text: string) => void
+}): JSX.Element {
+  const [status, setStatus] = useState<RaycastExtensionStatus | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const refresh = useCallback(async (): Promise<void> => {
+    try {
+      const next = await window.zen.raycastGetStatus()
+      setStatus(next)
+      setError(null)
+    } catch (err) {
+      setError((err as Error).message)
+    }
+  }, [])
+
+  useEffect(() => {
+    void refresh()
+  }, [refresh])
+
+  const onInstall = async (): Promise<void> => {
+    setBusy(true)
+    setError(null)
+    try {
+      const next = await window.zen.raycastInstall()
+      setStatus(next)
+    } catch (err) {
+      setError((err as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (status == null) {
+    return (
+      <Section
+        title="Raycast Extension"
+        description="Install the ZenNotes Raycast extension locally from this app instead of waiting for the Raycast Store review."
+      >
+        <InlineNote>Checking Raycast status…</InlineNote>
+      </Section>
+    )
+  }
+
+  const chip = raycastStatusChip(status, cliInstalled)
+  const installDisabled = busy || !cliInstalled || !status.available
+  const installLabel = busy
+    ? 'Installing…'
+    : status.installed
+      ? status.upToDate
+        ? 'Reinstall'
+        : 'Update'
+      : 'Install'
+  const detail = raycastStatusDetail(status, cliInstalled)
+  const toolchainDetail = [
+    `Raycast ${status.raycastInstalled ? 'found' : 'missing'}`,
+    `Node ${status.nodeVersion ?? 'missing'}`,
+    `npm ${status.npmVersion ?? 'missing'}`
+  ].join(' · ')
+
+  return (
+    <Section
+      title="Raycast Extension"
+      description="Install the ZenNotes Raycast extension locally from this app instead of waiting for the Raycast Store review."
+    >
+      <div className="flex flex-col gap-3 px-5 py-4">
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <span className="text-sm font-medium text-ink-900">ZenNotes for Raycast</span>
+              <span
+                className={[
+                  'rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.14em]',
+                  statusChipClass(chip.tone)
+                ].join(' ')}
+              >
+                {chip.label}
+              </span>
+            </div>
+            <div className="mt-1 text-xs leading-5 text-ink-500">{detail}</div>
+            <div className="mt-1 text-[11px] leading-5 text-ink-400">{toolchainDetail}</div>
+            {!cliInstalled && (
+              <div className="mt-1.5 text-xs leading-5 text-amber-500">
+                Install the <code className="font-mono">zen</code> CLI above first. The Raycast
+                command calls it to read your local vault.
+              </div>
+            )}
+            {cliInstalled && status.reason && (
+              <div className="mt-1.5 text-xs leading-5 text-amber-500">{status.reason}</div>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => void onInstall()}
+            disabled={installDisabled}
+            className={[
+              'shrink-0 rounded-xl px-3.5 py-1.5 text-xs font-medium transition-colors',
+              installDisabled
+                ? 'cursor-not-allowed bg-paper-300 text-ink-500'
+                : 'bg-ink-900 text-paper-50 hover:bg-ink-800'
+            ].join(' ')}
+          >
+            {installLabel}
+          </button>
+        </div>
+
+        <div className="flex items-center gap-2 border-t border-paper-300/45 pt-2 text-[11px] text-ink-500">
+          <span className="text-[10px] font-medium uppercase tracking-[0.14em] text-ink-400">
+            Local copy
+          </span>
+          <code className="min-w-0 flex-1 break-all rounded-md bg-paper-100/80 px-2 py-1 font-mono text-[11px] text-ink-800">
+            {status.extensionPath}
+          </code>
+          <button
+            type="button"
+            onClick={() => copyToClipboard(status.extensionPath)}
+            className="shrink-0 rounded-md border border-paper-300/70 bg-paper-100/80 px-2 py-1 text-[11px] font-medium text-ink-700 hover:bg-paper-200"
+          >
+            Copy
+          </button>
+        </div>
+      </div>
+
+      {error && (
+        <InlineNote>
+          <span className="text-ink-900">Something went wrong:</span> {error}
+        </InlineNote>
+      )}
+    </Section>
+  )
+}
+
+function raycastStatusChip(
+  status: RaycastExtensionStatus,
+  cliInstalled: boolean
+): { label: string; tone: 'ok' | 'warn' | 'off' } {
+  if (!status.supportedPlatform) return { label: 'Not supported', tone: 'off' }
+  if (status.installed && status.upToDate) return { label: 'Installed', tone: 'ok' }
+  if (status.installed && !status.upToDate) return { label: 'Update available', tone: 'warn' }
+  if (status.available && cliInstalled) return { label: 'Ready', tone: 'off' }
+  return { label: 'Not ready', tone: 'off' }
+}
+
+function raycastStatusDetail(
+  status: RaycastExtensionStatus,
+  cliInstalled: boolean
+): string {
+  if (!status.supportedPlatform) {
+    return status.reason ?? 'Raycast extensions are available on macOS only.'
+  }
+  if (status.installed && status.upToDate) {
+    return 'Installed locally. Search for “Search Notes” in Raycast to use it.'
+  }
+  if (status.installed) {
+    return `A local copy exists from ZenNotes ${status.installedVersion ?? 'an older version'}. Update it to match ${status.bundledVersion}.`
+  }
+  if (!cliInstalled) {
+    return 'The extension can be installed after the local ZenNotes CLI is available.'
+  }
+  if (!status.available) {
+    return status.reason ?? 'Local installation is not available yet.'
+  }
+  return 'Copies the bundled extension into app data, installs dependencies, builds it, and imports it into Raycast.'
 }
 
 

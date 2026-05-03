@@ -81,7 +81,9 @@ export const IPC = {
   MCP_SET_INSTRUCTIONS: 'mcp:set-instructions',
   CLI_GET_STATUS: 'cli:get-status',
   CLI_INSTALL: 'cli:install',
-  CLI_UNINSTALL: 'cli:uninstall'
+  CLI_UNINSTALL: 'cli:uninstall',
+  RAYCAST_GET_STATUS: 'raycast:get-status',
+  RAYCAST_INSTALL: 'raycast:install'
 } as const
 
 export interface TikzRenderResponse {
@@ -130,6 +132,40 @@ export interface CliInstallStatus {
   /** Whether this platform supports installing the CLI from Settings.
    *  False on Windows for now (different install model). */
   supportedPlatform: boolean
+}
+
+export interface RaycastExtensionStatus {
+  /** True when this build can attempt a local Raycast extension install. */
+  available: boolean
+  /** Reason installation is unavailable, if available is false. */
+  reason: string | null
+  /** Raycast extensions are macOS-only. */
+  supportedPlatform: boolean
+  /** True when the copied local extension exists in app data. */
+  installed: boolean
+  /** True when the local copy was installed from the current app version. */
+  upToDate: boolean
+  /** App-data path where ZenNotes copies the local Raycast extension. */
+  extensionPath: string
+  /** Bundled extension source path used for the next install, if present. */
+  sourcePath: string | null
+  /** Whether Raycast.app was found on this Mac. */
+  raycastInstalled: boolean
+  /** Whether a user-installed Node.js binary is visible to login shells. */
+  nodeAvailable: boolean
+  /** Whether a user-installed npm binary is visible to login shells. */
+  npmAvailable: boolean
+  nodePath: string | null
+  npmPath: string | null
+  nodeVersion: string | null
+  npmVersion: string | null
+  /** True when the user Node.js version meets Raycast's extension tooling requirements. */
+  nodeMeetsMinimum: boolean
+  /** True when npm meets Raycast's extension tooling requirements. */
+  npmMeetsMinimum: boolean
+  installedVersion: string | null
+  bundledVersion: string
+  lastInstalledAt: string | null
 }
 
 export interface AppUpdateState {
